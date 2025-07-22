@@ -47,6 +47,7 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -73,14 +74,16 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.beans.HasPropertyWithValue.hasProperty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.TRIM_HORIZON;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
@@ -124,8 +127,17 @@ public class ProcessTaskTest {
         when(checkpointer.checkpointer()).thenReturn(mock(Checkpointer.class));
 
         shardInfo = new ShardInfo(shardId, null, null, null);
-        processRecordsInput =
-                ProcessRecordsInput.builder().records(Collections.emptyList()).build();
+        final Instant entryTime = Instant.now();
+        final Instant exitTime = entryTime.plusSeconds(1);
+        final boolean isAtShardEnd = false;
+        final List<ChildShard> childShards = Collections.emptyList();
+        processRecordsInput = ProcessRecordsInput.builder()
+                .records(Collections.emptyList())
+                .cacheEntryTime(entryTime)
+                .cacheExitTime(exitTime)
+                .isAtShardEnd(isAtShardEnd)
+                .childShards(childShards)
+                .build();
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
@@ -176,6 +188,28 @@ public class ProcessTaskTest {
 
         TaskResult result = processTask.call();
         assertThat(result, shardEndTaskResult(true));
+        verifyNoInteractions(shardRecordProcessor);
+    }
+
+    @Test
+    public void testProcessTaskWithRecordsAndShardEndReached() {
+        final String sqn = new BigInteger(128, new Random()).toString();
+        final String pk = UUID.randomUUID().toString();
+        final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
+        final KinesisClientRecord r = makeKinesisClientRecord(pk, sqn, ts.toInstant());
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(Collections.singletonList(r))
+                .isAtShardEnd(true)
+                .childShards(Collections.singletonList(ChildShard.builder().build()))
+                .build();
+
+        processTask = makeProcessTask(processRecordsInput);
+        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, TRIM_HORIZON, TRIM_HORIZON);
+        TaskResult result = outcome.taskResult;
+        assertThat(result, shardEndTaskResult(true));
+        final ProcessRecordsInput expected =
+                processRecordsInput.toBuilder().checkpointer(checkpointer).build();
+        assertEquals(expected, outcome.processRecordsCall);
     }
 
     private KinesisClientRecord makeKinesisClientRecord(String partitionKey, String sequenceNumber, Instant arrival) {
@@ -207,13 +241,18 @@ public class ProcessTaskTest {
 
         ShardRecordProcessorOutcome outcome = testWithRecord(r);
 
-        assertEquals(1, outcome.getProcessRecordsCall().records().size());
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
+        assertEquals(1, capturedInput.records().size());
 
-        KinesisClientRecord pr = outcome.getProcessRecordsCall().records().get(0);
+        KinesisClientRecord pr = capturedInput.records().get(0);
         assertEquals(pk, pr.partitionKey());
         assertEquals(ts.toInstant(), pr.approximateArrivalTimestamp());
         byte[] b = pr.data().array();
         assertThat(b, equalTo(TEST_DATA));
+
+        final ProcessRecordsInput expected =
+                processRecordsInput.toBuilder().checkpointer(checkpointer).build();
+        assertEquals(expected, capturedInput);
 
         assertEquals(sqn, outcome.getCheckpointCall().sequenceNumber());
         assertEquals(0, outcome.getCheckpointCall().subSequenceNumber());
@@ -223,6 +262,7 @@ public class ProcessTaskTest {
     static class ShardRecordProcessorOutcome {
         final ProcessRecordsInput processRecordsCall;
         final ExtendedSequenceNumber checkpointCall;
+        final TaskResult taskResult;
     }
 
     @Test
@@ -239,9 +279,9 @@ public class ProcessTaskTest {
 
         processTask = makeProcessTask(processRecordsInput);
         ShardRecordProcessorOutcome outcome = testWithRecord(record);
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords = capturedInput.records();
 
         assertEquals(3, actualRecords.size());
         for (KinesisClientRecord pr : actualRecords) {
@@ -253,6 +293,12 @@ public class ProcessTaskTest {
             pr.data().get(actualData);
             assertThat(actualData, equalTo(TEST_DATA));
         }
+
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(actualRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
 
         assertEquals(sqn, outcome.getCheckpointCall().sequenceNumber());
         assertEquals(actualRecords.size() - 1, outcome.getCheckpointCall().subSequenceNumber());
@@ -271,15 +317,21 @@ public class ProcessTaskTest {
 
         processTask = makeProcessTask(processRecordsInput);
         ShardRecordProcessorOutcome outcome = testWithRecord(record);
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords = capturedInput.records();
 
         assertEquals(3, actualRecords.size());
         for (KinesisClientRecord actualRecord : actualRecords) {
             assertThat(actualRecord.partitionKey(), equalTo(pk));
             assertThat(actualRecord.approximateArrivalTimestamp(), nullValue());
         }
+
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(actualRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
     }
 
     @Test
@@ -347,9 +399,9 @@ public class ProcessTaskTest {
                 Collections.singletonList(record),
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString(), previousCheckpointSsqn),
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString(), previousCheckpointSsqn));
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords = capturedInput.records();
 
         // First two records should be dropped - and only 1 remaining records should be there.
         assertThat(actualRecords.size(), equalTo(1));
@@ -360,6 +412,12 @@ public class ProcessTaskTest {
         assertThat(actualRecord.sequenceNumber(), equalTo(startingSqn));
         assertThat(actualRecord.subSequenceNumber(), equalTo(previousCheckpointSsqn + 1));
         assertThat(actualRecord.approximateArrivalTimestamp(), nullValue());
+
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(actualRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
 
         // Expected largest permitted sequence number will be last sub-record sequence number.
         final ExtendedSequenceNumber expectedLargestPermittedEsqn =
@@ -435,8 +493,13 @@ public class ProcessTaskTest {
                 new ExtendedSequenceNumber(
                         sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
                 new ExtendedSequenceNumber(sequenceNumber.toString(), recordIndex + 1L));
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
 
-        assertThat(outcome.processRecordsCall.records().size(), equalTo(0));
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(Collections.emptyList())
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
     }
 
     @Test
@@ -498,7 +561,12 @@ public class ProcessTaskTest {
                         sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
                 new ExtendedSequenceNumber(sequenceNumber.toString(), 0L));
 
-        assertThat(outcome.processRecordsCall.records(), equalTo(expectedRecords));
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(expectedRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
     }
 
     @Test
@@ -535,10 +603,12 @@ public class ProcessTaskTest {
         List<KinesisClientRecord> expectedRecords =
                 ImmutableList.of(decodedSchemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
-
-        assertEquals(expectedRecords, actualRecords);
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(expectedRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
 
         verify(glueSchemaRegistryDeserializer, times(1)).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
         verify(glueSchemaRegistryDeserializer, times(1)).getSchema(SCHEMA_REGISTRY_PAYLOAD);
@@ -576,10 +646,12 @@ public class ProcessTaskTest {
 
         List<KinesisClientRecord> expectedRecords = ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
-
-        assertEquals(expectedRecords, actualRecords);
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(expectedRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
     }
 
     @Test
@@ -615,10 +687,12 @@ public class ProcessTaskTest {
 
         List<KinesisClientRecord> expectedRecords = ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords =
-                outcome.getProcessRecordsCall().records();
-
-        assertEquals(expectedRecords, actualRecords);
+        final ProcessRecordsInput capturedInput = outcome.getProcessRecordsCall();
+        final ProcessRecordsInput expected = processRecordsInput.toBuilder()
+                .records(expectedRecords)
+                .checkpointer(checkpointer)
+                .build();
+        assertEquals(expected, capturedInput);
     }
 
     private KinesisClientRecord createAndRegisterAggregatedRecord(
@@ -744,7 +818,7 @@ public class ProcessTaskTest {
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
         when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
-        processTask.call();
+        TaskResult result = processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
         ArgumentCaptor<ProcessRecordsInput> recordsCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
@@ -753,7 +827,7 @@ public class ProcessTaskTest {
         ArgumentCaptor<ExtendedSequenceNumber> esnCaptor = ArgumentCaptor.forClass(ExtendedSequenceNumber.class);
         verify(checkpointer).largestPermittedCheckpointValue(esnCaptor.capture());
 
-        return new ShardRecordProcessorOutcome(recordsCaptor.getValue(), esnCaptor.getValue());
+        return new ShardRecordProcessorOutcome(recordsCaptor.getValue(), esnCaptor.getValue(), result);
     }
 
     /**
