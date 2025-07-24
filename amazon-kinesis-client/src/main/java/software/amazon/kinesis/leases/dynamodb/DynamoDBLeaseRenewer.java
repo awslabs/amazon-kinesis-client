@@ -354,7 +354,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         boolean success = false;
         Lease authoritativeLeaseCopy = authoritativeLease.copy();
         try {
-            log.info("Updating lease from {} to {}", authoritativeLease, lease);
+            log.debug("Updating lease from {} to {}", authoritativeLease, lease);
             synchronized (authoritativeLease) {
                 authoritativeLease.update(lease);
                 boolean updatedLease = leaseRefresher.updateLease(authoritativeLease);
