@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 
@@ -91,12 +92,19 @@ public class WorkerIdExclusionMonitor implements Runnable {
             this.prevState = this.currState;
             this.currState = this.getCurrentState();
 
-            this.newState = !this.currState.equals(this.prevState);
-            this.onlyExcludingLeadership = this.currState.isOnlyExcludingLeadership();
-
-            if (!isExpired(this.currState)) {
-                this.activePattern = this.currState.getRegex();
+            if (this.currState == null) {
+                this.newState = this.prevState != null;
+                this.onlyExcludingLeadership = false;
+                this.activePattern = null;
+            } else if (!this.currState.equals(this.prevState)) {
+                this.activePattern = isExpired(this.currState) ? null : this.currState.getRegex();
+                this.onlyExcludingLeadership = this.currState.isOnlyExcludingLeadership();
+                this.newState = true;
+            } else {
+                this.newState = false;
             }
+        } catch (ResourceNotFoundException rnfe) {
+            log.warn("Could not find worker ID exclusion item in coordinator state table." + rnfe.getMessage());
         } catch (DynamoDbException ddbe) {
             log.warn("Caught DynamoDB exception while trying to fetch the worker ID exclusion item from "
                     + "the coordinator state table." + ddbe.getMessage());

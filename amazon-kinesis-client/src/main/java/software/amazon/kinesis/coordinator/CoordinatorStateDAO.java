@@ -202,12 +202,24 @@ public class CoordinatorStateDAO {
                 .build();
     }
 
-    public GetItemResponse callGetItem(@NonNull final GetItemRequest request) throws Exception {
+    public GetItemResponse callGetItem(@NonNull final GetItemRequest request) {
         return FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.getItem(request));
     }
 
-    public Map<String, AttributeValue> getDynamoRecord(@NonNull final String key) throws Exception {
-        return callGetItem(buildGetItemRequest(key)).item();
+    public Map<String, AttributeValue> getDynamoRecord(@NonNull final String key) {
+        try {
+            return callGetItem(buildGetItemRequest(key)).item();
+        } catch (ResourceNotFoundException rnfe) {
+            log.warn("Could not find key {} in coordinator state table. " + rnfe.getMessage(), key);
+            return null;
+        } catch (DynamoDbException ddbe) {
+            log.warn("Could not fetch item from coordinator state table with key : {} " + ddbe.getMessage(), key);
+            return null;
+        } catch (Exception e) {
+            log.error(
+                    "Caught unexpected exception while trying to fetch key from DynamoDB : {} " + e.getMessage(), key);
+            return null;
+        }
     }
 
     /**

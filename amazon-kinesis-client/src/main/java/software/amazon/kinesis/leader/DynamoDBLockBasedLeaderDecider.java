@@ -64,7 +64,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     @VisibleForTesting
-    static DynamoDBLockBasedLeaderDecider create(
+    public static DynamoDBLockBasedLeaderDecider create(
             final CoordinatorStateDAO coordinatorStateDao,
             final String workerId,
             final Long leaseDuration,
@@ -111,15 +111,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             publishIsLeaderMetrics(false);
             return false;
         }
-        // if there's a worker ID exclusion monitor running, check if own worker ID is excluded
-        // this works based on a regex pattern written into the coordinator table, plus an expiration time
-        WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
-        if (exclusionMonitor != null && exclusionMonitor.isExcludedFromLeadership(workerId)) {
-            log.info("Worker : {} is not eligible to be leader based on exclusion pattern.", workerId);
-            releaseLeadershipIfHeld();
-            publishIsLeaderMetrics(false);
-            return false;
-        }
         // If the last time we tried to take lock and didnt get lock, don't try to take again for heartbeatPeriodMillis
         // this is to avoid unnecessary calls to dynamoDB.
         // Different modules in KCL can request for isLeader check within heartbeatPeriodMillis, and this optimization
@@ -128,6 +119,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         if (!lastIsLeaderResult && lastCheckTimeInMillis + heartbeatPeriodMillis > System.currentTimeMillis()) {
             publishIsLeaderMetrics(lastIsLeaderResult);
             return lastIsLeaderResult;
+        }
+        // if there's a worker ID exclusion monitor running, check if own worker ID is excluded
+        // this works based on a regex pattern written into the coordinator table, plus an expiration time
+        WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
+        if (exclusionMonitor != null && exclusionMonitor.isExcludedFromLeadership(workerId)) {
+            log.info("Worker : {} is not eligible to be leader based on exclusion pattern.", workerId);
+            releaseLeadershipIfHeld();
+            publishIsLeaderMetrics(false);
+            return false;
         }
         boolean response;
         // Get the lockItem from storage (if present

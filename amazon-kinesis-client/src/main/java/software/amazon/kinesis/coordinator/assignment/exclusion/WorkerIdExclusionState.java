@@ -16,18 +16,20 @@
 package software.amazon.kinesis.coordinator.assignment.exclusion;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 
 @Getter
-@RequiredArgsConstructor
+@Slf4j
 public class WorkerIdExclusionState extends CoordinatorState {
 
     public static final String WORKER_ID_EXCLUSION_HASH_KEY = "WorkerIdExclusion";
@@ -35,40 +37,90 @@ public class WorkerIdExclusionState extends CoordinatorState {
     public static final String EXPIRATION_HASH_KEY = "e";
     public static final String ONLY_EXCLUDING_LEADERSHIP_HASH_KEY = "l";
 
+    private static final String DEFAULT_REGEX = "(?!)";
+    private static final Long DEFAULT_EXPIRATION = Long.MAX_VALUE;
+    private static final boolean DEFAULT_EXCLUDING_LEADERSHIP = false;
+
     private final Pattern regex;
     private final Instant expirationInstant;
     private final boolean onlyExcludingLeadership;
 
+    public WorkerIdExclusionState() {
+        this(DEFAULT_REGEX, DEFAULT_EXPIRATION, DEFAULT_EXCLUDING_LEADERSHIP);
+    }
+
+    public WorkerIdExclusionState(String regex, long expirationInstant, boolean onlyExcludingLeadership) {
+        this.initializeParentFields();
+        this.putAttributeValues(regex, expirationInstant, onlyExcludingLeadership);
+
+        this.regex = Pattern.compile(regex);
+        this.expirationInstant = Instant.ofEpochMilli(expirationInstant);
+        this.onlyExcludingLeadership = onlyExcludingLeadership;
+    }
+
+    private void initializeParentFields() {
+        this.setKey(WORKER_ID_EXCLUSION_HASH_KEY);
+        this.setAttributes(new HashMap<String, AttributeValue>());
+    }
+
+    private void putAttributeValues(String regex, long expirationInstant, boolean onlyExcludingLeadership) {
+        Map<String, AttributeValue> attributes = this.getAttributes();
+
+        attributes.put(REGEX_HASH_KEY, AttributeValue.fromS(regex));
+        attributes.put(EXPIRATION_HASH_KEY, AttributeValue.fromN(String.valueOf(expirationInstant)));
+        attributes.put(ONLY_EXCLUDING_LEADERSHIP_HASH_KEY, AttributeValue.fromBool(onlyExcludingLeadership));
+    }
+
     public static WorkerIdExclusionState fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
-        return new WorkerIdExclusionState(
-                getRegexAttribute(dynamoRecord),
-                getExpirationInstantAttribute(dynamoRecord),
-                getOnlyExcludingLeadershipAttribute(dynamoRecord));
+        if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
+            return null;
+        } else {
+            return new WorkerIdExclusionState(
+                    getRegexAttribute(dynamoRecord),
+                    getExpirationInstantAttribute(dynamoRecord),
+                    getOnlyExcludingLeadershipAttribute(dynamoRecord));
+        }
     }
 
-    public static Pattern getRegexAttribute(Map<String, AttributeValue> dynamoRecord) {
-        return Pattern.compile(dynamoRecord.get(REGEX_HASH_KEY).s());
+    public static String getRegexAttribute(@NonNull Map<String, AttributeValue> dynamoRecord) {
+        AttributeValue av = dynamoRecord.get(REGEX_HASH_KEY);
+        if (av == null) {
+            return DEFAULT_REGEX;
+        } else {
+            return av.s();
+        }
     }
 
-    public static Instant getExpirationInstantAttribute(Map<String, AttributeValue> dynamoRecord) {
-        return Instant.ofEpochMilli(
-                Long.valueOf(dynamoRecord.get(EXPIRATION_HASH_KEY).n()));
+    public static Long getExpirationInstantAttribute(@NonNull Map<String, AttributeValue> dynamoRecord) {
+        AttributeValue av = dynamoRecord.get(EXPIRATION_HASH_KEY);
+        if (av == null) {
+            return DEFAULT_EXPIRATION;
+        } else {
+            return Long.valueOf(av.n());
+        }
     }
 
-    public static boolean getOnlyExcludingLeadershipAttribute(Map<String, AttributeValue> dynamoRecord) {
-        return dynamoRecord.get(ONLY_EXCLUDING_LEADERSHIP_HASH_KEY).bool();
+    public static boolean getOnlyExcludingLeadershipAttribute(@NonNull Map<String, AttributeValue> dynamoRecord) {
+        AttributeValue av = dynamoRecord.get(ONLY_EXCLUDING_LEADERSHIP_HASH_KEY);
+        if (av == null) {
+            return DEFAULT_EXCLUDING_LEADERSHIP;
+        } else {
+            return av.bool();
+        }
     }
 
     @Override
     public boolean equals(Object other) {
-        if (this == null ^ other == null) {
+        if (this == other) {
+            return true;
+        } else if (this == null ^ other == null) {
             return false;
         } else if (!(other instanceof WorkerIdExclusionState)) {
             return false;
         } else {
             WorkerIdExclusionState o = (WorkerIdExclusionState) other;
             return sameRegex(o)
-                    && this.expirationInstant == o.getExpirationInstant()
+                    && this.expirationInstant.equals(o.getExpirationInstant())
                     && this.onlyExcludingLeadership == o.isOnlyExcludingLeadership();
         }
     }
