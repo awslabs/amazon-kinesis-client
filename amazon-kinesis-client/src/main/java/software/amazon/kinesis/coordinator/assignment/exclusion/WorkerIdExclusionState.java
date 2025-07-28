@@ -23,13 +23,11 @@ import java.util.regex.Pattern;
 
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 
 @Getter
-@Slf4j
 public class WorkerIdExclusionState extends CoordinatorState {
 
     public static final String WORKER_ID_EXCLUSION_HASH_KEY = "WorkerIdExclusion";

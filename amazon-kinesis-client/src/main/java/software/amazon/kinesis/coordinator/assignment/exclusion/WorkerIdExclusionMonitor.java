@@ -17,7 +17,6 @@ package software.amazon.kinesis.coordinator.assignment.exclusion;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -28,7 +27,6 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -122,12 +120,9 @@ public class WorkerIdExclusionMonitor implements Runnable {
         }
     }
 
-    private Map<String, AttributeValue> getDynamoRecord() throws Exception {
-        return this.coordinatorStateDAO.getDynamoRecord(WorkerIdExclusionState.WORKER_ID_EXCLUSION_HASH_KEY);
-    }
-
     private WorkerIdExclusionState getCurrentState() throws Exception {
-        return WorkerIdExclusionState.fromDynamoRecord(getDynamoRecord());
+        return WorkerIdExclusionState.fromDynamoRecord(
+                this.coordinatorStateDAO.getDynamoRecord(WorkerIdExclusionState.WORKER_ID_EXCLUSION_HASH_KEY));
     }
 
     public synchronized boolean isExcluded(@NonNull String workerId) {
@@ -135,11 +130,7 @@ public class WorkerIdExclusionMonitor implements Runnable {
     }
 
     public synchronized boolean isExcludedFromLeadership(@NonNull String workerId) {
-        return this.matches(this.activePattern, workerId);
-    }
-
-    public static boolean matches(Pattern pattern, @NonNull String workerId) {
-        return pattern == null ? false : Pattern.matches(pattern.pattern(), workerId);
+        return this.activePattern != null && Pattern.matches(this.activePattern.pattern(), workerId);
     }
 
     public static boolean isExpired(@NonNull WorkerIdExclusionState state) {
