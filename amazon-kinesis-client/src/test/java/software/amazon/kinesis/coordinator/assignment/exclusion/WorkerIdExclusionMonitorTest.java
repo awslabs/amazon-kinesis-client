@@ -126,6 +126,7 @@ class WorkerIdExclusionMonitorTest {
 
         this.monitor.run();
         assertEquals(false, leaderDecider0.isLeader(workerId0));
+        Thread.sleep(10L);
         assertEquals(true, leaderDecider1.isLeader(workerId1));
 
         WorkerIdExclusionState newState = new WorkerIdExclusionState(workerId1, Long.MAX_VALUE, false);
@@ -133,6 +134,7 @@ class WorkerIdExclusionMonitorTest {
 
         this.monitor.run();
         assertEquals(false, leaderDecider1.isLeader(workerId1));
+        Thread.sleep(10L);
         assertEquals(true, leaderDecider0.isLeader(workerId0));
     }
 
