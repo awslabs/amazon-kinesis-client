@@ -245,13 +245,9 @@ public class ProcessTask implements ConsumerTask {
     private void callProcessRecords(ProcessRecordsInput input, List<KinesisClientRecord> records) {
         log.debug("Calling application processRecords() with {} records from {}", records.size(), shardInfoId);
 
-        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
+        final ProcessRecordsInput processRecordsInput = input.toBuilder()
                 .records(records)
-                .cacheExitTime(input.cacheExitTime())
-                .cacheEntryTime(input.cacheEntryTime())
-                .isAtShardEnd(input.isAtShardEnd())
                 .checkpointer(recordProcessorCheckpointer)
-                .millisBehindLatest(input.millisBehindLatest())
                 .build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);

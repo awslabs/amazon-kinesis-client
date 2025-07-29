@@ -23,7 +23,7 @@
   <parent>
     <groupId>software.amazon.kinesis</groupId>
     <artifactId>amazon-kinesis-client-pom</artifactId>
-    <version>3.1.0</version>
+    <version>3.1.1</version>
   </parent>
 
   <artifactId>amazon-kinesis-client</artifactId>
@@ -150,7 +150,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
-      <version>3.14.0</version>
+      <version>3.18.0</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/commons-collections/commons-collections -->
     <dependency>

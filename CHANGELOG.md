@@ -5,6 +5,15 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release (3.1.1 - July 8, 2025)
+* [#1495](https://github.com/awslabs/amazon-kinesis-client/pull/1495) Add millisBehindLatestThresholdForReducedTps property to PollingConfig
+* [#1498](https://github.com/awslabs/amazon-kinesis-client/pull/1498) Add multilang support for leaseAssignmentIntervalMillis config
+* [#1499](https://github.com/awslabs/amazon-kinesis-client/pull/1499) Add Lease Table ARN Hash as Consumer ID in UserAgent for Kinesis requests
+* [#1493](https://github.com/awslabs/amazon-kinesis-client/pull/1493) Bump awssdk.version from 2.25.64 to 2.31.62
+* [#1502](https://github.com/awslabs/amazon-kinesis-client/pull/1502) Bump io.reactivex.rxjava3:rxjava from 3.1.8 to 3.1.11
+* [#1457](https://github.com/awslabs/amazon-kinesis-client/pull/1457) Bump org.projectlombok:lombok from 1.18.24 to 1.18.38
+* [#1505](https://github.com/awslabs/amazon-kinesis-client/pull/1505) Bump schema-registry-common and schema-registry-serde from 1.1.19 to 1.1.24
+
 ### Release (3.1.0 - June 09, 2025)
 * [#1481](https://github.com/awslabs/amazon-kinesis-client/pull/1481) Convert awssdk object to lease early to release memory
 * [#1480](https://github.com/awslabs/amazon-kinesis-client/pull/1480) Added the ability to control sleep time in recordsfetcher
