@@ -79,7 +79,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testGetNullIdentifierSingleStreamModeFetchesFromDAOWhenNotCached()
+    public void testGetWithNullIdentifierInSingleStreamModeFetchesFromDAOWhenNotCached()
             throws InvalidStateException, ProvisionedThroughputException, DependencyException {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
         StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
@@ -92,7 +92,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testGetNullStreamIdentifierInMultiStreamModeThrowsException() throws InvalidStateException {
+    public void testGetWithNullIdentifierInMultiStreamModeThrowsException() throws InvalidStateException {
         cacheManager = createCacheManager(true, StreamIdOnboardingState.ONBOARDED);
 
         cacheManager.get(null);
@@ -136,20 +136,52 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testGetWithNonExistentStreamIdInNotOnboardedStateReturnsNull() throws InvalidStateException {
+    public void testResolveStreamIdInNotOnboardedStateSkipsDAO() {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.NOT_ONBOARDED);
+        cacheManager.resolveStreamId(streamIdentifier);
+        verifyNoInteractions(mockStreamInfoDAO);
+    }
+
+    @Test
+    public void testGetWithNonExistentStreamIdInTransitionStateReturnsNullAndQueuesForDelayedFetch()
+            throws InvalidStateException {
+        cacheManager = createCacheManager(false, StreamIdOnboardingState.IN_TRANSITION);
 
         String result = cacheManager.get(streamIdentifier);
 
         assertNull(result);
         assertTrue(cacheManager.delayedFetchStreamIdKeys.contains(streamIdentifier.toString()));
+        verifyNoInteractions(mockStreamInfoDAO);
     }
 
     @Test
-    public void testResolveStreamIdInNotOnboardedStateSkipsDAO() {
-        cacheManager = createCacheManager(false, StreamIdOnboardingState.NOT_ONBOARDED);
-        cacheManager.resolveStreamId(streamIdentifier);
+    public void testGetInMultiStreamTransitionModeQueuesForDelayedFetch() throws Exception {
+        Map<StreamIdentifier, StreamConfig> multiStreamMap = createMultiStreamConfigMap();
+        cacheManager = createCacheManager(true, StreamIdOnboardingState.IN_TRANSITION);
+
+        StreamIdentifier[] streamIds = multiStreamMap.keySet().toArray(new StreamIdentifier[0]);
+        StreamIdentifier streamId1 = streamIds[0];
+        StreamIdentifier streamId2 = streamIds[1];
+
+        // Mock the DAO responses for delayed fetch
+        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1", "STREAM");
+        when(mockStreamInfoDAO.getStreamInfo(streamId1.toString())).thenReturn(streamInfo1);
+
+        // Call get() - should return null and queue for delayed fetch
+        String result1 = cacheManager.get(streamId1);
+
+        // Verify immediate behavior
+        assertNull(result1);
+        assertTrue(cacheManager.delayedFetchStreamIdKeys.contains(streamId1.toString()));
         verifyNoInteractions(mockStreamInfoDAO);
+
+        // Simulate the delayed fetch process (what the scheduled task would do)
+        assertEquals(1, cacheManager.delayedFetchStreamIdKeys.size());
+        cacheManager.resolveAndFetchStreamId(cacheManager.delayedFetchStreamIdKeys.poll());
+
+        // Verify delayed fetch worked
+        assertEquals("id1", cacheManager.cache.get(streamId1.toString()));
+        verify(mockStreamInfoDAO).getStreamInfo(streamId1.toString());
     }
 
     @Test(expected = RuntimeException.class)
@@ -162,7 +194,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testGetConcurrentCallsForSameStreamCallsDAOOnlyOnce() throws Exception {
+    public void testGetWithConcurrentCallsForSameStreamCallsDAOOnlyOnce() throws Exception {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
 
         StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
@@ -194,21 +226,6 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testResolveAndFetchStreamIdInNotOnboardedStateAddsToCache() throws Exception {
-        cacheManager = createCacheManager(false, StreamIdOnboardingState.NOT_ONBOARDED);
-        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
-        when(mockStreamInfoDAO.getStreamInfo(streamIdentifier.toString())).thenReturn(streamInfo);
-
-        cacheManager.delayedFetchStreamIdKeys.add(streamIdentifier.toString());
-
-        cacheManager.resolveAndFetchStreamId(cacheManager.delayedFetchStreamIdKeys.poll());
-
-        verify(mockStreamInfoDAO).getStreamInfo(streamIdentifier.toString());
-        assertEquals(streamId, cacheManager.cache.get(streamIdentifier.toString()));
-        assertTrue(cacheManager.delayedFetchStreamIdKeys.isEmpty());
-    }
-
-    @Test
     public void testConstructorCreatesScheduledTaskForDelayedFetch() {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
 
@@ -221,8 +238,8 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testDelayedFetchTaskHandlesExceptions() throws Exception {
-        cacheManager = createCacheManager(false, StreamIdOnboardingState.NOT_ONBOARDED);
+    public void testResolveAndFetchStreamIdWithExceptionHandlesException() throws Exception {
+        cacheManager = createCacheManager(false, StreamIdOnboardingState.IN_TRANSITION);
 
         cacheManager.delayedFetchStreamIdKeys.add(streamIdentifier.toString());
 
@@ -242,7 +259,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testGetMultiStreamOnboardedStateReturnsStreamIdFromDAO() throws Exception {
+    public void testGetInMultiStreamOnboardedModeReturnsStreamIdFromDAO() throws Exception {
         Map<StreamIdentifier, StreamConfig> multiStreamMap = createMultiStreamConfigMap();
         cacheManager = createCacheManager(true, StreamIdOnboardingState.ONBOARDED);
 
@@ -267,7 +284,7 @@ public class StreamIdCacheManagerTest {
     @Test
     public void testMultiStreamModeWithDelayedFetch() throws Exception {
         Map<StreamIdentifier, StreamConfig> multiStreamMap = createMultiStreamConfigMap();
-        cacheManager = createCacheManager(true, StreamIdOnboardingState.NOT_ONBOARDED);
+        cacheManager = createCacheManager(true, StreamIdOnboardingState.IN_TRANSITION);
 
         StreamIdentifier[] streamIds = multiStreamMap.keySet().toArray(new StreamIdentifier[0]);
         StreamIdentifier streamId1 = streamIds[0];
@@ -295,14 +312,14 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testStopMethod() {
+    public void testStopShutsdownScheduledExecutor() {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
         cacheManager.stop();
         verify(mockScheduledExecutorService).shutdownNow();
     }
 
     @Test(expected = RuntimeException.class)
-    public void testEmptyStreamConfigMap() throws InvalidStateException {
+    public void testGetWithEmptyStreamConfigMapThrowsException() throws InvalidStateException {
         Map<StreamIdentifier, StreamConfig> emptyMap = new HashMap<>();
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
 
@@ -310,7 +327,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testRemoveStreamId() {
+    public void testRemoveStreamIdRemovesFromCache() {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
         cacheManager.cache.put(streamKey, streamId);
 
@@ -320,7 +337,7 @@ public class StreamIdCacheManagerTest {
     }
 
     @Test
-    public void testGetAllCachedStreamIdKey() {
+    public void testGetAllCachedStreamIdKeyReturnsAllKeys() {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
         cacheManager.cache.put(streamKey, streamId);
         cacheManager.cache.put("key2", "id2");

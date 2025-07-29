@@ -210,21 +210,4 @@ public class StreamIdCacheManager {
             scheduledExecutorService.shutdownNow();
         }
     }
-
-    /**
-     * Cleans up the stream ID cache by removing entries that are not in the active streams set.
-     * @param activeStreamIds Set of active stream IDs to keep in the cache
-     */
-    void cleanupStreamIdCache(Set<String> activeStreamIds) {
-        if (activeStreamIds == null) {
-            return;
-        }
-
-        Set<String> cachedStreamIds = cache.keySet();
-        for (String streamId : cachedStreamIds) {
-            if (!activeStreamIds.contains(streamId)) {
-                cache.remove(streamId);
-            }
-        }
-    }
 }
