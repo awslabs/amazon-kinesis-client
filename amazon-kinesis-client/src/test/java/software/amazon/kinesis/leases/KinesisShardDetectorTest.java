@@ -41,6 +41,9 @@ import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheTestUtil;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.isA;
@@ -79,6 +82,9 @@ public class KinesisShardDetectorTest {
     @Mock
     private CompletableFuture<ListShardsResponse> mockFuture;
 
+    @Mock
+    private StreamIdCacheManager mockCacheManager;
+
     @Before
     public void setup() {
         shardDetector = new KinesisShardDetector(
@@ -90,6 +96,7 @@ public class KinesisShardDetectorTest {
                 MAX_CACHE_MISSES_BEFORE_RELOAD,
                 CACHE_MISS_WARNING_MODULUS,
                 KINESIS_REQUEST_TIMEOUT);
+        StreamIdCacheTestUtil.initializeForTest(mockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
     }
 
     @Test
