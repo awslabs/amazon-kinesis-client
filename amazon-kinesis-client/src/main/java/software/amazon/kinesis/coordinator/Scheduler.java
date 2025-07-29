@@ -1259,7 +1259,7 @@ public class Scheduler implements Runnable {
             final Set<String> activeStreamIdKeys = shardInfoShardConsumerMap.keySet().stream()
                     .map(k -> StreamInfo.multiStreamLeaseKeyToStreamIdentifier(ShardInfo.getLeaseKey(k)))
                     .collect(Collectors.toSet());
-            Set<String> allCachedStreamIdKeys = streamIdCacheManager.getAllCachedStreamIdKey();
+            final Set<String> allCachedStreamIdKeys = streamIdCacheManager.getAllCachedStreamIdKey();
             for (String streamIdKey : allCachedStreamIdKeys) {
                 if (!activeStreamIdKeys.contains(streamIdKey)) {
                     streamIdCacheManager.removeStreamId(streamIdKey);
