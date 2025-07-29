@@ -64,6 +64,10 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -198,6 +202,12 @@ public class SchedulerTest {
 
     @Mock
     private LeaseCleanupManager leaseCleanupManager;
+
+    @Mock
+    private StreamInfoManager streamInfoManager;
+
+    @Mock
+    private StreamIdCacheManager streamIdCacheManager;
 
     private Map<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerMap;
     private Map<StreamIdentifier, ShardDetector> shardDetectorMap;
@@ -352,6 +362,84 @@ public class SchedulerTest {
         // verify shard consumers present in assignedShards aren't shut down
         assertFalse(shardConsumer0.isShutdownRequested());
         assertFalse(shardConsumer1.isShutdownRequested());
+    }
+
+    private void createShardConsumer(String shardId, String streamIdentifier) {
+        ShardInfo shardInfo =
+                new ShardInfo(shardId, "concurrencyToken", null, ExtendedSequenceNumber.TRIM_HORIZON, streamIdentifier);
+        scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
+    }
+
+    @Test
+    public void testCleanupStreamIdCache_NoInteractionInSingleStreamMode() throws Exception {
+        final String stream1 = "123456789012:stream1:1";
+        createShardConsumer("shardId-000000000000", stream1);
+        createShardConsumer("shardId-000000000001", stream1);
+
+        // Execute cleanup
+        scheduler.cleanupStreamIdCache();
+
+        // Verify no interactions with streamIdCacheManager in single stream mode
+        verify(streamIdCacheManager, never()).getAllCachedStreamIdKey();
+        verify(streamIdCacheManager, never()).removeStreamId(anyString());
+    }
+
+    @Test
+    public void testCleanupStreamIdCache_RemovesUnusedStreamIds_MultipleStreamsScenario() {
+        /*
+         Setup: 4 streams with 4 shards each
+         Stream1: 2 active shards (out of 4) - should NOT be removed from cache
+         Stream2: 4 active shards (all active) - should NOT be removed from cache
+         Stream3: 0 active shards - should be removed from cache
+         Stream4: 1 active shard (out of 4) - should NOT be removed from cache
+        */
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        leaseManagementConfig = new LeaseManagementConfig(
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
+                .leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, true));
+        scheduler = new Scheduler(
+                checkpointConfig,
+                coordinatorConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig);
+
+        final String stream1 = "123456789012:stream1:1";
+        final String stream2 = "123456789012:stream2:2";
+        final String stream3 = "123456789012:stream3:3";
+        final String stream4 = "210987654321:stream1:1";
+
+        // Create active shards for different streams
+        // Stream1: 2 active shards
+        createShardConsumer("shardId-000000000000", stream1);
+        createShardConsumer("shardId-000000000001", stream1);
+
+        // Stream2: 4 active shards
+        createShardConsumer("shardId-000000000000", stream2);
+        createShardConsumer("shardId-000000000001", stream2);
+        createShardConsumer("shardId-000000000002", stream2);
+        createShardConsumer("shardId-000000000003", stream2);
+
+        // Stream3: 0 active shards (none created)
+
+        // Stream4: 1 active shard
+        createShardConsumer("shardId-000000000000", stream4);
+
+        // Mock cache with all 4 stream IDs
+        Set<String> cachedStreamIds = new HashSet<>(Arrays.asList(stream1, stream2, stream3, stream4));
+        when(streamIdCacheManager.getAllCachedStreamIdKey()).thenReturn(cachedStreamIds);
+
+        // Execute cleanup
+        scheduler.cleanupStreamIdCache();
+
+        // Verify: Only stream3 should be removed (has no active shards)
+        verify(streamIdCacheManager, never()).removeStreamId(stream1); // Has 2 active shards
+        verify(streamIdCacheManager, never()).removeStreamId(stream2); // Has 4 active shards
+        verify(streamIdCacheManager).removeStreamId(stream3); // Has 0 active shards
+        verify(streamIdCacheManager, never()).removeStreamId(stream4); // Has 1 active shard
     }
 
     @Test
@@ -790,6 +878,7 @@ public class SchedulerTest {
                     }
                 });
         testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
+        verify(streamInfoManager, times(2)).deleteStreamInfo(any(StreamIdentifier.class));
     }
 
     @Test
@@ -814,6 +903,7 @@ public class SchedulerTest {
                         InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
                 .collect(Collectors.toCollection(HashSet::new));
         testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(false, currentStreamConfigMapOverride);
+        verify(streamInfoManager, never()).deleteStreamInfo(any(StreamIdentifier.class));
     }
 
     @Test
@@ -838,6 +928,7 @@ public class SchedulerTest {
                     }
                 });
         testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
+        verify(streamInfoManager, times(2)).deleteStreamInfo(any(StreamIdentifier.class));
     }
 
     private void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(
@@ -1011,6 +1102,7 @@ public class SchedulerTest {
         Assert.assertEquals(
                 expectPendingStreamsForDeletion ? expectedPendingStreams : Sets.newHashSet(),
                 scheduler.staleStreamDeletionMap().keySet());
+        verify(streamInfoManager, never()).deleteStreamInfo(any(StreamIdentifier.class));
     }
 
     @Test
@@ -1693,6 +1785,14 @@ public class SchedulerTest {
         }
 
         @Override
+        public LeaseCoordinator createLeaseCoordinator(
+                MetricsFactory metricsFactory,
+                ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
+                StreamIdCacheManager streamIdCacheManager) {
+            return leaseCoordinator;
+        }
+
+        @Override
         public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory) {
             return shardSyncTaskManager;
         }
@@ -1721,6 +1821,15 @@ public class SchedulerTest {
         }
 
         @Override
+        public ShardSyncTaskManager createShardSyncTaskManager(
+                MetricsFactory metricsFactory,
+                StreamConfig streamConfig,
+                DeletedStreamListProvider deletedStreamListProvider,
+                StreamInfoManager streamInfoManager) {
+            return createShardSyncTaskManager(metricsFactory, streamConfig, deletedStreamListProvider);
+        }
+
+        @Override
         public DynamoDBLeaseRefresher createLeaseRefresher() {
             return dynamoDBLeaseRefresher;
         }
@@ -1738,6 +1847,26 @@ public class SchedulerTest {
         @Override
         public LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory) {
             return leaseCleanupManager;
+        }
+
+        @Override
+        public StreamIdCacheManager createStreamIdCacheManager(
+                StreamInfoDAO streamInfoDAO,
+                Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+                StreamIdOnboardingState streamIdOnboardingState,
+                boolean isMultiStreamMode) {
+            return streamIdCacheManager;
+        }
+
+        @Override
+        public StreamInfoManager createStreamInfoManager(
+                Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+                StreamInfoDAO streamInfoDAO,
+                MetricsFactory metricsFactory,
+                boolean isMultiStreamMode,
+                long streamInfoBackfillIntervalMillis,
+                StreamInfoMode streamInfoMode) {
+            return streamInfoManager;
         }
     }
 
