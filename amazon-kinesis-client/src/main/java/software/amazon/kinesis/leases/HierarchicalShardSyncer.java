@@ -48,6 +48,9 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
+import software.amazon.kinesis.coordinator.StreamInfoManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -76,6 +79,8 @@ public class HierarchicalShardSyncer {
 
     private final DeletedStreamListProvider deletedStreamListProvider;
 
+    private final StreamInfoManager streamInfoManager;
+
     private static final String MIN_HASH_KEY = BigInteger.ZERO.toString();
     private static final String MAX_HASH_KEY =
             new BigInteger("2").pow(128).subtract(BigInteger.ONE).toString();
@@ -95,9 +100,18 @@ public class HierarchicalShardSyncer {
             final boolean isMultiStreamMode,
             final String streamIdentifier,
             final DeletedStreamListProvider deletedStreamListProvider) {
+        this(isMultiStreamMode, streamIdentifier, deletedStreamListProvider, null);
+    }
+
+    public HierarchicalShardSyncer(
+            final boolean isMultiStreamMode,
+            final String streamIdentifier,
+            final DeletedStreamListProvider deletedStreamListProvider,
+            final StreamInfoManager streamInfoManager) {
         this.isMultiStreamMode = isMultiStreamMode;
         this.streamIdentifier = streamIdentifier;
         this.deletedStreamListProvider = deletedStreamListProvider;
+        this.streamInfoManager = streamInfoManager;
     }
 
     private static String getShardIdFromLease(Lease lease, MultiStreamArgs multiStreamArgs) {
@@ -161,6 +175,8 @@ public class HierarchicalShardSyncer {
             log.warn("Skipping shard sync for {} as no shards found from service.", streamIdentifier);
             return false;
         }
+        // back-fill stream info before creating lease
+        createStreamInfo(shardDetector.streamIdentifier());
 
         final Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(latestShards);
         final Map<String, Set<String>> shardIdToChildShardIdsMap =
@@ -203,6 +219,33 @@ public class HierarchicalShardSyncer {
         }
         log.info("{} - Newly created leases {}: {}", streamIdentifier, createdLeases.size(), createdLeases);
         return true;
+    }
+
+    /**
+     * This method creates stream Info before lease is created for new stream
+     * It throws exception only if it fails to create stream in StreamIdOnboardingState.ONBOARDED mode
+     * @param streamIdentifier
+     * @throws ProvisionedThroughputException
+     * @throws InvalidStateException
+     * @throws DependencyException
+     */
+    private void createStreamInfo(StreamIdentifier streamIdentifier)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (streamInfoManager == null) {
+            if (StreamIdCache.getInstance().getOnboardingState() == StreamIdOnboardingState.ONBOARDED) {
+                throw new InvalidStateException("Failed to create streamId info for {} before creating lease. "
+                        + "StreamInfoManager is not initialized" + streamIdentifier.serialize());
+            }
+            return;
+        }
+        try {
+            streamInfoManager.createStreamInfo(streamIdentifier);
+        } catch (Exception e) {
+            if (StreamIdCache.getInstance().getOnboardingState() == StreamIdOnboardingState.ONBOARDED) {
+                log.error("Error while creating stream info for streamIdentifier: {}", streamIdentifier);
+                throw e;
+            }
+        }
     }
 
     /** Helper method to detect a race condition between fetching the shards via paginated DescribeStream calls

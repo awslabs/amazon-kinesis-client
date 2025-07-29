@@ -47,6 +47,8 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
@@ -74,6 +76,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final String shardId;
     private final String consumerArn;
     private final String streamAndShardId;
+    private final StreamIdentifier streamIdentifier;
     private final Object lockObject = new Object();
 
     private final AtomicInteger subscribeToShardId = new AtomicInteger(0);
@@ -94,19 +97,26 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
-    public FanOutRecordsPublisher(KinesisAsyncClient kinesis, String shardId, String consumerArn) {
+    public FanOutRecordsPublisher(
+            KinesisAsyncClient kinesis, String shardId, String consumerArn, StreamIdentifier streamIdentifier) {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
         this.streamAndShardId = shardId;
+        this.streamIdentifier = streamIdentifier;
     }
 
     public FanOutRecordsPublisher(
-            KinesisAsyncClient kinesis, String shardId, String consumerArn, String streamIdentifierSer) {
+            KinesisAsyncClient kinesis,
+            String shardId,
+            String consumerArn,
+            String streamIdentifierSer,
+            StreamIdentifier streamIdentifier) {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
         this.streamAndShardId = streamIdentifierSer + ":" + shardId;
+        this.streamIdentifier = streamIdentifier;
     }
 
     @Override
@@ -311,6 +321,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId)
                     .consumerARN(consumerArn);
+            builder.streamId(StreamIdCache.get(streamIdentifier));
+
             SubscribeToShardRequest request;
             if (isFirstConnection) {
                 request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStreamExtended)

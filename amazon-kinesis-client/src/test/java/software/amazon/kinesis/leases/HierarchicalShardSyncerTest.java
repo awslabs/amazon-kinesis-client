@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,13 +53,21 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
+import software.amazon.kinesis.coordinator.StreamInfoManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheTestUtil;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.NullMetricsScope;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -68,12 +77,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.leases.HierarchicalShardSyncer.MemoizationContext;
 import static software.amazon.kinesis.leases.HierarchicalShardSyncer.determineNewLeasesToCreate;
@@ -150,8 +161,23 @@ public class HierarchicalShardSyncerTest {
     @Mock
     private DynamoDBLeaseRefresher dynamoDBLeaseRefresher;
 
+    @Mock
+    private StreamIdCacheManager mockCacheManager;
+
+    @Mock
+    private ScheduledExecutorService mockScheduledExecutorService;
+
+    @Mock
+    private StreamInfoDAO mockStreamInfoDAO;
+
+    @Mock
+    MetricsFactory mockMetricsFactory;
+
+    private StreamInfoManager streamInfoManager;
+
     @Before
     public void setup() throws DependencyException {
+        StreamIdCacheTestUtil.initializeForTest(mockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
         hierarchicalShardSyncer = new HierarchicalShardSyncer();
         when(shardDetector.streamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
         when(dynamoDBLeaseRefresher.getLeaseTableIdentifier()).thenReturn(CONSUMER_ID);
@@ -2652,6 +2678,134 @@ public class HierarchicalShardSyncerTest {
 
         verify(shardDetector, times(1)).listShardsWithFilter(any(ShardFilter.class), anyString()); // Verify retries.
         verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+    @Test
+    public void testLeaseCreationWithStreamInfoNotCreatedWhenStreamInfoModeDisabled() throws Exception {
+        final List<Shard> shardsWithCompleteHashRange = createTestShards();
+        streamInfoManager = createStreamInfoManager(new HashMap<>(), true, StreamInfoMode.DISABLED);
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class), anyString()))
+                .thenReturn(shardsWithCompleteHashRange);
+        HierarchicalShardSyncer currentHierarchicalShardSyncer =
+                new HierarchicalShardSyncer(false, "streamName", null, streamInfoManager);
+        currentHierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
+                shardDetector,
+                dynamoDBLeaseRefresher,
+                INITIAL_POSITION_LATEST,
+                SCOPE,
+                ignoreUnexpectedChildShards,
+                dynamoDBLeaseRefresher.isLeaseTableEmpty());
+
+        verifyNoMoreInteractions(mockStreamInfoDAO);
+        verify(shardDetector, times(1)).listShardsWithFilter(any(ShardFilter.class), anyString()); // Verify retries.
+        verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+    @Test
+    public void testLeaseCreationWithStreamInfoCreatedWhenStreamInfoModeTrackOnly()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException, InterruptedException {
+        final List<Shard> shardsWithCompleteHashRange = createTestShards();
+
+        streamInfoManager = createStreamInfoManager(new HashMap<>(), true, StreamInfoMode.TRACK_ONLY);
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class), anyString()))
+                .thenReturn(shardsWithCompleteHashRange);
+        HierarchicalShardSyncer currentHierarchicalShardSyncer =
+                new HierarchicalShardSyncer(false, "", null, streamInfoManager);
+        currentHierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
+                shardDetector,
+                dynamoDBLeaseRefresher,
+                INITIAL_POSITION_LATEST,
+                SCOPE,
+                ignoreUnexpectedChildShards,
+                dynamoDBLeaseRefresher.isLeaseTableEmpty());
+
+        verify(mockStreamInfoDAO).createStreamInfo(any(StreamIdentifier.class));
+        verify(shardDetector, times(1)).listShardsWithFilter(any(ShardFilter.class), anyString()); // Verify retries.
+        verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+    @Test
+    public void testLeaseCreationWhenStreamInfoNotCreatedWhenStreamInfoModeTrackOnly() throws Exception {
+        final List<Shard> shardsWithCompleteHashRange = createTestShards();
+
+        streamInfoManager = createStreamInfoManager(new HashMap<>(), true, StreamInfoMode.TRACK_ONLY);
+        when(mockStreamInfoDAO.createStreamInfo(any(StreamIdentifier.class)))
+                .thenThrow(new InvalidStateException("Test Exception"));
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class), anyString()))
+                .thenReturn(shardsWithCompleteHashRange);
+        HierarchicalShardSyncer currentHierarchicalShardSyncer =
+                new HierarchicalShardSyncer(false, "", null, streamInfoManager);
+        currentHierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
+                shardDetector,
+                dynamoDBLeaseRefresher,
+                INITIAL_POSITION_LATEST,
+                SCOPE,
+                ignoreUnexpectedChildShards,
+                dynamoDBLeaseRefresher.isLeaseTableEmpty());
+
+        verify(mockStreamInfoDAO).createStreamInfo(any(StreamIdentifier.class));
+        verify(shardDetector, times(1)).listShardsWithFilter(any(ShardFilter.class), anyString()); // Verify retries.
+        verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+    @Test
+    public void testLeaseNotCreatedWhenStreamInfoNotCreatedWhenStreamInfoModeTrackOnlyAndStreamOnboardingOnboarded()
+            throws Exception {
+        StreamIdCacheTestUtil.initializeForTest(mockCacheManager, StreamIdOnboardingState.ONBOARDED);
+        final List<Shard> shardsWithCompleteHashRange = createTestShards();
+
+        streamInfoManager = createStreamInfoManager(new HashMap<>(), true, StreamInfoMode.TRACK_ONLY);
+        when(mockStreamInfoDAO.createStreamInfo(any(StreamIdentifier.class)))
+                .thenThrow(new InvalidStateException("Test Exception"));
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class), anyString()))
+                .thenReturn(shardsWithCompleteHashRange);
+        HierarchicalShardSyncer currentHierarchicalShardSyncer =
+                new HierarchicalShardSyncer(false, "", null, streamInfoManager);
+        try {
+            currentHierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
+                    shardDetector,
+                    dynamoDBLeaseRefresher,
+                    INITIAL_POSITION_LATEST,
+                    SCOPE,
+                    ignoreUnexpectedChildShards,
+                    dynamoDBLeaseRefresher.isLeaseTableEmpty());
+            fail("Exception needs to be thrown");
+        } catch (Exception e) {
+            verify(mockStreamInfoDAO).createStreamInfo(any(StreamIdentifier.class));
+            verify(dynamoDBLeaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
+        }
+    }
+
+    private StreamInfoManager createStreamInfoManager(
+            Map<StreamIdentifier, StreamConfig> configMap, boolean isMultiStreamMode, StreamInfoMode streamInfoMode) {
+        return new StreamInfoManager(
+                mockScheduledExecutorService,
+                configMap,
+                mockStreamInfoDAO,
+                mockMetricsFactory,
+                isMultiStreamMode,
+                1000,
+                streamInfoMode);
+    }
+
+    private List<Shard> createTestShards() {
+        return Arrays.asList(
+                ShardObjectHelper.newShard(
+                        "shardId-2",
+                        null,
+                        null,
+                        ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
+                ShardObjectHelper.newShard(
+                        "shardId-3",
+                        null,
+                        null,
+                        ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY)));
     }
 
     //    /**

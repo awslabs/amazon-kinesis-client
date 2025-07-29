@@ -17,6 +17,7 @@ package software.amazon.kinesis.leases.dynamodb;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +36,13 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
+import software.amazon.kinesis.coordinator.StreamInfoManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.KinesisShardDetector;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
@@ -229,6 +236,14 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public LeaseCoordinator createLeaseCoordinator(
             @NonNull final MetricsFactory metricsFactory,
             @NonNull final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
+        return createLeaseCoordinator(metricsFactory, shardInfoShardConsumerMap, null);
+    }
+
+    @Override
+    public LeaseCoordinator createLeaseCoordinator(
+            MetricsFactory metricsFactory,
+            ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
+            StreamIdCacheManager streamIdCacheManager) {
         return new DynamoDBLeaseCoordinator(
                 this.createLeaseRefresher(),
                 workerIdentifier,
@@ -244,7 +259,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 workerUtilizationAwareAssignmentConfig,
                 gracefulLeaseHandoffConfig,
                 shardInfoShardConsumerMap,
-                leaseAssignmentIntervalMillis);
+                leaseAssignmentIntervalMillis,
+                streamIdCacheManager);
     }
 
     /**
@@ -270,6 +286,28 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 executorService,
                 new HierarchicalShardSyncer(
                         isMultiStreamMode, streamConfig.streamIdentifier().toString(), deletedStreamListProvider),
+                metricsFactory);
+    }
+
+    @Override
+    public ShardSyncTaskManager createShardSyncTaskManager(
+            MetricsFactory metricsFactory,
+            StreamConfig streamConfig,
+            DeletedStreamListProvider deletedStreamListProvider,
+            StreamInfoManager streamInfoManager) {
+        return new ShardSyncTaskManager(
+                this.createShardDetector(streamConfig),
+                this.createLeaseRefresher(),
+                streamConfig.initialPositionInStreamExtended(),
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards,
+                shardSyncIntervalMillis,
+                executorService,
+                new HierarchicalShardSyncer(
+                        isMultiStreamMode,
+                        streamConfig.streamIdentifier().toString(),
+                        deletedStreamListProvider,
+                        streamInfoManager),
                 metricsFactory);
     }
 
@@ -329,5 +367,37 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 leaseCleanupConfig.leaseCleanupIntervalMillis(),
                 leaseCleanupConfig.completedLeaseCleanupIntervalMillis(),
                 leaseCleanupConfig.garbageLeaseCleanupIntervalMillis());
+    }
+
+    @Override
+    public StreamIdCacheManager createStreamIdCacheManager(
+            StreamInfoDAO streamInfoDAO,
+            Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            StreamIdOnboardingState streamIdOnboardingState,
+            boolean isMultiStreamMode) {
+        return new StreamIdCacheManager(
+                Executors.newSingleThreadScheduledExecutor(),
+                streamInfoDAO,
+                currentStreamConfigMap,
+                streamIdOnboardingState,
+                isMultiStreamMode);
+    }
+
+    @Override
+    public StreamInfoManager createStreamInfoManager(
+            Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            StreamInfoDAO streamInfoDAO,
+            MetricsFactory metricsFactory,
+            boolean isMultiStreamMode,
+            long streamInfoBackfillIntervalMillis,
+            StreamInfoMode streamInfoMode) {
+        return new StreamInfoManager(
+                Executors.newSingleThreadScheduledExecutor(),
+                currentStreamConfigMap,
+                streamInfoDAO,
+                metricsFactory,
+                isMultiStreamMode,
+                streamInfoBackfillIntervalMillis,
+                streamInfoMode);
     }
 }

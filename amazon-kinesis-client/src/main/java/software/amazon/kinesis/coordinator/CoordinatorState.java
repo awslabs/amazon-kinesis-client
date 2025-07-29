@@ -46,6 +46,8 @@ public class CoordinatorState {
      */
     public static final String LEADER_HASH_KEY = "Leader";
 
+    public String entityType;
+
     private String key;
 
     private Map<String, AttributeValue> attributes;

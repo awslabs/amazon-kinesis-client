@@ -104,7 +104,6 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
     public void initialize() throws DependencyException {
         if (startingClientVersion == null) {
             log.info("Initializing MigrationStateMachine");
-            coordinatorStateDAO.initialize();
             final MigrationClientVersionStateInitializer startingStateInitializer =
                     new MigrationClientVersionStateInitializer(
                             timeProvider, coordinatorStateDAO, clientVersionConfig, random, workerId);

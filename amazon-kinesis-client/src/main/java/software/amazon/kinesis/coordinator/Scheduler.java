@@ -65,6 +65,10 @@ import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leader.MigrationAdaptiveLeaderDecider;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -189,6 +193,10 @@ public class Scheduler implements Runnable {
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
+    private final CoordinatorStateDAO coordinatorStateDAO;
+    private final StreamInfoManager streamInfoManager;
+    private final StreamIdCacheManager streamIdCacheManager;
+
     private volatile String consumerId = "";
 
     private final DeletedStreamListProvider deletedStreamListProvider;
@@ -292,14 +300,28 @@ public class Scheduler implements Runnable {
 
         final LeaseManagementFactory leaseManagementFactory =
                 this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
-        this.leaseCoordinator =
-                leaseManagementFactory.createLeaseCoordinator(this.metricsFactory, shardInfoShardConsumerMap);
+        this.coordinatorStateDAO = new CoordinatorStateDAO(
+                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
+        final StreamInfoDAO streamInfoDAO =
+                new StreamInfoDAO(coordinatorStateDAO, leaseManagementConfig.kinesisClient());
+        this.streamInfoManager = leaseManagementFactory.createStreamInfoManager(
+                currentStreamConfigMap,
+                streamInfoDAO,
+                metricsFactory,
+                isMultiStreamMode,
+                leaseManagementConfig.shardSyncIntervalMillis(),
+                leaseManagementConfig.streamInfoMode());
+        this.streamIdCacheManager = leaseManagementFactory.createStreamIdCacheManager(
+                streamInfoDAO,
+                currentStreamConfigMap,
+                leaseManagementConfig.streamIdOnboardingState(),
+                isMultiStreamMode);
+        this.leaseCoordinator = leaseManagementFactory.createLeaseCoordinator(
+                this.metricsFactory, shardInfoShardConsumerMap, this.streamIdCacheManager);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
-        final CoordinatorStateDAO coordinatorStateDAO = new CoordinatorStateDAO(
-                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
-        this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer(coordinatorStateDAO);
+        this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,
                 System::currentTimeMillis,
@@ -332,7 +354,7 @@ public class Scheduler implements Runnable {
         this.diagnosticEventHandler = new DiagnosticEventLogger();
         this.deletedStreamListProvider = new DeletedStreamListProvider();
         this.shardSyncTaskManagerProvider = streamConfig -> leaseManagementFactory.createShardSyncTaskManager(
-                this.metricsFactory, streamConfig, this.deletedStreamListProvider);
+                this.metricsFactory, streamConfig, this.deletedStreamListProvider, this.streamInfoManager);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -382,8 +404,7 @@ public class Scheduler implements Runnable {
     /**
      * Depends on LeaseCoordinator and LeaseRefresher to be created first
      */
-    private DynamicMigrationComponentsInitializer createDynamicMigrationComponentsInitializer(
-            final CoordinatorStateDAO coordinatorStateDAO) {
+    private DynamicMigrationComponentsInitializer createDynamicMigrationComponentsInitializer() {
         selectWorkerMetricsIfAvailable(leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
 
         final WorkerMetricStatsManager workerMetricsManager = new WorkerMetricStatsManager(
@@ -425,7 +446,8 @@ public class Scheduler implements Runnable {
                         System::nanoTime,
                         leaseManagementConfig.maxLeasesForWorker(),
                         leaseManagementConfig.gracefulLeaseHandoffConfig(),
-                        leaseManagementConfig.leaseAssignmentIntervalMillis()))
+                        leaseManagementConfig.leaseAssignmentIntervalMillis(),
+                        streamIdCacheManager))
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
@@ -484,6 +506,8 @@ public class Scheduler implements Runnable {
                 try {
                     log.info("Initializing LeaseCoordinator attempt {}", (i + 1));
                     leaseCoordinator.initialize();
+                    coordinatorStateDAO.initialize();
+                    StreamIdCache.initialize(streamIdCacheManager, leaseManagementConfig.streamIdOnboardingState());
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         if (shouldInitiateLeaseSync()) {
                             log.info(
@@ -526,6 +550,8 @@ public class Scheduler implements Runnable {
                     try {
                         Thread.sleep(schedulerInitializationBackoffTimeMillis);
                         leaderElectedPeriodicShardSyncManager.stop();
+                        streamInfoManager.stop(false);
+                        streamIdCacheManager.stop();
                     } catch (InterruptedException e) {
                         log.debug("Sleep interrupted while initializing worker.");
                     }
@@ -577,8 +603,10 @@ public class Scheduler implements Runnable {
             if (isLeader()) {
                 checkAndSyncStreamShardsAndLeases();
                 leaderSynced.set(true);
+                streamInfoManager.start();
             } else {
                 leaderSynced.set(false);
+                streamInfoManager.stop(false);
             }
 
             logExecutorState();
@@ -835,6 +863,7 @@ public class Scheduler implements Runnable {
             currentStreamConfigMap.remove(streamIdentifier);
             // Deleting leases will cause the workers to shutdown the record processors for these shards.
             if (deleteMultiStreamLeases(streamIdToShardsMap.get(streamIdentifier.serialize()))) {
+                streamInfoManager.deleteStreamInfo(streamIdentifier);
                 staleStreamDeletionMap.remove(streamIdentifier);
                 streamsSynced.add(streamIdentifier);
             }
@@ -1046,6 +1075,8 @@ public class Scheduler implements Runnable {
 
             leaderElectedPeriodicShardSyncManager.stop();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
+            streamInfoManager.stop(true);
+            streamIdCacheManager.stop();
         }
     }
 
@@ -1213,6 +1244,35 @@ public class Scheduler implements Runnable {
                     consumer.executeLifecycle();
                 }
             }
+        }
+        cleanupStreamIdCache();
+    }
+
+    /**
+     * This method removes the streamId that the current worker does not owns the lease of from StreamIdCache
+     */
+    void cleanupStreamIdCache() {
+        if (!isMultiStreamMode) {
+            return;
+        }
+        try {
+            final Set<String> activeStreamIdKeys = shardInfoShardConsumerMap.keySet().stream()
+                    .map(k -> StreamInfo.multiStreamLeaseKeyToStreamIdentifier(ShardInfo.getLeaseKey(k)))
+                    .collect(Collectors.toSet());
+            Set<String> allCachedStreamIdKeys = streamIdCacheManager.getAllCachedStreamIdKey();
+            for (String streamIdKey : allCachedStreamIdKeys) {
+                if (!activeStreamIdKeys.contains(streamIdKey)) {
+                    streamIdCacheManager.removeStreamId(streamIdKey);
+                    log.debug(
+                            "Removed stream ID from cache for stream {} as it has no shards on this worker",
+                            streamIdKey);
+                }
+            }
+        } catch (Exception e) {
+            // Not throwing exception as stream ID cache cleanup is a non-critical operation.
+            // If a stream ID remains in cache, it will be removed during a future cleanup cycle
+            // when the worker reprocesses its shard assignments.
+            log.warn("Error during stream ID cache cleanup. Will try in next cleanup cycle", e);
         }
     }
 

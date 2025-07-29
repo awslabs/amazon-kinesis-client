@@ -15,10 +15,17 @@
 
 package software.amazon.kinesis.leases;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
+import software.amazon.kinesis.coordinator.StreamInfoManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -29,8 +36,16 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 public interface LeaseManagementFactory {
     LeaseCoordinator createLeaseCoordinator(MetricsFactory metricsFactory);
 
+    @Deprecated
     default LeaseCoordinator createLeaseCoordinator(
             MetricsFactory metricsFactory, ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    default LeaseCoordinator createLeaseCoordinator(
+            MetricsFactory metricsFactory,
+            ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
+            StreamIdCacheManager streamIdCacheManager) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -52,10 +67,19 @@ public interface LeaseManagementFactory {
         throw new UnsupportedOperationException("Deprecated");
     }
 
+    @Deprecated
     default ShardSyncTaskManager createShardSyncTaskManager(
             MetricsFactory metricsFactory,
             StreamConfig streamConfig,
             DeletedStreamListProvider deletedStreamListProvider) {
+        throw new UnsupportedOperationException("createShardSyncTaskManager method not implemented");
+    }
+
+    default ShardSyncTaskManager createShardSyncTaskManager(
+            MetricsFactory metricsFactory,
+            StreamConfig streamConfig,
+            DeletedStreamListProvider deletedStreamListProvider,
+            StreamInfoManager streamInfoManager) {
         throw new UnsupportedOperationException("createShardSyncTaskManager method not implemented");
     }
 
@@ -75,4 +99,18 @@ public interface LeaseManagementFactory {
     }
 
     LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory);
+
+    StreamIdCacheManager createStreamIdCacheManager(
+            StreamInfoDAO streamInfoDAO,
+            Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            StreamIdOnboardingState streamIdOnboardingState,
+            boolean isMultiStreamMode);
+
+    StreamInfoManager createStreamInfoManager(
+            Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            StreamInfoDAO streamInfoDAO,
+            MetricsFactory metricsFactory,
+            boolean isMultiStreamMode,
+            long streamInfoBackfillIntervalMillis,
+            StreamInfoMode streamInfoMode);
 }
