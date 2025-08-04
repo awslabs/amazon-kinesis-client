@@ -79,7 +79,7 @@
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>dynamodb-lock-client</artifactId>
-      <version>1.3.0</version>
+      <version>1.4.0</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
