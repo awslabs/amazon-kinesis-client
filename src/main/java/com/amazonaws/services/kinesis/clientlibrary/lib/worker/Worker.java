@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
+import com.amazonaws.SDKGlobalConfiguration;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -1448,6 +1449,11 @@ public class Worker implements Runnable {
             if (execService == null) {
                 execService = getExecutorService();
             }
+
+            if (config.isCBORProtocolDisabled()) {
+                System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
+            }
+
             if (kinesisClient == null) {
                 kinesisClient = createClient(AmazonKinesisClientBuilder.standard(),
                         config.getKinesisCredentialsProvider(),
@@ -1466,7 +1472,7 @@ public class Worker implements Runnable {
                 cloudWatchClient = createClient(AmazonCloudWatchClientBuilder.standard(),
                         config.getCloudWatchCredentialsProvider(),
                         config.getCloudWatchClientConfiguration(),
-                        null,
+                        config.getCloudWatchEndpoint(),
                         config.getRegionName());
             }
             // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.

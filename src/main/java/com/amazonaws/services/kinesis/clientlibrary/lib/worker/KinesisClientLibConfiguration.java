@@ -256,6 +256,7 @@ public class KinesisClientLibConfiguration {
     private Arn streamArn;
     private String kinesisEndpoint;
     private String dynamoDBEndpoint;
+    private String cloudWatchEndpoint;
     private InitialPositionInStream initialPositionInStream;
     private AWSCredentialsProvider kinesisCredentialsProvider;
     private AWSCredentialsProvider dynamoDBCredentialsProvider;
@@ -295,6 +296,9 @@ public class KinesisClientLibConfiguration {
     private long garbageLeaseCleanupThresholdMillis;
     private long leasesRecoveryAuditorExecutionFrequencyMillis;
     private int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
+
+    @Getter
+    private boolean isCBORProtocolDisabled;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -955,6 +959,13 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
+     * @return CloudWatch endpoint
+     */
+    public String getCloudWatchEndpoint() {
+        return cloudWatchEndpoint;
+    }
+
+    /**
      * @return the initialPositionInStream
      */
     public InitialPositionInStream getInitialPositionInStream() {
@@ -1203,11 +1214,29 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
+     * @param isCBORProtocolDisabled is CBOR protocol disabled
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withIsCBORProtocolDisabled(boolean isCBORProtocolDisabled) {
+        this.isCBORProtocolDisabled = isCBORProtocolDisabled;
+        return this;
+    }
+
+    /**
      * @param dynamoDBEndpoint DynamoDB endpoint
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withDynamoDBEndpoint(String dynamoDBEndpoint) {
         this.dynamoDBEndpoint = dynamoDBEndpoint;
+        return this;
+    }
+
+    /**
+     * @param cloudWatchEndpoint CloudWatch endpoint
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withCloudWatchEndpoint(String cloudWatchEndpoint) {
+        this.cloudWatchEndpoint = cloudWatchEndpoint;
         return this;
     }
 

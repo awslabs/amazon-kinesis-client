@@ -1844,7 +1844,8 @@ public class WorkerTest {
         KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
                 .withRegionName(Regions.US_WEST_2.getName())
                 .withKinesisEndpoint(endpoint)
-                .withDynamoDBEndpoint(endpoint);
+                .withDynamoDBEndpoint(endpoint)
+                .withCloudWatchEndpoint(endpoint);
 
         AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
         AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
@@ -1943,16 +1944,14 @@ public class WorkerTest {
         String region = Regions.US_WEST_2.getName();
         String endpointUrl = "TestEndpoint";
         KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
-                .withRegionName(region).withKinesisEndpoint(endpointUrl).withDynamoDBEndpoint(endpointUrl);
+                .withRegionName(region).withKinesisEndpoint(endpointUrl).withDynamoDBEndpoint(endpointUrl).withCloudWatchEndpoint(endpointUrl);
 
         Worker.Builder builder = spy(new Worker.Builder());
 
         builder.recordProcessorFactory(recordProcessorFactory).config(config).build();
 
-        verify(builder, times(2)).createClient(
+        verify(builder, times(3)).createClient(
                 any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(endpointUrl), eq(region));
-        verify(builder, times(1)).createClient(
-                any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(null), eq(region));
     }
 
     private abstract class InjectableWorker extends Worker {
