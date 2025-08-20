@@ -5,6 +5,16 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release (3.1.2 - Aug 20, 2025)
+* [#1501](https://github.com/awslabs/amazon-kinesis-client/pull/1501) Allow migration to KCL 3.x when there are fewer leases than workers
+* [#1496](https://github.com/awslabs/amazon-kinesis-client/pull/1496) Decrease DDB lease renewal verbosity
+* [#1523](https://github.com/awslabs/amazon-kinesis-client/pull/1523) Replace ProcessRecordsInput.builder() method with ProcessRecordsInput.toBuilder() to avoid copying over fields
+* [#1519](https://github.com/awslabs/amazon-kinesis-client/pull/1519) Fix flaky LeaseAssignmentManager retry behavior test
+* [#1504](https://github.com/awslabs/amazon-kinesis-client/pull/1504) Bump awssdk.version from 2.31.62 to 2.31.77
+* [#1538](https://github.com/awslabs/amazon-kinesis-client/pull/1538) Bump com.amazonaws:dynamodb-lock-client from 1.3.0 to 1.4.0
+* [#1513](https://github.com/awslabs/amazon-kinesis-client/pull/1513) Bump org.apache.commons:commons-lang3 in /amazon-kinesis-client
+
+
 ### Release (3.1.1 - July 8, 2025)
 * [#1495](https://github.com/awslabs/amazon-kinesis-client/pull/1495) Add millisBehindLatestThresholdForReducedTps property to PollingConfig
 * [#1498](https://github.com/awslabs/amazon-kinesis-client/pull/1498) Add multilang support for leaseAssignmentIntervalMillis config
