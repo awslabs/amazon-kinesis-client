@@ -5,7 +5,7 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
-### Release (3.1.2 - Aug 20, 2025)
+### Release 3.1.2 (Aug 20, 2025)
 * [#1501](https://github.com/awslabs/amazon-kinesis-client/pull/1501) Allow migration to KCL 3.x when there are fewer leases than workers
 * [#1496](https://github.com/awslabs/amazon-kinesis-client/pull/1496) Decrease DDB lease renewal verbosity
 * [#1523](https://github.com/awslabs/amazon-kinesis-client/pull/1523) Replace ProcessRecordsInput.builder() method with ProcessRecordsInput.toBuilder() to avoid copying over fields
