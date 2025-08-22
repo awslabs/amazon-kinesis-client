@@ -48,6 +48,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -113,7 +114,9 @@ public final class LeaseAssignmentManager {
     private final ScheduledExecutorService executorService;
     private final Supplier<Long> nanoTimeProvider;
     private final int maxLeasesForWorker;
+    private final int maxLeasesToStealAtOneTime;
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
+    private final LeaseAssignmentStrategy leaseAssignmentStrategy;
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
@@ -192,11 +195,23 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
-            final LeaseAssignmentDecider leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
-                    inMemoryStorageView,
-                    config.dampeningPercentage(),
-                    config.reBalanceThresholdPercentage(),
-                    config.allowThroughputOvershoot());
+
+            // Strategy pattern: Select appropriate lease assignment decider based on configuration
+            final LeaseAssignmentDecider leaseAssignmentDecider;
+            if (leaseAssignmentStrategy == LeaseAssignmentStrategy.LEASE_COUNT_BASED) {
+                // KCL v2 lease count-based assignment
+                leaseAssignmentDecider = new LeaseCountBasedLeaseAssignmentDecider(
+                        inMemoryStorageView, maxLeasesForWorker, maxLeasesToStealAtOneTime);
+                log.info("Using KCL v2 lease count-based assignment strategy");
+            } else {
+                // KCL v3 worker utilization-aware assignment (default)
+                leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
+                        inMemoryStorageView,
+                        config.dampeningPercentage(),
+                        config.reBalanceThresholdPercentage(),
+                        config.allowThroughputOvershoot());
+                log.info("Using KCL v3 worker utilization-aware assignment strategy");
+            }
 
             updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
