@@ -82,12 +82,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final MetricsFactory metricsFactory,
             long leaseDurationInMillis,
             long heartbeatPeriodInMillis) {
-        return create(
-                coordinatorStateDao,
-                workerId,
-                leaseDurationInMillis,
-                heartbeatPeriodInMillis,
-                metricsFactory);
+        return create(coordinatorStateDao, workerId, leaseDurationInMillis, heartbeatPeriodInMillis, metricsFactory);
     }
 
     @Override
