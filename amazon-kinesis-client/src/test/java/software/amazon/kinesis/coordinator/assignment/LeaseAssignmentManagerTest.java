@@ -360,7 +360,8 @@ class LeaseAssignmentManagerTest {
         populateLeasesInLeaseTable(lease1, lease2, lease3, lease4);
 
         // 1. test with the config set to false. No lease should be picked
-        final var config = getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
         config.allowThroughputOvershoot(false);
         createLeaseAssignmentManager(config, Duration.ofHours(1).toMillis(), System::nanoTime, Integer.MAX_VALUE);
 
