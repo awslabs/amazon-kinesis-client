@@ -430,8 +430,8 @@ public class Scheduler implements Runnable {
                         coordinatorStateDAO,
                         leaseCoordinator.workerIdentifier(),
                         metricsFactory,
-                        leaseManagementConfig.dynamoLockBasedLeaderLeaseDurationInSeconds(),
-                        leaseManagementConfig.dynamoLockBasedLeaderHeartbeatPeriodInSeconds()))
+                        leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
+                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
