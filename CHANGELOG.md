@@ -5,10 +5,17 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.2.0 (November 5, 2025)
+* [#1482](https://github.com/awslabs/amazon-kinesis-client/pull/1482) Add config for leader lifetime and heartbeat
+* [#1533](https://github.com/awslabs/amazon-kinesis-client/pull/1533) Bump awssdk.version from 2.33.0 to 2.37.1
+* [#1634](https://github.com/awslabs/amazon-kinesis-client/pull/1634) Remove old commons-collections version
+* [#1635](https://github.com/awslabs/amazon-kinesis-client/pull/1635) Remove var keyword from unit test
+* [#1641](https://github.com/awslabs/amazon-kinesis-client/pull/1641) Bump netty-handler from 4.1.118.Final to 4.2.7.Final
+
 ### Release 3.1.3 (September 24, 2025)
 * [#1619](https://github.com/awslabs/amazon-kinesis-client/pull/1619) Bump awssdk from 2.31.77 to 2.33.0 and bump fasterxml.jackson from 2.12.7.1 to 2.20.0
 
-### Release 3.1.2 (Aug 20, 2025)
+### Release 3.1.2 (August 20, 2025)
 * [#1501](https://github.com/awslabs/amazon-kinesis-client/pull/1501) Allow migration to KCL 3.x when there are fewer leases than workers
 * [#1496](https://github.com/awslabs/amazon-kinesis-client/pull/1496) Decrease DDB lease renewal verbosity
 * [#1523](https://github.com/awslabs/amazon-kinesis-client/pull/1523) Replace ProcessRecordsInput.builder() method with ProcessRecordsInput.toBuilder() to avoid copying over fields
