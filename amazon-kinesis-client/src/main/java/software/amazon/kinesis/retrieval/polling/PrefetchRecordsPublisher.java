@@ -386,7 +386,14 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     @Override
     public void subscribe(Subscriber<? super RecordsRetrieved> s) {
-        throwOnIllegalState();
+        if (executorService.isShutdown()) {
+            s.onError(new IllegalStateException("Shutdown has been called on the cache, can't accept new requests."));
+            return;
+        }
+        if (!started) {
+            s.onError(new IllegalStateException("Cache has not been initialized, make sure to call start."));
+            return;
+        }
         subscriber = s;
         subscriber.onSubscribe(new Subscription() {
             @Override
