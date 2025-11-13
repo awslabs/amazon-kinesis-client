@@ -23,7 +23,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import io.netty.handler.timeout.ReadTimeoutException;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -1289,7 +1288,7 @@ public class FanOutRecordsPublisherTest {
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
         FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
-        recordFlow.exceptionOccurred(new RuntimeException(ReadTimeoutException.INSTANCE));
+        recordFlow.exceptionOccurred(new RuntimeException("ReadTimeoutException"));
 
         verify(subscriber).onSubscribe(any());
         verify(subscriber).onError(any(RetryableRetrievalException.class));
