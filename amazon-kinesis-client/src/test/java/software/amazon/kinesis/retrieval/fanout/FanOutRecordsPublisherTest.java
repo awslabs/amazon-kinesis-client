@@ -1279,6 +1279,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testReadTimeoutExceptionForShard() {
+        class SimulatedReadTimeoutException extends Exception {}
+
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
@@ -1288,7 +1290,7 @@ public class FanOutRecordsPublisherTest {
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
         FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
-        recordFlow.exceptionOccurred(new RuntimeException("ReadTimeoutException"));
+        recordFlow.exceptionOccurred(new RuntimeException(new SimulatedReadTimeoutException()));
 
         verify(subscriber).onSubscribe(any());
         verify(subscriber).onError(any(RetryableRetrievalException.class));
