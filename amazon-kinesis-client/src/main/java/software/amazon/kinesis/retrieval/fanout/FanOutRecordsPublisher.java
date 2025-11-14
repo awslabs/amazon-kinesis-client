@@ -492,7 +492,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             if (current.getMessage() != null && current.getMessage().startsWith("Acquire operation")) {
                 return ACQUIRE_TIMEOUT_CATEGORY;
             }
-            if (current.getMessage() != null && current.getMessage().contains("ReadTimeoutException")) {
+            if (current.getClass().getSimpleName().contains("ReadTimeoutException")) {
                 return READ_TIMEOUT_CATEGORY;
             }
 
