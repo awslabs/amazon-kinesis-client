@@ -7,7 +7,7 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 ---
 ### Release 3.2.1 (November 14, 2025)
 * [#1650](https://github.com/awslabs/amazon-kinesis-client/pull/1650) Remove explicit netty dependency to fix mismatched versions
-* [#1648](https://github.com/awslabs/amazon-kinesis-client/pull/1648) Capture subscribe exceptions in onError instead of throwing from Scheduler
+* [#1648](https://github.com/awslabs/amazon-kinesis-client/pull/1648) Capture subscribe exceptions in onError instead of throwing in RxJava
 
 ### Release 3.2.0 (November 5, 2025)
 * [#1482](https://github.com/awslabs/amazon-kinesis-client/pull/1482) Add config for leader lifetime and heartbeat
