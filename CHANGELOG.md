@@ -7,6 +7,7 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 ---
 ### Release 3.2.1 (November 14, 2025)
 * [#1650](https://github.com/awslabs/amazon-kinesis-client/pull/1650) Remove explicit netty dependency to fix mismatched versions
+* [#1648](https://github.com/awslabs/amazon-kinesis-client/pull/1648) Capture subscribe exceptions in onError instead of throwing from Scheduler
 
 ### Release 3.2.0 (November 5, 2025)
 * [#1482](https://github.com/awslabs/amazon-kinesis-client/pull/1482) Add config for leader lifetime and heartbeat
@@ -26,7 +27,6 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 * [#1504](https://github.com/awslabs/amazon-kinesis-client/pull/1504) Bump awssdk.version from 2.31.62 to 2.31.77
 * [#1538](https://github.com/awslabs/amazon-kinesis-client/pull/1538) Bump com.amazonaws:dynamodb-lock-client from 1.3.0 to 1.4.0
 * [#1513](https://github.com/awslabs/amazon-kinesis-client/pull/1513) Bump org.apache.commons:commons-lang3 from 3.14.0 to 3.18.0 in /amazon-kinesis-client
-
 
 ### Release (3.1.1 - July 8, 2025)
 * [#1495](https://github.com/awslabs/amazon-kinesis-client/pull/1495) Add millisBehindLatestThresholdForReducedTps property to PollingConfig
