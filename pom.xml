@@ -26,7 +26,7 @@
 
   <properties>
     <aws-java-sdk.version>1.12.681</aws-java-sdk.version>
-    <protobuf.version>4.31.0</protobuf.version>
+    <protobuf.version>4.33.1</protobuf.version>
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
