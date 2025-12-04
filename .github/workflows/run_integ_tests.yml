@@ -1,0 +1,73 @@
+# This workflow will trigger on pushes and pull requests to master branch (and other branches in the list)
+# run-integ-tests runs the KCL java integration tests on Java 8
+name: Run integration tests
+on:
+  push:
+    branches: [ master, '*-test' ]
+  pull_request_target:
+    branches: [ master, '*-test' ]
+    types: [opened, synchronize]
+
+jobs:
+  # Evaluates if the sample tests should run. If the workflow is triggered by a push OR
+  # is triggered by a pull request without the 'skip-sample-tests' label, the sample tests should run.
+  # Otherwise, the sample tests will be skipped
+  check-if-should-run:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request_target' && !contains(github.event.pull_request.labels.*.name, 'skip-sample-tests')) }}
+    outputs:
+      should_run: 'true'
+      is_fork: ${{ github.event_name == 'pull_request_target' && (github.event.pull_request.head.repo.fork || github.event.pull_request.user.login == 'dependabot[bot]') }}
+    steps:
+      - run: echo "Evaluating workflow conditions"
+
+  # Workflow will pause and wait here if it is triggered by a fork PR. The workflow will continue to wait until
+  # an approved member of the environment 'manual_approval' allows the workflow to run
+  wait-for-approval:
+    needs: [ check-if-should-run ]
+    if: ${{ needs.check-if-should-run.outputs.is_fork == 'true' }}
+    runs-on: ubuntu-latest
+    environment: manual-approval
+    steps:
+      - run: echo "Fork PR approved by a team member."
+
+  # Run integration tests in the KCL
+  # Runs only if (check-if-should-run allows AND (the PR is not from a fork OR it has been approved to run))
+  run-integ-tests:
+    needs: [ check-if-should-run, wait-for-approval ]
+    permissions:
+      id-token: write
+    if: ${{ always() && needs.check-if-should-run.outputs.should_run == 'true' && (needs.check-if-should-run.outputs.is_fork != 'true' || needs.wait-for-approval.result == 'success') }}
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # For pull_request_target, checkout PR head instead of merge commit
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.ref }}
+
+      # Configure AWS Credentials. Role session name is unique to avoid OIDC errors when running multiple tests concurrently
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+         aws-region: us-east-1
+         role-to-assume: ${{ secrets.AWS_ARN_GHA }}
+         role-session-name: GHA-${{ github.run_id }}
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'corretto'
+
+      # Skipping unit tests and only running integration tests since the normal build runs the unit tests already
+      - name: Standard build
+        run: mvn -B package --file pom.xml -DskipITs=true -DskipUTs=true
+      # TODO: For now, just run the basic test case. Need to optimize parallel executions so tests don't take long
+      - name: Run integration tests
+        run: mvn -DskipUTs=true -DskipITs=false -Dit.test="BasicStreamConsumerIntegrationTest" verify

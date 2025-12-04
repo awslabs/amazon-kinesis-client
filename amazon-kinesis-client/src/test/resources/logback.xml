@@ -22,12 +22,7 @@
         </encoder>
     </appender>
 
-    <root level="debug">
+    <root level="info">
         <appender-ref ref="CONSOLE" />
     </root>
-    <logger level="info" name="software.amazon.awssdk.request" />
-    <logger level="info" name="software.amazon.awssdk.core" />
-    <logger level="info" name="software.amazon.awssdk.http" />
-    <logger level="info" name="io.netty" />
-    <logger level="info" name="software.amazon.awssdk.auth.signer" />
 </configuration>
