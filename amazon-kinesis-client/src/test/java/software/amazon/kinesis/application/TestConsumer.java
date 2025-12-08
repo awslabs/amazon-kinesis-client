@@ -228,38 +228,37 @@ public class TestConsumer {
 
     private void putRecordsWithRetry(final String streamName, final int recordCount)
             throws ExecutionException, InterruptedException {
-        final List<PutRecordsRequestEntry> records = new ArrayList<>();
-
+        List<PutRecordsRequestEntry> recordsPendingPut = new ArrayList<>();
         for (int i = 0; i < recordCount; i++) {
             final PutRecordsRequestEntry entry = PutRecordsRequestEntry.builder()
                     .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
                     .data(SdkBytes.fromByteBuffer(wrapWithCounter(payloadCounter)))
                     .build();
-            records.add(entry);
+            recordsPendingPut.add(entry);
             payloadCounter = payloadCounter.add(new BigInteger("1"));
         }
 
-        List<PutRecordsRequestEntry> recordsToRetry = records;
         int recordsRemaining = recordCount;
-        while (!recordsToRetry.isEmpty()) {
+        while (!recordsPendingPut.isEmpty()) {
             final PutRecordsRequest request = PutRecordsRequest.builder()
                     .streamName(streamName)
-                    .records(recordsToRetry)
+                    .records(recordsPendingPut)
                     .build();
             final CompletableFuture<PutRecordsResponse> responseFuture =
                     kinesisClientForStreamOwner.putRecords(request);
             final PutRecordsResponse response = responseFuture.get();
 
             // Collect failed records for retry
-            recordsToRetry = new ArrayList<>();
+            final List<PutRecordsRequestEntry> failedRecords = new ArrayList<>();
             for (int i = 0; i < response.records().size(); i++) {
                 if (response.records().get(i).errorCode() != null) {
-                    recordsToRetry.add(records.get(i));
+                    failedRecords.add(recordsPendingPut.get(i));
                 }
             }
 
-            final int recordsSuccessfullyPut = recordsRemaining - recordsToRetry.size();
-            recordsRemaining = recordsToRetry.size();
+            recordsPendingPut = failedRecords;
+            final int recordsSuccessfullyPut = recordsRemaining - recordsPendingPut.size();
+            recordsRemaining = recordsPendingPut.size();
             if (recordsRemaining > 0) {
                 log.info(
                         "For stream {}: {} records successfully published. {} records failed and will be retried.",
