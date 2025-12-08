@@ -2,7 +2,6 @@ package software.amazon.kinesis.config;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
@@ -12,10 +11,8 @@ import software.amazon.awssdk.http.Protocol;
  */
 public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
 
-    private final UUID uniqueId = UUID.randomUUID();
-
     private final String applicationName = "PollingH1Test";
-    private final String streamName = "2XPollingH1TestStream_" + uniqueId;
+    private final String streamName = "PollingH1TestStream";
 
     @Override
     public String getTestName() {

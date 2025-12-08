@@ -2,7 +2,6 @@ package software.amazon.kinesis.config.crossaccount;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
@@ -14,7 +13,6 @@ import software.amazon.kinesis.config.RetrievalMode;
  */
 @Slf4j
 public class ReleaseCanaryCrossAccountMultiStreamStreamingTestConfig extends KCLCrossAccountAppConfig {
-    private final UUID uniqueId = UUID.randomUUID();
 
     private final int numStreams = 2;
     private final String applicationName = "CrossAccountMultiStreamStreamingTest";
@@ -30,7 +28,7 @@ public class ReleaseCanaryCrossAccountMultiStreamStreamingTestConfig extends KCL
     public List<Arn> getStreamArns() {
         ArrayList<Arn> streamArns = new ArrayList<>(numStreams);
         for (int i = 1; i <= numStreams; i++) {
-            streamArns.add(buildStreamArn(String.join("_", streamName, Integer.toString(i), uniqueId.toString())));
+            streamArns.add(buildStreamArn(String.join("_", streamName, Integer.toString(i))));
         }
         return streamArns;
     }

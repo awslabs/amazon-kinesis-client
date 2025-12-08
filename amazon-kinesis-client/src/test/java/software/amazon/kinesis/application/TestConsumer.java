@@ -2,8 +2,10 @@ package software.amazon.kinesis.application;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -23,7 +25,9 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
-import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsRequest;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.ScalingType;
 import software.amazon.awssdk.services.kinesis.model.UpdateShardCountRequest;
 import software.amazon.awssdk.services.kinesis.model.UpdateShardCountResponse;
@@ -48,6 +52,8 @@ import static org.junit.Assume.assumeTrue;
 
 @Slf4j
 public class TestConsumer {
+    private static final int NUM_RECORDS_PUT_PER_STREAM = 100;
+
     public final KCLAppConfig consumerConfig;
     public final Region region;
     public final List<String> streamNames;
@@ -67,7 +73,6 @@ public class TestConsumer {
     private ScheduledFuture<?> consumerFuture;
     private DynamoDbAsyncClient dynamoClient;
     private final ObjectMapper mapper = new ObjectMapper();
-    public int successfulPutRecords = 0;
     public BigInteger payloadCounter = new BigInteger("0");
 
     public TestConsumer(KCLAppConfig consumerConfig) throws Exception {
@@ -77,6 +82,8 @@ public class TestConsumer {
         this.kinesisClientForStreamOwner = consumerConfig.buildAsyncKinesisClientForStreamOwner();
         this.kinesisClient = consumerConfig.buildAsyncKinesisClientForConsumer();
         this.dynamoClient = consumerConfig.buildAsyncDynamoDbClient();
+        this.producerExecutor = Executors.newSingleThreadScheduledExecutor();
+        this.consumerExecutor = Executors.newSingleThreadScheduledExecutor();
     }
 
     public void run() throws Exception {
@@ -89,31 +96,34 @@ public class TestConsumer {
         final StreamExistenceManager streamExistenceManager = new StreamExistenceManager(this.consumerConfig);
         final LeaseTableManager leaseTableManager = new LeaseTableManager(this.dynamoClient);
 
-        // Clean up any old streams or lease tables left in test environment
-        cleanTestResources(streamExistenceManager, leaseTableManager);
-
-        // Check if stream is created. If not, create it
-        streamExistenceManager.checkStreamsAndCreateIfNecessary();
-        Map<Arn, Arn> streamToConsumerArnsMap = streamExistenceManager.createCrossAccountConsumerIfNecessary();
-
-        startProducer();
-        setUpConsumerResources(streamToConsumerArnsMap);
-
         try {
+            // Check if stream is created. If not, create it
+            streamExistenceManager.checkStreamsAndCreateIfNecessary();
+            Map<Arn, Arn> streamToConsumerArnsMap = streamExistenceManager.createCrossAccountConsumerIfNecessary();
+
+            setUpConsumerResources(streamToConsumerArnsMap);
+            publishRecords(NUM_RECORDS_PUT_PER_STREAM);
+
             startConsumer();
 
-            // Sleep to allow the producer/consumer to run and then end the test case.
-            // If non-reshard sleep 3 minutes, else sleep 4 minutes per scale.
-            final int sleepMinutes = (consumerConfig.getReshardFactorList() == null)
-                    ? 3
-                    : (4 * consumerConfig.getReshardFactorList().size());
-            Thread.sleep(TimeUnit.MINUTES.toMillis(sleepMinutes));
+            // The longest part of starting up a new KCL 3.x application is waiting for the lease table GSI to be
+            // created. This roughly takes between 5-10 minutes for a 4 shard lease table. Therefore, sleep for
+            // approximately 15 minutes to allow KCL to start up, assign leases, and process.
+            // TODO: optimize the integration test runtime so we know when KCL has started so we don't sleep as long
+            Thread.sleep(TimeUnit.MINUTES.toMillis(15));
 
-            // Stops sending dummy data.
-            stopProducer();
+            if (consumerConfig.getReshardFactorList() != null) {
+                performStreamScale();
+                startProducer();
+                // sleep two minutes per scale
+                final int sleepMinutes =
+                        2 * consumerConfig.getReshardFactorList().size();
+                Thread.sleep(TimeUnit.MINUTES.toMillis(sleepMinutes));
+                stopProducer();
+            }
 
             // Wait a few seconds for the last few records to be processed
-            Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
 
             // Finishes processing current batch of data already received from Kinesis before shutting down.
             awaitConsumerFinish();
@@ -131,34 +141,21 @@ public class TestConsumer {
         }
     }
 
-    private void cleanTestResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager)
-            throws Exception {
-        log.info("----------Before starting, Cleaning test environment----------");
-        log.info("----------Deleting all lease tables in account----------");
-        leaseTableManager.deleteAllResource();
-        log.info("----------Finished deleting all lease tables-------------");
-
-        log.info("----------Deleting all streams in account----------");
-        streamExistenceManager.deleteAllResource();
-        log.info("----------Finished deleting all streams-------------");
+    private void startProducer() {
+        this.producerFuture = producerExecutor.scheduleAtFixedRate(
+                () -> publishRecords(NUM_RECORDS_PUT_PER_STREAM), 10, 10, TimeUnit.SECONDS);
     }
 
-    private void startProducer() {
-        this.producerExecutor = Executors.newSingleThreadScheduledExecutor();
-        this.producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 10, 1, TimeUnit.SECONDS);
+    private void performStreamScale() {
+        log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
 
-        // Reshard logic if required for the test
-        if (consumerConfig.getReshardFactorList() != null) {
-            log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
+        for (String streamName : consumerConfig.getStreamNames()) {
+            final StreamScaler streamScaler = new StreamScaler(
+                    kinesisClientForStreamOwner, streamName, consumerConfig.getReshardFactorList(), consumerConfig);
 
-            for (String streamName : consumerConfig.getStreamNames()) {
-                final StreamScaler streamScaler = new StreamScaler(
-                        kinesisClientForStreamOwner, streamName, consumerConfig.getReshardFactorList(), consumerConfig);
-
-                // Schedule the stream scales 4 minutes apart with 2 minute starting delay
-                for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
-                    producerExecutor.schedule(streamScaler, (4 * i) + 2, TimeUnit.MINUTES);
-                }
+            // Schedule the stream scales 2 minutes apart
+            for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
+                producerExecutor.schedule(streamScaler, 2 * i, TimeUnit.MINUTES);
             }
         }
     }
@@ -203,7 +200,6 @@ public class TestConsumer {
 
     private void startConsumer() {
         // Start record processing of dummy data
-        this.consumerExecutor = Executors.newSingleThreadScheduledExecutor();
         this.consumerFuture = consumerExecutor.schedule(scheduler, 0, TimeUnit.SECONDS);
     }
 
@@ -217,35 +213,70 @@ public class TestConsumer {
         }
     }
 
-    public void publishRecord() {
+    public void publishRecords(final int numRecordsPerStream) {
         for (String streamName : consumerConfig.getStreamNames()) {
             try {
-                final PutRecordRequest request = PutRecordRequest.builder()
-                        .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
-                        .streamName(streamName)
-                        .data(SdkBytes.fromByteBuffer(wrapWithCounter(5, payloadCounter))) // 1024
-                        // is 1 KB
-                        .build();
-                kinesisClientForStreamOwner.putRecord(request).get();
-
-                // Increment the payload counter if the putRecord call was successful
-                payloadCounter = payloadCounter.add(new BigInteger("1"));
-                successfulPutRecords += 1;
-                log.info(
-                        "---------Record published for stream {}, successfulPutRecords is now: {}",
-                        streamName,
-                        successfulPutRecords);
+                log.info("Publishing {} records for stream {} ", numRecordsPerStream, streamName);
+                putRecordsWithRetry(streamName, numRecordsPerStream);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
             } catch (InterruptedException e) {
-                log.info("Interrupted, assuming shutdown. ", e);
-            } catch (ExecutionException | RuntimeException e) {
-                log.error("Error during publish records", e);
+                throw new RuntimeException(e);
             }
         }
     }
 
-    private ByteBuffer wrapWithCounter(int payloadSize, BigInteger payloadCounter) throws RuntimeException {
+    private void putRecordsWithRetry(final String streamName, final int recordCount)
+            throws ExecutionException, InterruptedException {
+        List<PutRecordsRequestEntry> recordsPendingPut = new ArrayList<>();
+        for (int i = 0; i < recordCount; i++) {
+            final PutRecordsRequestEntry entry = PutRecordsRequestEntry.builder()
+                    .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                    .data(SdkBytes.fromByteBuffer(wrapWithCounter(payloadCounter)))
+                    .build();
+            recordsPendingPut.add(entry);
+            payloadCounter = payloadCounter.add(new BigInteger("1"));
+        }
+
+        int recordsRemaining = recordCount;
+        while (!recordsPendingPut.isEmpty()) {
+            final PutRecordsRequest request = PutRecordsRequest.builder()
+                    .streamName(streamName)
+                    .records(recordsPendingPut)
+                    .build();
+            final CompletableFuture<PutRecordsResponse> responseFuture =
+                    kinesisClientForStreamOwner.putRecords(request);
+            final PutRecordsResponse response = responseFuture.get();
+
+            // Collect failed records for retry
+            final List<PutRecordsRequestEntry> failedRecords = new ArrayList<>();
+            for (int i = 0; i < response.records().size(); i++) {
+                if (response.records().get(i).errorCode() != null) {
+                    failedRecords.add(recordsPendingPut.get(i));
+                }
+            }
+
+            recordsPendingPut = failedRecords;
+            final int recordsSuccessfullyPut = recordsRemaining - recordsPendingPut.size();
+            recordsRemaining = recordsPendingPut.size();
+            if (recordsRemaining > 0) {
+                log.info(
+                        "For stream {}: {} records successfully published. {} records failed and will be retried.",
+                        streamName,
+                        recordsSuccessfullyPut,
+                        recordsRemaining);
+            } else {
+                log.info(
+                        "For stream {}: All {} records successfully published. Payload counter is now {}.",
+                        streamName,
+                        recordCount,
+                        payloadCounter);
+            }
+        }
+    }
+
+    private ByteBuffer wrapWithCounter(BigInteger payloadCounter) throws RuntimeException {
         final byte[] returnData;
-        log.info("---------Putting record with data: {}", payloadCounter);
         try {
             returnData = mapper.writeValueAsBytes(payloadCounter);
         } catch (Exception e) {
@@ -254,7 +285,7 @@ public class TestConsumer {
         return ByteBuffer.wrap(returnData);
     }
 
-    private void awaitConsumerFinish() throws Exception {
+    private void awaitConsumerFinish() {
         Future<Boolean> gracefulShutdownFuture = scheduler.startGracefulShutdown();
         log.info("Waiting up to 20 seconds for shutdown to complete.");
         try {
@@ -267,10 +298,10 @@ public class TestConsumer {
         log.info("Completed, shutting down now.");
     }
 
-    private void validateRecordProcessor() throws Exception {
-        log.info("The number of expected records is: {}", successfulPutRecords);
+    private void validateRecordProcessor() {
+        log.info("The number of expected records is: {}", payloadCounter);
         final RecordValidationStatus errorVal =
-                consumerConfig.getRecordValidator().validateRecords(successfulPutRecords);
+                consumerConfig.getRecordValidator().validateRecords(payloadCounter.intValue());
         if (errorVal != RecordValidationStatus.NO_ERROR) {
             throw new RuntimeException(
                     "There was an error validating the records that were processed: " + errorVal.toString());
@@ -285,8 +316,8 @@ public class TestConsumer {
             log.info("Deleting stream {}", streamName);
             streamExistenceManager.deleteResource(streamName);
         }
-        log.info("---------Start deleting lease table.---------");
-        leaseTableManager.deleteResource(consumerConfig.getApplicationName());
+        log.info("---------Start deleting DDB tables.---------");
+        leaseTableManager.deleteAllResource(consumerConfig.getResourcePrefix());
         log.info("---------Finished deleting resources.---------");
     }
 

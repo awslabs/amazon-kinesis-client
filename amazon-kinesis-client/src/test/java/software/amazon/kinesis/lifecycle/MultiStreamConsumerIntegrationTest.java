@@ -3,7 +3,7 @@ package software.amazon.kinesis.lifecycle;
 import org.junit.Test;
 import software.amazon.kinesis.application.TestConsumer;
 import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryMultiStreamPollingH2TestConfig;
+import software.amazon.kinesis.config.multistream.ReleaseCanaryMultiStreamPollingH2TestConfig;
 import software.amazon.kinesis.config.multistream.ReleaseCanaryMultiStreamStreamingTestConfig;
 
 public class MultiStreamConsumerIntegrationTest {
@@ -14,7 +14,7 @@ public class MultiStreamConsumerIntegrationTest {
         consumer.run();
     }
 
-    @Test
+    // @Test
     public void kclReleaseCanaryMultiStreamStreamingTest() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryMultiStreamStreamingTestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);

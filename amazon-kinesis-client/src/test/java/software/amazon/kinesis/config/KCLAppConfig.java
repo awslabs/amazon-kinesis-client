@@ -7,10 +7,10 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-import lombok.Builder;
-import lombok.Value;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
@@ -59,6 +59,9 @@ public abstract class KCLAppConfig {
     public static final String CROSS_ACCOUNT_CONSUMER_NAME = "cross-account-consumer";
     public static final String INTEGRATION_TEST_RESOURCE_PREFIX = "KCLIntegrationTest";
 
+    @Getter
+    private final String testId = UUID.randomUUID().toString();
+
     private String accountIdForConsumer = null;
     private String accountIdForStreamOwner = null;
     private List<String> streamNames = null;
@@ -71,7 +74,7 @@ public abstract class KCLAppConfig {
     private RecordValidatorQueue recordValidator;
 
     /**
-     * List of Strings, either stream names or valid stream Arns, to be used in testing. For single stream mode, return
+     * List of stream ARNs to be used in testing. For single stream mode, return
      * a list of size 1. For multistream mode, return a list of size > 1.
      */
     public abstract List<Arn> getStreamArns();
@@ -89,8 +92,12 @@ public abstract class KCLAppConfig {
 
     public abstract String getTestName();
 
+    public String getResourcePrefix() {
+        return String.join("_", INTEGRATION_TEST_RESOURCE_PREFIX, getTestId());
+    }
+
     public String getApplicationName() {
-        return INTEGRATION_TEST_RESOURCE_PREFIX + getTestName();
+        return String.join("_", getResourcePrefix(), getTestName());
     }
 
     public int getShardCount() {
@@ -98,7 +105,7 @@ public abstract class KCLAppConfig {
     }
 
     public Region getRegion() {
-        return Region.US_WEST_2;
+        return Region.US_EAST_1;
     }
 
     /**
@@ -125,15 +132,6 @@ public abstract class KCLAppConfig {
     }
 
     public abstract Protocol getKinesisClientProtocol();
-
-    public ProducerConfig getProducerConfig() {
-        return ProducerConfig.builder()
-                .isBatchPut(false)
-                .batchSize(1)
-                .recordSizeKB(60)
-                .callPeriodMills(100)
-                .build();
-    }
 
     public List<ReshardOptions> getReshardFactorList() {
         return null;
@@ -374,20 +372,9 @@ public abstract class KCLAppConfig {
 
     public Arn buildStreamArn(String streamName) {
         final String partition = getRegion().metadata().partition().id();
+        final String streamNameForTest = getResourcePrefix() + "_" + streamName;
         return Arn.fromString(
                 String.join(":", "arn", partition, "kinesis", getRegion().id(), getAccountIdForStreamOwner(), "stream")
-                        + "/" + INTEGRATION_TEST_RESOURCE_PREFIX + streamName);
-    }
-
-    /**
-     * Configure ingress load (batch size, record size, and calling interval)
-     */
-    @Value
-    @Builder
-    public static class ProducerConfig {
-        private boolean isBatchPut;
-        private int batchSize;
-        private int recordSizeKB;
-        private long callPeriodMills;
+                        + "/" + streamNameForTest);
     }
 }

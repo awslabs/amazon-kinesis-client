@@ -2,7 +2,6 @@ package software.amazon.kinesis.config.crossaccount;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
@@ -14,11 +13,10 @@ import software.amazon.kinesis.config.RetrievalMode;
  */
 @Slf4j
 public class ReleaseCanaryCrossAccountPollingH2TestConfig extends KCLCrossAccountAppConfig {
-    private final UUID uniqueId = UUID.randomUUID();
 
     private final String applicationName = "CrossAccountPollingH2Test";
 
-    private final String streamName = "2XCrossAccountPollingH2TestStream_" + uniqueId;
+    private final String streamName = "CrossAccountPollingH2TestStream_";
 
     @Override
     public String getTestName() {
