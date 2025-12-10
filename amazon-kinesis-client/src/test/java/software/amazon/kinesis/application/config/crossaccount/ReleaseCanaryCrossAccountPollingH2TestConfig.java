@@ -1,18 +1,22 @@
-package software.amazon.kinesis.config;
+package software.amazon.kinesis.application.config.crossaccount;
 
 import java.util.Collections;
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
+import software.amazon.kinesis.application.config.RetrievalMode;
 
 /**
- * Config for a streaming consumer with HTTP protocol of HTTP2
+ * Config for a cross account polling consumer with HTTP protocol of HTTP2
  */
-public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
+@Slf4j
+public class ReleaseCanaryCrossAccountPollingH2TestConfig extends KCLCrossAccountAppConfig {
 
-    private final String applicationName = "StreamingTest";
-    private final String streamName = "StreamingTestStream";
+    private final String applicationName = "CrossAccountPollingH2Test";
+
+    private final String streamName = "CrossAccountPollingH2TestStream_";
 
     @Override
     public String getTestName() {
@@ -31,6 +35,6 @@ public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
 
     @Override
     public RetrievalMode getRetrievalMode() {
-        return RetrievalMode.STREAMING;
+        return RetrievalMode.POLLING;
     }
 }

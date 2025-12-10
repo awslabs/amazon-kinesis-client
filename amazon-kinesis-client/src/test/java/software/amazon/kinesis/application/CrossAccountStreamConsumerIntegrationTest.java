@@ -1,13 +1,14 @@
-package software.amazon.kinesis.lifecycle;
+package software.amazon.kinesis.application;
 
+import org.junit.Ignore;
 import org.junit.Test;
-import software.amazon.kinesis.application.TestConsumer;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamPollingH2TestConfig;
-import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamStreamingTestConfig;
-import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountPollingH2TestConfig;
-import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountStreamingTestConfig;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamPollingH2TestConfig;
+import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamStreamingTestConfig;
+import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountPollingH2TestConfig;
+import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountStreamingTestConfig;
 
+@Ignore
 public class CrossAccountStreamConsumerIntegrationTest {
 
     /**

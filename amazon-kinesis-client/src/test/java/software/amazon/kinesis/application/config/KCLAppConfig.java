@@ -1,4 +1,4 @@
-package software.amazon.kinesis.config;
+package software.amazon.kinesis.application.config;
 
 import java.io.IOException;
 import java.net.Inet4Address;

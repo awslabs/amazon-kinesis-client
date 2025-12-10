@@ -28,9 +28,9 @@ import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerReque
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.RetrievalMode;
 import software.amazon.kinesis.common.FutureUtils;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.RetrievalMode;
 
 @Value
 @Slf4j

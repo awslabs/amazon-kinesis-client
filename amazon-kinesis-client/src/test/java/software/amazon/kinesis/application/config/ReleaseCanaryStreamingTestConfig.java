@@ -1,4 +1,4 @@
-package software.amazon.kinesis.config;
+package software.amazon.kinesis.application.config;
 
 import java.util.Collections;
 import java.util.List;
@@ -7,12 +7,12 @@ import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
 
 /**
- * Config for a polling consumer with HTTP protocol of HTTP2
+ * Config for a streaming consumer with HTTP protocol of HTTP2
  */
-public class ReleaseCanaryPollingH2TestConfig extends KCLAppConfig {
+public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
 
-    private final String applicationName = "PollingH2Test";
-    private final String streamName = "PollingH2TestStream";
+    private final String applicationName = "StreamingTest";
+    private final String streamName = "StreamingTestStream";
 
     @Override
     public String getTestName() {
@@ -31,6 +31,6 @@ public class ReleaseCanaryPollingH2TestConfig extends KCLAppConfig {
 
     @Override
     public RetrievalMode getRetrievalMode() {
-        return RetrievalMode.POLLING;
+        return RetrievalMode.STREAMING;
     }
 }

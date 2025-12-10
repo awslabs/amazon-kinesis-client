@@ -1,11 +1,11 @@
-package software.amazon.kinesis.lifecycle;
+package software.amazon.kinesis.application;
 
+import org.junit.Ignore;
 import org.junit.Test;
-import software.amazon.kinesis.application.TestConsumer;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
-import software.amazon.kinesis.config.ReleaseCanaryPollingH2TestConfig;
-import software.amazon.kinesis.config.ReleaseCanaryStreamingTestConfig;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.ReleaseCanaryPollingH1TestConfig;
+import software.amazon.kinesis.application.config.ReleaseCanaryPollingH2TestConfig;
+import software.amazon.kinesis.application.config.ReleaseCanaryStreamingTestConfig;
 
 public class BasicStreamConsumerIntegrationTest {
 
@@ -24,7 +24,8 @@ public class BasicStreamConsumerIntegrationTest {
      * Test with a polling consumer using HTTP1 protocol.
      * In the polling case, consumer makes calls to the producer each time to request records to process.
      */
-    // @Test
+    @Ignore
+    @Test
     public void kclReleaseCanaryPollingH1Test() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryPollingH1TestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);
@@ -35,7 +36,8 @@ public class BasicStreamConsumerIntegrationTest {
      * Test with a streaming consumer.
      * In the streaming configuration, connection is made once between consumer and producer and producer continuously sends data to be processed.
      */
-    // @Test
+    @Ignore
+    @Test
     public void kclReleaseCanaryStreamingTest() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryStreamingTestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);

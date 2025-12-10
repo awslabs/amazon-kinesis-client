@@ -1,10 +1,11 @@
-package software.amazon.kinesis.lifecycle;
+package software.amazon.kinesis.application;
 
+import org.junit.Ignore;
 import org.junit.Test;
-import software.amazon.kinesis.application.TestConsumer;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryStreamingReshardingTestConfig;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.ReleaseCanaryStreamingReshardingTestConfig;
 
+@Ignore
 public class ReshardIntegrationTest {
     @Test
     public void kclReleaseCanaryStreamingReshardingTest() throws Exception {

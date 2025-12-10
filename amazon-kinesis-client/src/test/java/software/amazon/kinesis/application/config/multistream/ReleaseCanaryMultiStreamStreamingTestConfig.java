@@ -1,12 +1,12 @@
-package software.amazon.kinesis.config.multistream;
+package software.amazon.kinesis.application.config.multistream;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.RetrievalMode;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.RetrievalMode;
 
 public class ReleaseCanaryMultiStreamStreamingTestConfig extends KCLAppConfig {
     private final int numStreams = 2;
