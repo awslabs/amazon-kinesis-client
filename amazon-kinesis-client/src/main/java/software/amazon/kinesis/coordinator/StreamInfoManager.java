@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
@@ -49,6 +50,8 @@ public class StreamInfoManager {
     private final long streamInfoBackfillIntervalMillis;
 
     private final StreamInfoMode streamInfoMode;
+
+    private final StreamIdOnboardingState streamIdOnboardingState;
 
     private ScheduledFuture<?> scheduledFuture;
     private boolean isRunning;
@@ -161,11 +164,22 @@ public class StreamInfoManager {
                         log.debug("Stream metadata already exists for streamIdentifier: {}", streamIdentifier);
                     }
                 } catch (Exception e) {
-                    log.error("Caught exception while syncing streamId {}. Will retry again", streamIdentifier, e);
+                    final String errorMessage =
+                            "Caught exception while syncing streamId " + streamIdentifier + ". Will retry in next run";
+                    if (streamIdOnboardingState == StreamIdOnboardingState.ONBOARDED) {
+                        log.error(errorMessage, e);
+                    } else {
+                        log.debug(errorMessage, e);
+                    }
                 }
             }
         } catch (Exception e) {
-            log.error("Caught exception while syncing streamId.", e);
+            final String errorMessage = "Caught exception while syncing streamId.";
+            if (streamIdOnboardingState == StreamIdOnboardingState.ONBOARDED) {
+                log.error(errorMessage, e);
+            } else {
+                log.debug(errorMessage, e);
+            }
         }
 
         Queue<StreamIdentifier> failedBackfillStreams = null;

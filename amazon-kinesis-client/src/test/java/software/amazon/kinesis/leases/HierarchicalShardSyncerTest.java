@@ -2789,7 +2789,8 @@ public class HierarchicalShardSyncerTest {
                 mockMetricsFactory,
                 isMultiStreamMode,
                 1000,
-                streamInfoMode);
+                streamInfoMode,
+                StreamIdOnboardingState.NOT_ONBOARDED);
     }
 
     private List<Shard> createTestShards() {

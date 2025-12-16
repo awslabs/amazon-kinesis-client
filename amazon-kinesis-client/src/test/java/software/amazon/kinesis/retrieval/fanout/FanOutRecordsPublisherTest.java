@@ -1309,7 +1309,11 @@ public class FanOutRecordsPublisherTest {
     public void testReadTimeoutExceptionForShard() {
         class SimulatedReadTimeoutException extends Exception {}
 
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(
+                kinesisClient,
+                SHARD_ID,
+                CONSUMER_ARN,
+                software.amazon.kinesis.common.StreamIdentifier.singleStreamInstance("test-stream"));
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);

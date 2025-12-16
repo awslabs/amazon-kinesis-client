@@ -118,7 +118,6 @@ import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 
-import static software.amazon.kinesis.common.ArnUtil.constructStreamArn;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
 
@@ -310,7 +309,8 @@ public class Scheduler implements Runnable {
                 metricsFactory,
                 isMultiStreamMode,
                 leaseManagementConfig.shardSyncIntervalMillis(),
-                leaseManagementConfig.streamInfoMode());
+                leaseManagementConfig.streamInfoMode(),
+                leaseManagementConfig.streamIdOnboardingState());
         this.streamIdCacheManager = leaseManagementFactory.createStreamIdCacheManager(
                 streamInfoDAO,
                 currentStreamConfigMap,
@@ -1321,8 +1321,7 @@ public class Scheduler implements Runnable {
      * @param kinesisRegion The {@link Region} the stream exists in, to be used for constructing the {@link Arn}.
      * @return A copy of the {@link StreamConfig} with {@link StreamIdentifier#streamArnOptional()} populated.
      */
-    private static StreamConfig withStreamArn(
-            @NonNull final StreamConfig streamConfig, @NonNull final Region kinesisRegion) {
+    private StreamConfig withStreamArn(@NonNull final StreamConfig streamConfig, @NonNull final Region kinesisRegion) {
         Validate.isTrue(
                 streamConfig.streamIdentifier().accountIdOptional().isPresent(), "accountId should not be empty");
         Validate.isTrue(
@@ -1334,13 +1333,20 @@ public class Scheduler implements Runnable {
                 streamConfig.streamIdentifier(),
                 kinesisRegion);
 
-        final StreamIdentifier streamIdentifierWithArn = StreamIdentifier.multiStreamInstance(
-                constructStreamArn(
-                        kinesisRegion,
-                        streamConfig.streamIdentifier().accountIdOptional().get(),
-                        streamConfig.streamIdentifier().streamName()),
+        StreamIdentifier streamIdentifierWithArn = StreamIdentifier.multiStreamInstance(
+                retrievalConfig
+                        .arnConstructor()
+                        .constructStreamArn(
+                                kinesisRegion,
+                                streamConfig
+                                        .streamIdentifier()
+                                        .accountIdOptional()
+                                        .get(),
+                                streamConfig.streamIdentifier().streamName()),
                 streamConfig.streamIdentifier().streamCreationEpochOptional().get());
-
+        streamIdentifierWithArn = streamIdentifierWithArn.toBuilder()
+                .streamName(streamConfig.streamIdentifier().streamName())
+                .build();
         return new StreamConfig(
                 streamIdentifierWithArn, streamConfig.initialPositionInStreamExtended(), streamConfig.consumerArn());
     }

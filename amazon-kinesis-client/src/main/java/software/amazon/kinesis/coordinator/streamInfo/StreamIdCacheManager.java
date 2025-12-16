@@ -131,7 +131,7 @@ public class StreamIdCacheManager {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while fetching stream ID", e);
         } catch (ExecutionException e) {
-            throw new RuntimeException("Error fetching stream ID", e.getCause());
+            throw new RuntimeException("Error fetching stream ID", e);
         } catch (TimeoutException e) {
             throw new RuntimeException(
                     "Timed out waiting for stream ID after " + STREAM_ID_FETCH_TIMEOUT_MILLIS + "ms", e);
@@ -193,7 +193,12 @@ public class StreamIdCacheManager {
                             resolveAndFetchStreamId(delayedFetchStreamIdKeys.poll());
                         }
                     } catch (Exception e) {
-                        log.error("Error processing delayed stream ID fetch", e);
+                        final String errorMessage = "Error processing delayed stream ID fetch";
+                        if (shouldBlockOnStreamId()) {
+                            log.error(errorMessage, e);
+                        } else {
+                            log.debug(errorMessage, e);
+                        }
                     }
                 },
                 0,

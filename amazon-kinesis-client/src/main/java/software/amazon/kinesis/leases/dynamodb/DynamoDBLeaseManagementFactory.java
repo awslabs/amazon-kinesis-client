@@ -390,7 +390,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             MetricsFactory metricsFactory,
             boolean isMultiStreamMode,
             long streamInfoBackfillIntervalMillis,
-            StreamInfoMode streamInfoMode) {
+            StreamInfoMode streamInfoMode,
+            StreamIdOnboardingState streamIdOnboardingState) {
         return new StreamInfoManager(
                 Executors.newSingleThreadScheduledExecutor(),
                 currentStreamConfigMap,
@@ -398,6 +399,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 metricsFactory,
                 isMultiStreamMode,
                 streamInfoBackfillIntervalMillis,
-                streamInfoMode);
+                streamInfoMode,
+                streamIdOnboardingState);
     }
 }

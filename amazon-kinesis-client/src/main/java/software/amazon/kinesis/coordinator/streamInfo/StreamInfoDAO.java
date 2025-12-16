@@ -119,6 +119,10 @@ public class StreamInfoDAO {
      */
     private String getStreamId(StreamIdentifier streamIdentifier) throws DependencyException {
         final DescribeStreamSummaryRequest request = DescribeStreamSummaryRequest.builder()
+                .streamARN(
+                        streamIdentifier.streamArnOptional().isPresent()
+                                ? streamIdentifier.streamArnOptional().get().toString()
+                                : null)
                 .streamName(streamIdentifier.streamName())
                 .build();
 

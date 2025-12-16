@@ -1865,7 +1865,8 @@ public class SchedulerTest {
                 MetricsFactory metricsFactory,
                 boolean isMultiStreamMode,
                 long streamInfoBackfillIntervalMillis,
-                StreamInfoMode streamInfoMode) {
+                StreamInfoMode streamInfoMode,
+                StreamIdOnboardingState streamIdOnboardingState) {
             return streamInfoManager;
         }
     }
