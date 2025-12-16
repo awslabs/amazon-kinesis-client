@@ -68,6 +68,7 @@ public class StreamIdCache {
             if (instance.onboardingState == StreamIdOnboardingState.ONBOARDED) {
                 throw new RuntimeException("Error getting stream ID " + streamIdentifier, e);
             }
+            log.info("Error getting stream ID but it will be retried {}", streamIdentifier, e);
             return null;
         }
     }

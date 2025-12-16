@@ -112,5 +112,6 @@ public interface LeaseManagementFactory {
             MetricsFactory metricsFactory,
             boolean isMultiStreamMode,
             long streamInfoBackfillIntervalMillis,
-            StreamInfoMode streamInfoMode);
+            StreamInfoMode streamInfoMode,
+            StreamIdOnboardingState streamIdOnboardingState);
 }

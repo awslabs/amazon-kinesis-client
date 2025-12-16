@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRespon
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
@@ -40,6 +41,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class StreamInfoManagerTest {
+    private static final StreamIdOnboardingState STREAM_ID_ONBOARDING_STATE = StreamIdOnboardingState.NOT_ONBOARDED;
+
     @Mock
     private ScheduledExecutorService mockExecutorService;
 
@@ -169,7 +172,8 @@ public class StreamInfoManagerTest {
                 mockMetricsFactory,
                 true,
                 BACKFILL_INTERVAL,
-                StreamInfoMode.TRACK_ONLY);
+                StreamInfoMode.TRACK_ONLY,
+                StreamIdOnboardingState.IN_TRANSITION);
         StreamDescriptionSummary summary =
                 StreamDescriptionSummary.builder().streamId(null).build();
 
@@ -495,7 +499,8 @@ public class StreamInfoManagerTest {
                 mockMetricsFactory,
                 isMultiStreamMode,
                 BACKFILL_INTERVAL,
-                streamInfoMode);
+                streamInfoMode,
+                STREAM_ID_ONBOARDING_STATE);
     }
 
     private void performBackfill() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
