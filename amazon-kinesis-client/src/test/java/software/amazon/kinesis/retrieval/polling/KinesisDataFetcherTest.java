@@ -49,6 +49,10 @@ import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheTestUtil;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -105,10 +109,14 @@ public class KinesisDataFetcherTest {
     @Rule
     public ExpectedException expectedExceptionRule = ExpectedException.none();
 
+    @Mock
+    private StreamIdCacheManager mockCacheManager;
+
     @Before
     public void setup() {
         kinesisDataFetcher =
                 new KinesisDataFetcher(kinesisClient, STREAM_NAME, SHARD_ID, MAX_RECORDS, NULL_METRICS_FACTORY);
+        StreamIdCacheTestUtil.initializeForTest(mockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
     }
 
     /**
@@ -302,6 +310,7 @@ public class KinesisDataFetcherTest {
 
     @Test
     public void testGetRecordsThrowsSdkException() throws Exception {
+        setupForStreamIdTest(mockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
         expectedExceptionRule.expect(SdkException.class);
         expectedExceptionRule.expectMessage("Test Exception");
 
@@ -353,6 +362,89 @@ public class KinesisDataFetcherTest {
                 iteratorCaptor.getValue().startingSequenceNumber());
         assertEquals(
                 expectedRecordsRequest.shardIterator(), recordsCaptor.getValue().shardIterator());
+    }
+
+    private void setupForStreamIdTest(
+            StreamIdCacheManager currentMockCacheManager, StreamIdOnboardingState streamIdOnboardingState)
+            throws Exception {
+        StreamIdCacheTestUtil.initializeForTest(currentMockCacheManager, streamIdOnboardingState);
+        final String nextIterator = "TestIterator";
+        final ArgumentCaptor<GetShardIteratorRequest> iteratorCaptor =
+                ArgumentCaptor.forClass(GetShardIteratorRequest.class);
+        final ArgumentCaptor<GetRecordsRequest> recordsCaptor = ArgumentCaptor.forClass(GetRecordsRequest.class);
+
+        final CompletableFuture<GetRecordsResponse> future = mock(CompletableFuture.class);
+
+        when(kinesisClient.getShardIterator(iteratorCaptor.capture()))
+                .thenReturn(makeGetShardIteratorResponse(nextIterator));
+        when(kinesisClient.getRecords(recordsCaptor.capture())).thenReturn(future);
+        when(future.get(anyLong(), any(TimeUnit.class)))
+                .thenThrow(new ExecutionException(ResourceNotFoundException.builder()
+                        .message("Test Exception")
+                        .build()));
+    }
+
+    @Test
+    public void testGetRecordsWithStreamIdAndOnboardingStateAsNotOnboarding() throws Exception {
+        StreamIdCacheManager currentMockCacheManager = mock(StreamIdCacheManager.class);
+        setupForStreamIdTest(currentMockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
+
+        kinesisDataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        DataFetcherResult dataFetcherResult = kinesisDataFetcher.getRecords();
+
+        assertNotNull(dataFetcherResult);
+        verify(currentMockCacheManager, never()).get(any(StreamIdentifier.class));
+    }
+
+    @Test
+    public void testGetRecordsWithStreamIdAndOnboardingStateAsInTransition() throws Exception {
+        StreamIdCacheManager currentMockCacheManager = mock(StreamIdCacheManager.class);
+        setupForStreamIdTest(currentMockCacheManager, StreamIdOnboardingState.IN_TRANSITION);
+        when(currentMockCacheManager.get(any(StreamIdentifier.class))).thenReturn("test-stream-id");
+
+        kinesisDataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        DataFetcherResult dataFetcherResult = kinesisDataFetcher.getRecords();
+
+        assertNotNull(dataFetcherResult);
+        // called twice, one in initialize and one on getRecords
+        verify(currentMockCacheManager, times(2)).get(any(StreamIdentifier.class));
+    }
+
+    @Test
+    public void testGetRecordsWithStreamIdAndOnboardingStateAsOnboarding() throws Exception {
+        StreamIdCacheManager currentMockCacheManager = mock(StreamIdCacheManager.class);
+        setupForStreamIdTest(currentMockCacheManager, StreamIdOnboardingState.ONBOARDED);
+        when(currentMockCacheManager.get(any(StreamIdentifier.class))).thenReturn("test-stream-id");
+        kinesisDataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        DataFetcherResult dataFetcherResult = kinesisDataFetcher.getRecords();
+
+        assertNotNull(dataFetcherResult);
+        // called twice, one in initialize and one on getRecords
+        verify(currentMockCacheManager, times(2)).get(any(StreamIdentifier.class));
+    }
+
+    @Test
+    public void testGetRecordsWithStreamIdAndOnboardingStateAsInTransitionNoRuntimeException() throws Exception {
+        StreamIdCacheManager currentMockCacheManager = mock(StreamIdCacheManager.class);
+        setupForStreamIdTest(currentMockCacheManager, StreamIdOnboardingState.IN_TRANSITION);
+        when(currentMockCacheManager.get(any(StreamIdentifier.class))).thenThrow(RuntimeException.class);
+
+        kinesisDataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        DataFetcherResult dataFetcherResult = kinesisDataFetcher.getRecords();
+
+        assertNotNull(dataFetcherResult);
+        // called twice, one in initialize and one on getRecords
+        verify(currentMockCacheManager, times(2)).get(any(StreamIdentifier.class));
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testGetRecordsWithStreamIdAndOnboardingStateAsOnboardingThrowsRuntimeException() throws Exception {
+        StreamIdCacheManager currentMockCacheManager = mock(StreamIdCacheManager.class);
+        setupForStreamIdTest(currentMockCacheManager, StreamIdOnboardingState.ONBOARDED);
+        when(currentMockCacheManager.get(any(StreamIdentifier.class))).thenThrow(RuntimeException.class);
+
+        kinesisDataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        kinesisDataFetcher.getRecords();
     }
 
     private CompletableFuture<GetRecordsResponse> makeGetRecordsResponse(String nextIterator, List<Record> records) {

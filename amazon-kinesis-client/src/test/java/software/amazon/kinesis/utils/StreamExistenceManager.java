@@ -133,8 +133,9 @@ public class StreamExistenceManager extends AWSResourceManager {
         if (testConfig.isCrossAccount() && testConfig.getRetrievalMode().equals(RetrievalMode.STREAMING)) {
             final Map<Arn, Arn> streamToConsumerArnsMap = new HashMap<>();
             for (Arn streamArn : testConfig.getStreamArns()) {
-                final Arn consumerArn =
-                        registerConsumerAndWaitForActive(streamArn, KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
+                final String consumerName =
+                        String.join("_", testConfig.getResourcePrefix(), KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
+                final Arn consumerArn = registerConsumerAndWaitForActive(streamArn, consumerName);
                 putResourcePolicyForCrossAccount(
                         consumerArn,
                         getCrossAccountConsumerResourcePolicy(testConfig.getAccountIdForConsumer(), consumerArn));

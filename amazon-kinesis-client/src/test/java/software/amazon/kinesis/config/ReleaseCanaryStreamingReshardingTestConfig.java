@@ -3,7 +3,6 @@ package software.amazon.kinesis.config;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
@@ -14,10 +13,8 @@ import static software.amazon.kinesis.utils.ReshardOptions.SPLIT;
 
 public class ReleaseCanaryStreamingReshardingTestConfig extends KCLAppConfig {
 
-    private final UUID uniqueId = UUID.randomUUID();
-
     private final String applicationName = "StreamingReshardingTest";
-    private final String streamName = "2XStreamingReshardingTestStream_" + uniqueId;
+    private final String streamName = "StreamingReshardingTestStream";
 
     @Override
     public String getTestName() {

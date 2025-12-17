@@ -54,12 +54,14 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
                     kinesisClient,
                     shardInfo.shardId(),
                     getOrCreateConsumerArn(streamConfig.streamIdentifier(), streamConfig.consumerArn()),
-                    streamIdentifierStr.get());
+                    streamIdentifierStr.get(),
+                    streamConfig.streamIdentifier());
         } else {
             return new FanOutRecordsPublisher(
                     kinesisClient,
                     shardInfo.shardId(),
-                    getOrCreateConsumerArn(streamConfig.streamIdentifier(), defaultConsumerArn));
+                    getOrCreateConsumerArn(streamConfig.streamIdentifier(), defaultConsumerArn),
+                    streamConfig.streamIdentifier());
         }
     }
 

@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.leader;
 
-import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,11 +45,6 @@ import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_K
 @Slf4j
 @KinesisClientInternalApi
 public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
-    private static final Long DEFAULT_LEASE_DURATION_MILLIS =
-            Duration.ofMinutes(2).toMillis();
-    // Heartbeat frequency should be at-least 3 times smaller the lease duration according to LockClient documentation
-    private static final Long DEFAULT_HEARTBEAT_PERIOD_MILLIS =
-            Duration.ofSeconds(30).toMillis();
 
     private final CoordinatorStateDAO coordinatorStateDao;
     private final AmazonDynamoDBLockClient dynamoDBLockClient;
@@ -83,13 +77,12 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
-            final CoordinatorStateDAO coordinatorStateDao, final String workerId, final MetricsFactory metricsFactory) {
-        return create(
-                coordinatorStateDao,
-                workerId,
-                DEFAULT_LEASE_DURATION_MILLIS,
-                DEFAULT_HEARTBEAT_PERIOD_MILLIS,
-                metricsFactory);
+            final CoordinatorStateDAO coordinatorStateDao,
+            final String workerId,
+            final MetricsFactory metricsFactory,
+            long leaseDurationInMillis,
+            long heartbeatPeriodInMillis) {
+        return create(coordinatorStateDao, workerId, leaseDurationInMillis, heartbeatPeriodInMillis, metricsFactory);
     }
 
     @Override

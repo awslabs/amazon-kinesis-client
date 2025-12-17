@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -193,6 +194,9 @@ public class AggregatorUtil {
                         }
                     } catch (InvalidProtocolBufferException e) {
                         isAggregated = false;
+                    } catch (Throwable t) {
+                        log.error("Error in deaggregation", t);
+                        throw t;
                     }
                 }
             }
@@ -205,6 +209,7 @@ public class AggregatorUtil {
         return result;
     }
 
+    @VisibleForTesting
     protected byte[] calculateTailCheck(byte[] data) {
         return md5(data);
     }

@@ -43,7 +43,6 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -414,14 +413,13 @@ public class PrefetchRecordsPublisherTest {
         assertTrue(spyQueue.size() <= MAX_SIZE);
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testSubscribeWithoutStarting() {
+    public void testSubscribeWithoutStartingCallsOnError() {
         verify(executorService, never()).execute(any());
         Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
         getRecordsCache.subscribe(mockSubscriber);
+        verify(mockSubscriber).onError(any(IllegalStateException.class));
     }
 
-    @Test(expected = IllegalStateException.class)
     public void testRequestRecordsOnSubscriptionAfterShutdown() {
         GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .records(Record.builder()
@@ -439,9 +437,7 @@ public class PrefetchRecordsPublisherTest {
         when(executorService.isShutdown()).thenReturn(true);
         Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
         getRecordsCache.subscribe(mockSubscriber);
-        ArgumentCaptor<Subscription> subscriptionCaptor = ArgumentCaptor.forClass(Subscription.class);
-        verify(mockSubscriber).onSubscribe(subscriptionCaptor.capture());
-        subscriptionCaptor.getValue().request(1);
+        verify(mockSubscriber).onError(any(IllegalStateException.class));
     }
 
     @Test

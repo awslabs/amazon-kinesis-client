@@ -5,6 +5,29 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.2.1 (November 14, 2025)
+* [#1650](https://github.com/awslabs/amazon-kinesis-client/pull/1650) Remove explicit netty dependency to fix mismatched versions
+* [#1648](https://github.com/awslabs/amazon-kinesis-client/pull/1648) Capture subscribe exceptions in onError instead of throwing in RxJava
+
+### Release 3.2.0 (November 5, 2025)
+* [#1482](https://github.com/awslabs/amazon-kinesis-client/pull/1482) Add config for leader lifetime and heartbeat
+* [#1533](https://github.com/awslabs/amazon-kinesis-client/pull/1533) Bump awssdk.version from 2.33.0 to 2.37.1
+* [#1634](https://github.com/awslabs/amazon-kinesis-client/pull/1634) Remove old commons-collections version
+* [#1635](https://github.com/awslabs/amazon-kinesis-client/pull/1635) Remove var keyword from unit test
+* [#1641](https://github.com/awslabs/amazon-kinesis-client/pull/1641) Bump netty-handler from 4.1.118.Final to 4.2.7.Final
+
+### Release 3.1.3 (September 24, 2025)
+* [#1619](https://github.com/awslabs/amazon-kinesis-client/pull/1619) Bump awssdk from 2.31.77 to 2.33.0 and bump fasterxml.jackson from 2.12.7.1 to 2.20.0
+
+### Release 3.1.2 (August 20, 2025)
+* [#1501](https://github.com/awslabs/amazon-kinesis-client/pull/1501) Allow migration to KCL 3.x when there are fewer leases than workers
+* [#1496](https://github.com/awslabs/amazon-kinesis-client/pull/1496) Decrease DDB lease renewal verbosity
+* [#1523](https://github.com/awslabs/amazon-kinesis-client/pull/1523) Replace ProcessRecordsInput.builder() method with ProcessRecordsInput.toBuilder() to avoid copying over fields
+* [#1519](https://github.com/awslabs/amazon-kinesis-client/pull/1519) Fix flaky LeaseAssignmentManager retry behavior test
+* [#1504](https://github.com/awslabs/amazon-kinesis-client/pull/1504) Bump awssdk.version from 2.31.62 to 2.31.77
+* [#1538](https://github.com/awslabs/amazon-kinesis-client/pull/1538) Bump com.amazonaws:dynamodb-lock-client from 1.3.0 to 1.4.0
+* [#1513](https://github.com/awslabs/amazon-kinesis-client/pull/1513) Bump org.apache.commons:commons-lang3 from 3.14.0 to 3.18.0 in /amazon-kinesis-client
+
 ### Release (3.1.1 - July 8, 2025)
 * [#1495](https://github.com/awslabs/amazon-kinesis-client/pull/1495) Add millisBehindLatestThresholdForReducedTps property to PollingConfig
 * [#1498](https://github.com/awslabs/amazon-kinesis-client/pull/1498) Add multilang support for leaseAssignmentIntervalMillis config
