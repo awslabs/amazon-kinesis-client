@@ -49,11 +49,6 @@
       <artifactId>sts</artifactId>
       <version>${awssdk.version}</version>
     </dependency>
-    <dependency>
-      <groupId>software.amazon.awssdk</groupId>
-      <artifactId>aws-cbor-protocol</artifactId>
-      <version>${awssdk.version}</version>
-    </dependency>
 
     <dependency>
       <groupId>org.projectlombok</groupId>
