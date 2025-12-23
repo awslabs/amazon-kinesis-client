@@ -681,7 +681,7 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
-    void performAssignment_continuousError_assertLeadershipRelease() throws Exception {
+    void performAssignment_onError_assertLeadershipRelease() throws Exception {
         final Supplier<Long> mockFailingNanoTimeProvider = Mockito.mock(Supplier.class);
         when(mockFailingNanoTimeProvider.get()).thenThrow(new OutOfMemoryError("IAmAlwaysFailing"));
 
