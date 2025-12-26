@@ -194,6 +194,22 @@ public class CoordinatorStateDAO {
         return true;
     }
 
+    public GetItemRequest buildGetItemRequest(@NonNull final String key) {
+        return GetItemRequest.builder()
+                .tableName(config.tableName())
+                .key(getCoordinatorStateKey(key))
+                .consistentRead(true)
+                .build();
+    }
+
+    public GetItemResponse callGetItem(@NonNull final GetItemRequest request) throws Exception {
+        return FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.getItem(request));
+    }
+
+    public Map<String, AttributeValue> getDynamoRecord(@NonNull final String key) throws Exception {
+        return callGetItem(buildGetItemRequest(key)).item();
+    }
+
     /**
      * @param key Get the CoordinatorState for this key
      *
