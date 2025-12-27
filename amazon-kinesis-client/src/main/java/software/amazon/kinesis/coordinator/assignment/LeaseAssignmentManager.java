@@ -36,17 +36,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.assignment.exclusion.WorkerIdExclusionMonitor;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -186,6 +190,15 @@ public final class LeaseAssignmentManager {
             log.info("Current worker {} is a leader, performing assignment", currentWorkerId);
 
             final InMemoryStorageView inMemoryStorageView = new InMemoryStorageView();
+            boolean reassignAllLeases = false;
+
+            // if there is a worker ID exclusion monitor running, get the active pattern (may be null)
+            // the InMemoryStorageView will filter the active worker IDs by the regex during the load
+            WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
+            if (exclusionMonitor != null && !exclusionMonitor.isOnlyExcludingLeadership()) {
+                inMemoryStorageView.setWorkerIdExclusionRegex(exclusionMonitor.getActivePattern());
+                reassignAllLeases = exclusionMonitor.isNewState();
+            }
 
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
@@ -201,18 +214,23 @@ public final class LeaseAssignmentManager {
             updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
 
-            // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
-            // lastUpdateTime)
-            // but the lease is not expired (based on the leaseCounter on lease).
-            // If a worker has died, the lease will be expired and assigned in next iteration.
-            final List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList().stream()
-                    .filter(lease -> lease.isExpired(
-                                    TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis),
-                                    inMemoryStorageView.getLeaseTableScanTime())
-                            || Objects.isNull(lease.actualOwner()))
-                    // marking them for direct reassignment.
-                    .map(l -> l.isExpiredOrUnassigned(true))
-                    .collect(Collectors.toList());
+            List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList();
+            // If there is a new worker exclusion coordinator state in the coordinator table, then we will treat
+            // the entire lease list as expired/unassigned, causing all the leases to be reassigned.
+            if (!reassignAllLeases) {
+                // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
+                // lastUpdateTime)
+                // but the lease is not expired (based on the leaseCounter on lease).
+                // If a worker has died, the lease will be expired and assigned in next iteration.
+                expiredOrUnAssignedLeases = expiredOrUnAssignedLeases.stream()
+                        .filter(lease -> lease.isExpired(
+                                        TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis),
+                                        inMemoryStorageView.getLeaseTableScanTime())
+                                || Objects.isNull(lease.actualOwner()))
+                        // marking them for direct reassignment.
+                        .map(l -> l.isExpiredOrUnassigned(true))
+                        .collect(Collectors.toList());
+            }
 
             log.info("Total expiredOrUnassignedLeases count : {}", expiredOrUnAssignedLeases.size());
             metricsScope.addData(
@@ -496,6 +514,9 @@ public final class LeaseAssignmentManager {
          */
         private double targetAverageThroughput;
 
+        @Setter
+        private Pattern workerIdExclusionRegex;
+
         /**
          * Update {@ref inMemoryWorkerToLeasesMapping} with the change in ownership and update newLeaseAssignmentMap
          *
@@ -580,11 +601,13 @@ public final class LeaseAssignmentManager {
              * If a workerMetrics has a metric (i.e. has -1 value in last index which denotes failure),
              * skip it from activeWorkerMetrics and no new action on it will be done
              * (new assignment etc.) until the metric has non -1 value in last index. This is to avoid performing action
-             * with the stale data on worker.
+             * with the stale data on worker. Also filter out worker metrics excluded by any regex pattern in the
+             * coordinator table.
              */
             this.activeWorkerMetrics = workerMetricsList.stream()
                     .filter(workerMetrics -> workerMetrics.getLastUpdateTime() >= workerExpiryThreshold
-                            && !workerMetrics.isAnyWorkerMetricFailing())
+                            && !workerMetrics.isAnyWorkerMetricFailing()
+                            && !workerIdExcluded(workerMetrics.getWorkerId()))
                     .collect(Collectors.toList());
             log.info("activeWorkerMetrics : {}", activeWorkerMetrics.size());
             targetAverageThroughput =
@@ -612,6 +635,10 @@ public final class LeaseAssignmentManager {
                             getTotalAssignedThroughput(workerMetrics.getWorkerId()) / targetAverageThroughput);
                 }
             });
+        }
+
+        private boolean workerIdExcluded(@NonNull String workerId) {
+            return workerIdExclusionRegex != null && Pattern.matches(workerIdExclusionRegex.pattern(), workerId);
         }
 
         private void updateWorkerThroughput(final String workerId, final double leaseThroughput) {
