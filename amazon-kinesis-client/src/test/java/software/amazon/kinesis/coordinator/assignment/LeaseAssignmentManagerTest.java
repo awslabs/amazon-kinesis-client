@@ -681,6 +681,22 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
+    void performAssignment_onError_assertLeadershipRelease() throws Exception {
+        final Supplier<Long> mockFailingNanoTimeProvider = Mockito.mock(Supplier.class);
+        when(mockFailingNanoTimeProvider.get()).thenThrow(new OutOfMemoryError("IAmAlwaysFailing"));
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                Duration.ofHours(1).toMillis(),
+                mockFailingNanoTimeProvider,
+                Integer.MAX_VALUE);
+
+        leaseAssignmentManagerRunnable.run();
+        // After 1 error, leadership is expected to be released.
+        verify(mockLeaderDecider, times(1)).releaseLeadershipIfHeld();
+    }
+
+    @Test
     void startStopValidation_sanity()
             throws InterruptedException, ProvisionedThroughputException, InvalidStateException, DependencyException {
         final LeaseAssignmentManager leaseAssignmentManager = createLeaseAssignmentManager(

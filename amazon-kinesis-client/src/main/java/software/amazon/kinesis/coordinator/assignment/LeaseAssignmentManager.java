@@ -259,13 +259,18 @@ public final class LeaseAssignmentManager {
             deleteStaleWorkerMetricsEntries(inMemoryStorageView, metricsScope);
             success = true;
             noOfContinuousFailedAttempts = 0;
-        } catch (final Exception e) {
+        } catch (final Throwable e) {
             log.error("LeaseAssignmentManager failed to perform lease assignment.", e);
             noOfContinuousFailedAttempts++;
-            if (noOfContinuousFailedAttempts >= DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER) {
+
+            final boolean isError = e instanceof Error;
+            final int failureThreshold = isError ? 1 : DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER;
+
+            if (noOfContinuousFailedAttempts >= failureThreshold) {
                 log.error(
-                        "Failed to perform assignment {} times in a row, releasing leadership from worker : {}",
-                        DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER,
+                        "Failed to perform assignment {} times in a row{}, releasing leadership from worker : {}",
+                        failureThreshold,
+                        isError ? " (Error detected)" : "",
                         currentWorkerId);
                 MetricsUtil.addCount(metricsScope, FORCE_LEADER_RELEASE_METRIC_NAME, 1, MetricsLevel.SUMMARY);
                 leaderDecider.releaseLeadershipIfHeld();
