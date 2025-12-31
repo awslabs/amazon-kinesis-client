@@ -1,6 +1,5 @@
 package software.amazon.kinesis.application;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import software.amazon.kinesis.application.config.KCLAppConfig;
 import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamPollingH2TestConfig;
@@ -8,7 +7,6 @@ import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCros
 import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountPollingH2TestConfig;
 import software.amazon.kinesis.application.config.crossaccount.ReleaseCanaryCrossAccountStreamingTestConfig;
 
-@Ignore
 public class CrossAccountStreamConsumerIntegrationTest {
 
     /**

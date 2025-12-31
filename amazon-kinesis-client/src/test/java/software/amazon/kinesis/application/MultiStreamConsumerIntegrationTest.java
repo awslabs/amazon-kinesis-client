@@ -1,12 +1,10 @@
 package software.amazon.kinesis.application;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import software.amazon.kinesis.application.config.KCLAppConfig;
 import software.amazon.kinesis.application.config.multistream.ReleaseCanaryMultiStreamPollingH2TestConfig;
 import software.amazon.kinesis.application.config.multistream.ReleaseCanaryMultiStreamStreamingTestConfig;
 
-@Ignore
 public class MultiStreamConsumerIntegrationTest {
     @Test
     public void kclReleaseCanaryMultiStreamPollingTest() throws Exception {
