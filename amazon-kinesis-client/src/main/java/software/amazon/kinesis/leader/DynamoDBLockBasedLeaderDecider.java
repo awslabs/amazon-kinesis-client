@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.leader;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -160,12 +161,24 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     /**
-     * Releases the lock if held by current worker when this method is invoked.
+     * Shuts down the leader decider, releasing any held lock and closing the lock client.
+     * <p>
+     * This method releases the leadership lock if held and then closes the underlying
+     * DynamoDB lock client to stop its background heartbeat thread. This ensures that
+     * no locks are kept alive after shutdown.
      */
     @Override
     public synchronized void shutdown() {
         if (!isShutdown.getAndSet(true)) {
             releaseLeadershipIfHeld();
+
+            // Close the any lock client to stop any potential background heartbeat thread.
+            try {
+                log.info("Closing DynamoDB lock client for worker {}", workerId);
+                dynamoDBLockClient.close();
+            } catch (final IOException e) {
+                log.error("Failed to close DynamoDB lock client for worker {}", workerId, e);
+            }
         }
     }
 
