@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,8 +50,14 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import org.mockito.InOrder;
 import static software.amazon.kinesis.common.HashKeyRangeForLease.deserialize;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MAX_HASH_KEY;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MIN_HASH_KEY;
@@ -737,5 +744,95 @@ public class PeriodicShardSyncManagerTest {
         SPLIT,
         MERGE,
         ANY
+    }
+
+    /**
+     * Test that stop() shuts down the thread pool first, waits for termination,
+     * and then shuts down the leader decider. This ordering is critical to prevent
+     * a race condition where a worker could acquire a leader lock during shutdown.
+     */
+    @Test
+    public void testStopShutsDownThreadPoolBeforeLeaderDecider() throws InterruptedException {
+        // Setup: configure the mock executor to return true for awaitTermination
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
+
+        // Execute: call stop
+        periodicShardSyncManager.stop();
+
+        // Verify: thread pool is shut down and awaited before leader decider shutdown
+        InOrder inOrder = inOrder(mockScheduledExecutor, leaderDecider);
+
+        // 1. First, thread pool should be shut down
+        inOrder.verify(mockScheduledExecutor).shutdown();
+
+        // 2. Then, we should wait for termination
+        inOrder.verify(mockScheduledExecutor).awaitTermination(anyLong(), eq(TimeUnit.SECONDS));
+
+        // 3. Finally, leader decider should be shut down
+        inOrder.verify(leaderDecider).shutdown();
+    }
+
+    /**
+     * Test that stop() calls shutdownNow when awaitTermination times out.
+     */
+    @Test
+    public void testStopForcesShutdownWhenTimeoutExpires() throws InterruptedException {
+        // Setup: configure the mock executor to return false for first awaitTermination (timeout)
+        // and true for the second one (after shutdownNow)
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS)))
+                .thenReturn(false)
+                .thenReturn(true);
+
+        // Execute: call stop
+        periodicShardSyncManager.stop();
+
+        // Verify: shutdownNow is called after timeout
+        InOrder inOrder = inOrder(mockScheduledExecutor, leaderDecider);
+        inOrder.verify(mockScheduledExecutor).shutdown();
+        inOrder.verify(mockScheduledExecutor).awaitTermination(anyLong(), eq(TimeUnit.SECONDS));
+        inOrder.verify(mockScheduledExecutor).shutdownNow();
+        inOrder.verify(mockScheduledExecutor).awaitTermination(anyLong(), eq(TimeUnit.SECONDS));
+        inOrder.verify(leaderDecider).shutdown();
+    }
+
+    /**
+     * Test that stop() handles InterruptedException properly by calling shutdownNow
+     * and re-interrupting the thread.
+     */
+    @Test
+    public void testStopHandlesInterruptedException() throws InterruptedException {
+        // Setup: configure the mock executor to throw InterruptedException
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS)))
+                .thenThrow(new InterruptedException("Test interruption"));
+
+        // Clear the interrupted flag before the test
+        Thread.interrupted();
+
+        // Execute: call stop
+        periodicShardSyncManager.stop();
+
+        // Verify: shutdownNow is called and leader decider is still shut down
+        verify(mockScheduledExecutor).shutdown();
+        verify(mockScheduledExecutor).shutdownNow();
+        verify(leaderDecider).shutdown();
+
+        // Verify the thread was re-interrupted
+        Assert.assertTrue("Thread should be interrupted", Thread.interrupted());
+    }
+
+    /**
+     * Test that stop() is idempotent - calling it multiple times has no additional effect.
+     */
+    @Test
+    public void testStopIsIdempotent() throws InterruptedException {
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
+
+        // Call stop twice
+        periodicShardSyncManager.stop();
+        periodicShardSyncManager.stop();
+
+        // Verify: shutdown methods are only called once (from the first stop() call)
+        verify(mockScheduledExecutor).shutdown();
+        verify(leaderDecider).shutdown();
     }
 }

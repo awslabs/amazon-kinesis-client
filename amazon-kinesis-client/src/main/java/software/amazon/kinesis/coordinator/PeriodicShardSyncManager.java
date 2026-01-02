@@ -193,12 +193,57 @@ class PeriodicShardSyncManager {
         }
     }
 
+    /**
+     * Timeout in seconds to wait for running shard sync tasks to complete during shutdown.
+     */
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 5L;
+
+    /**
+     * Stops the periodic shard sync manager.
+     * <p>
+     * This method first shuts down the thread pool to prevent new shard sync tasks from starting,
+     * then waits for any running tasks to complete before shutting down the leader decider.
+     * This ordering is critical to prevent the race condition where a worker could acquire a leader
+     * lock during shutdown:
+     * <ol>
+     *   <li>If runShardSync() is executing and has passed the isShutdown check in the leader decider</li>
+     *   <li>It could proceed to acquire the leader lock after leaderDecider.shutdown() is called</li>
+     *   <li>This would result in a lock held by a shutting-down worker that may not be properly released</li>
+     * </ol>
+     * By waiting for running tasks to complete first, we ensure that any lock acquisition completes
+     * before calling leaderDecider.shutdown(), which will then properly release the lock if held.
+     */
     public void stop() {
         if (isRunning) {
-            log.info(String.format("Shutting down leader decider on worker %s", workerId));
-            leaderDecider.shutdown();
-            log.info(String.format("Shutting down periodic shard sync task scheduler on worker %s", workerId));
+            // First, shutdown the thread pool to prevent new shard sync tasks from being scheduled
+            log.info("Shutting down periodic shard sync task scheduler on worker {}", workerId);
             shardSyncThreadPool.shutdown();
+
+            // Wait for any currently running shard sync task to complete.
+            // This is critical to avoid a race condition where runShardSync() has already passed
+            // the isShutdown check in the leader decider and is about to acquire the lock.
+            try {
+                log.info("Waiting up to {} seconds for running shard sync tasks to complete on worker {}",
+                        SHUTDOWN_TIMEOUT_SECONDS, workerId);
+                if (!shardSyncThreadPool.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    log.warn("Shard sync tasks did not complete within timeout, forcing shutdown on worker {}",
+                            workerId);
+                    shardSyncThreadPool.shutdownNow();
+                    // Wait a bit more for tasks to respond to interruption
+                    if (!shardSyncThreadPool.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                        log.error("Shard sync tasks did not terminate after forced shutdown on worker {}", workerId);
+                    }
+                }
+            } catch (InterruptedException e) {
+                log.warn("Interrupted while waiting for shard sync tasks to complete on worker {}", workerId);
+                shardSyncThreadPool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+
+            // Safe to shut down the leader decider now - any running task has completed,
+            log.info("Shutting down leader decider on worker {}", workerId);
+            leaderDecider.shutdown();
+
             isRunning = false;
         }
     }
