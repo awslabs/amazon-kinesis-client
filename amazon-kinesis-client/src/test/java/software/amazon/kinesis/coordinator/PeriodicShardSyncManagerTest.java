@@ -33,6 +33,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
@@ -56,8 +57,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import org.mockito.InOrder;
 import static software.amazon.kinesis.common.HashKeyRangeForLease.deserialize;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MAX_HASH_KEY;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MIN_HASH_KEY;
@@ -754,7 +753,8 @@ public class PeriodicShardSyncManagerTest {
     @Test
     public void testStopShutsDownThreadPoolBeforeLeaderDecider() throws InterruptedException {
         // Setup: configure the mock executor to return true for awaitTermination
-        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS)))
+                .thenReturn(true);
 
         // Execute: call stop
         periodicShardSyncManager.stop();
@@ -825,7 +825,8 @@ public class PeriodicShardSyncManagerTest {
      */
     @Test
     public void testStopIsIdempotent() throws InterruptedException {
-        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
+        when(mockScheduledExecutor.awaitTermination(anyLong(), eq(TimeUnit.SECONDS)))
+                .thenReturn(true);
 
         // Call stop twice
         periodicShardSyncManager.stop();

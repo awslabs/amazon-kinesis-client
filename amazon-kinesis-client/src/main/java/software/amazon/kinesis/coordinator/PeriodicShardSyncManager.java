@@ -223,10 +223,13 @@ class PeriodicShardSyncManager {
             // This is critical to avoid a race condition where runShardSync() has already passed
             // the isShutdown check in the leader decider and is about to acquire the lock.
             try {
-                log.info("Waiting up to {} seconds for running shard sync tasks to complete on worker {}",
-                        SHUTDOWN_TIMEOUT_SECONDS, workerId);
+                log.info(
+                        "Waiting up to {} seconds for running shard sync tasks to complete on worker {}",
+                        SHUTDOWN_TIMEOUT_SECONDS,
+                        workerId);
                 if (!shardSyncThreadPool.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    log.warn("Shard sync tasks did not complete within timeout, forcing shutdown on worker {}",
+                    log.warn(
+                            "Shard sync tasks did not complete within timeout, forcing shutdown on worker {}",
                             workerId);
                     shardSyncThreadPool.shutdownNow();
                     // Wait a bit more for tasks to respond to interruption
