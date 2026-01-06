@@ -163,7 +163,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * Releases the lock if held by current worker when this method is invoked.
      */
     @Override
-    public void shutdown() {
+    public synchronized void shutdown() {
         if (!isShutdown.getAndSet(true)) {
             releaseLeadershipIfHeld();
         }
