@@ -183,7 +183,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     @Override
-    public void releaseLeadershipIfHeld() {
+    public synchronized void releaseLeadershipIfHeld() {
         try {
             final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LEADER_HASH_KEY, Optional.empty());
             if (lockItem.isPresent()
