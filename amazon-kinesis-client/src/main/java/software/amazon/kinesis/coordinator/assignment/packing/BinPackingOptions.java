@@ -45,11 +45,11 @@ public final class BinPackingOptions {
     public enum ReassignmentStrategy {
         /** does not track differences in assignments versus base state */
         NONE,
-        /** adds linear weighted penalty per reassignment to the objective; if no base state provided, must use FFD */
+        /** adds weighted penalty per reassignment to the objective; if no base state provided, must use FFD */
         PENALTY,
         /** hard limit on number of reassignments; also needs base state */
         LIMIT,
-        /** adds quadratic weighted penalty per excess reassignment to the objective; also needs base state */
+        /** adds weighted penalty per excess reassignment to the objective; also needs base state */
         BOTH
     }
 }

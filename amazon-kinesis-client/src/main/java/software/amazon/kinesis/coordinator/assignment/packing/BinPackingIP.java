@@ -1,5 +1,7 @@
 package software.amazon.kinesis.coordinator.assignment.packing;
 
+import java.math.BigDecimal;
+
 import lombok.experimental.SuperBuilder;
 import org.ojalgo.optimisation.Expression;
 import org.ojalgo.optimisation.ExpressionsBasedModel;
@@ -18,24 +20,31 @@ class BinPackingIP extends BinPackingModel {
     boolean trackUnderfill;
     boolean trackOverfill;
     double smoothing; // smoothing ratio for any non-slack variables (0 is L1/linear, 1 is L2/quadratic)
+    boolean flexibleBins;
 
     // below fields are set with correct sizes/values during compile(); do not use Builder
     ExpressionsBasedModel model;
 
     Expression objective;
     Expression reassignmentLimitExpr;
+    Expression numBinsExpr;
     Expression[] assignmentExpr;
     Expression[] reassignmentExpr;
+    Expression[] nonEmptyExpr;
+    Expression[] ordering;
     Expression[][] capacity;
 
     Variable[][] assignment;
     Variable[][] underfill;
     Variable[][] overfill;
     Variable[] reassignment;
-    Variable[] empty;
+    Variable[] nonEmpty;
+    Variable numBinsUsed;
+
+    Optimisation.Result result;
 
     public Optimisation.Result solve() {
-        return model.minimise();
+        return (result = model.minimise());
     }
 
     public void compile(boolean skipObjective) {
@@ -62,6 +71,7 @@ class BinPackingIP extends BinPackingModel {
         capacityConstraints();
 
         if (numBins < maxBins) {
+            System.out.println("Using flexible bins...");
             flexibleBins();
         }
 
@@ -146,7 +156,54 @@ class BinPackingIP extends BinPackingModel {
         }
     }
 
-    private void flexibleBins() {}
+    private void nonEmptyConstraints() {
+        nonEmpty = new Variable[maxBins];
+        nonEmptyExpr = new Expression[maxBins];
+
+        for (int b = 0; b < maxBins; b++) {
+            nonEmpty[b] = model.addVariable("nonEmpty_" + b).binary();
+            nonEmptyExpr[b] = model.addExpression("nonEmptyExpr_" + b);
+
+            for (int i = 0; i < items.length; i++) {
+                nonEmptyExpr[b].set(assignment[i][b], 1);
+            }
+
+            // big M method: bin.size <= items.length
+            nonEmptyExpr[b].set(nonEmpty[b], BigDecimal.valueOf(-items.length));
+            nonEmptyExpr[b].upper(0);
+        }
+    }
+
+    private void orderingConstraints() {
+        ordering = new Expression[maxBins];
+
+        // symmetry breaking: cannot use bin b unless bin b-1 is used
+        for (int b = 1; b < maxBins; b++) {
+            ordering[b] = model.addExpression("ordering_" + b);
+            ordering[b].set(nonEmpty[b], 1);
+            ordering[b].set(nonEmpty[b - 1], -1);
+            ordering[b].upper(0);
+        }
+    }
+
+    private void flexibleBins() {
+        flexibleBins = true;
+
+        nonEmptyConstraints();
+        orderingConstraints();
+
+        numBinsUsed = model.addVariable("numBins").integer();
+        numBinsUsed.lower(1);
+        numBinsUsed.upper(maxBins);
+
+        numBinsExpr = model.addExpression("numBinsExpr");
+        numBinsExpr.set(numBinsUsed, 1);
+        numBinsExpr.level(0);
+
+        for (int b = 0; b < maxBins; b++) {
+            numBinsExpr.set(nonEmpty[b], -1);
+        }
+    }
 
     private void reassignmentVariables() {
         reassignment = new Variable[items.length];
@@ -159,7 +216,7 @@ class BinPackingIP extends BinPackingModel {
         int j = 0;
         for (Bin bin : baseState.bins) {
             for (int i : bin.items.keySet()) {
-                reassignmentExpr[i] = model.addExpression("reassign_" + i);
+                reassignmentExpr[i] = model.addExpression("reassignmentExpr_" + i);
                 reassignmentExpr[i].set(assignment[i][j], 1);
                 reassignmentExpr[i].set(reassignment[i], 1);
                 reassignmentExpr[i].lower(1);
@@ -169,7 +226,7 @@ class BinPackingIP extends BinPackingModel {
     }
 
     private void reassignmentLimit(int limit) {
-        reassignmentLimitExpr = model.addExpression("max_reassignments");
+        reassignmentLimitExpr = model.addExpression("reassignmentLimit");
 
         for (int i = 0; i < items.length; i++) {
             reassignmentLimitExpr.set(reassignment[i], 1);
@@ -200,6 +257,11 @@ class BinPackingIP extends BinPackingModel {
                 objectiveTerm(reassignment[i], reassignmentPenalty, smoothing);
             }
         }
+        if (flexibleBins && binCost > 0) {
+            for (int b = 0; b < maxBins; b++) {
+                objectiveTerm(nonEmpty[b], binCost, smoothing);
+            }
+        }
     }
 
     private void objectiveTerm(Variable v, double weight, double smoothing) {
@@ -214,10 +276,37 @@ class BinPackingIP extends BinPackingModel {
         }
     }
 
+    /*
+    public int getNumBinsUsed() {
+        int left = 0;
+        int right = Math.max(0, maxBins - 1);
+        int lastUsed = -1;
+
+        // binary search for the last bin with nonEmpty[b] != null && nonEmpty[b] == 1
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            BigDecimal value = nonEmpty[mid].getValue();
+
+            if (value != null && value.intValue() == 1) {
+                lastUsed = mid;
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        return lastUsed + 1;
+    }
+     */
+
+    public int getNumBinsUsed() {
+        return flexibleBins ? numBinsUsed.getValue().intValue() : numBins /* must equal maxBins */;
+    }
+
     public Packing extract() {
         Packing solution = new Packing(false);
 
-        for (int j = 0; j < numBins; j++) {
+        for (int j = 0; j < getNumBinsUsed(); j++) {
             Bin bin = new Bin();
             solution.bins.add(bin);
 

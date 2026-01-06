@@ -27,6 +27,8 @@ public class BinPackingSolver {
         double average = sum / numItems;
         double capacity = average * itemsPerBin;
 
+        System.out.println("target capacity... " + capacity);
+
         // create items from data
         Item[] items = new Item[values.length];
         for (int i = 0; i < values.length; i++) {
@@ -48,7 +50,7 @@ public class BinPackingSolver {
         Packing ffd = program.new Packing(true);
 
         // fix number of bins same as FFD (target extra low so feasibility check fails and we have to scale up)
-        program.numBins = program.maxBins = ffd.numBins() / 2;
+        program.numBins = program.maxBins = (int) Math.ceil(ffd.numBins() / 2);
 
         // compile the program without the objective
         program.compile(true);
@@ -67,18 +69,25 @@ public class BinPackingSolver {
             result = program.solve();
         }
 
-        // use FFD (computed earlier) as base state
+        // use FFD (computed earlier) as base state (can set numBins < maxBins and add binCost to use flexible bins)
+        // from testing => flexible bins is relatively expensive, feasible precheck is probably much better usually
+        // flexible would be useful if can afford extra bins and solve time for improved least squares (L2) balance
         program.baseState = ffd;
+        program.numBins = program.maxBins = ffd.numBins();
+        // program.binCost = 10L;
 
-        // penalty of 3L weight per reassignment with maximum of 5 percent of number of items
-        program.reassignmentLimit = (int) (numItems * 0.05);
-        program.reassignmentPenalty = 3L;
+        // penalty of 5L weight per reassignment with maximum of 10 percent of number of items
+        // the model MUST use symmetry-breaking constraints when bin range is not fixed to base state numBins
+        program.reassignmentLimit = (int) (numItems * 0.0);
+        program.reassignmentPenalty = 10000L;
 
         // add overfill slack, add smoothing for non-slack, and re-compile with objective
-        // be absolutely sure the model adds symmetry-breaking constraints given the number of bins allowed is not the
-        // exact same as FFD, as any bin number not in the FFD solution will be equally good to place an item into
-        program.trackOverfill = true;
-        program.smoothing = 0.2;
+        // smoothing > 0 || metrics[k].smoothing > 0 significantly degrades performance because QP solver must be used
+        // (possible to use piecewise linear approximation to bypass switching to much more expensive QP)
+        program.trackOverfill = true; // (no need to track overfill if using FFD / hard-capacity base state)
+        // tracking overfill expands search space as solver explores overpacking the bins when underpacking is just
+        // as good from the objective's perspective; can asymmetrically prioritize, or just drop one side
+        // program.smoothing = 0.2; (from testing => do not use; QP solver takes forever)
         program.compile(false);
 
         // solve the model
