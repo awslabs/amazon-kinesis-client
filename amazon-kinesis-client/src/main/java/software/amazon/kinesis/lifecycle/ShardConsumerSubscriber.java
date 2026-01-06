@@ -98,10 +98,17 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             if (lastAccepted != null) {
                 recordsPublisher.restartFrom(lastAccepted);
             }
-            Flowable.fromPublisher(recordsPublisher)
-                    .subscribeOn(scheduler)
-                    .observeOn(scheduler, true, bufferSize)
-                    .subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
+            Flowable<RecordsRetrieved> flowable =
+                    Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler);
+
+            // When buffer size is set, RxJava applies buffering to control backpressure.
+            // With buffer: non-blocking - publisher continues while subscriber processes asynchronously.
+            // Without buffer: blocking - publisher waits for subscriber to finish each record.
+            if (bufferSize != 0) {
+                flowable = flowable.observeOn(scheduler, true, bufferSize);
+            }
+
+            flowable.subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
         }
     }
 
