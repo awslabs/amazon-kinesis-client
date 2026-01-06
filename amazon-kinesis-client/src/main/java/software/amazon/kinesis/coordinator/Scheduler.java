@@ -108,6 +108,7 @@ import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
+import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
@@ -1170,12 +1171,21 @@ public class Scheduler implements Runnable {
                 leaseCleanupManager,
                 schemaRegistryDecoder,
                 this.consumerId);
+        int shardConsumerSubscriberBufferSize = 8;
+        if (retrievalConfig.retrievalSpecificConfig() != null
+                && retrievalConfig.retrievalSpecificConfig() instanceof PollingConfig) {
+            if (((PollingConfig) retrievalConfig.retrievalSpecificConfig()).maxPendingProcessRecordsInput() == 0) {
+                shardConsumerSubscriberBufferSize = 0;
+            }
+        }
         return new ShardConsumer(
                 cache,
                 executorService,
                 shardInfo,
                 lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument,
+                null,
+                shardConsumerSubscriberBufferSize,
                 lifecycleConfig.taskExecutionListener(),
                 lifecycleConfig.readTimeoutsToIgnoreBeforeWarning(),
                 leaseManagementConfig.consumerTaskFactory());

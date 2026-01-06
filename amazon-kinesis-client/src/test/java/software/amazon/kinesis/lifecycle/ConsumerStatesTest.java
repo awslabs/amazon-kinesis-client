@@ -166,6 +166,8 @@ public class ConsumerStatesTest {
                 shardInfo,
                 logWarningForTaskAfterMillis,
                 argument,
+                null,
+                1,
                 taskExecutionListener,
                 0,
                 new KinesisConsumerTaskFactory()));

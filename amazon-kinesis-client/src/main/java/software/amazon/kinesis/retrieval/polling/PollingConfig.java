@@ -46,6 +46,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
+    public static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT = 4;
+
     public static final long MIN_IDLE_MILLIS_BETWEEN_READS = 200L;
 
     /**
@@ -194,6 +196,15 @@ public class PollingConfig implements RetrievalSpecificConfig {
     }
 
     /**
+     * The maximum number of pending process records input that can be queued.
+     *
+     * <p>
+     * Default value: 4
+     * </p>
+     */
+    private int maxPendingProcessRecordsInput = DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT;
+
+    /**
      * The maximum time to wait for a future request from Kinesis to complete
      */
     private Duration kinesisRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
@@ -204,6 +215,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
         if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
+        recordsFetcherFactory.maxPendingProcessRecordsInput(maxPendingProcessRecordsInput);
         recordsFetcherFactory.millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps);
         return new SynchronousBlockingRetrievalFactory(
                 streamName(),
