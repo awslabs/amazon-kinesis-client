@@ -11,39 +11,42 @@ public class BinPackingSolver {
     public static void main(String[] args) {
         System.out.println("Starting solve...");
 
-        // generate data (single metric)
-        int numItems = 300;
+        // generate data (multiple metrics)
+        int numItems = 100;
         int maxSize = 1000;
-        int itemsPerBin = numItems / 2;
+        int numMetrics = 1;
+        int numBins = 2;
 
-        long sum = 0L;
-        long[] values = new long[numItems];
+        long[] sums = new long[numMetrics];
+        long[][] values = new long[numItems][numMetrics];
 
         for (int i = 0; i < numItems; i++) {
-            values[i] = (long) (Math.random() * maxSize);
-            sum += values[i];
+            for (int j = 0; j < numMetrics; j++) {
+                values[i][j] = (long) (Math.random() * maxSize);
+                sums[j] += values[i][j];
+            }
         }
-
-        double average = sum / numItems;
-        long capacity = sum / 3; /*average * itemsPerBin*/ // use long because sum is long
-
-        System.out.println("target capacity... " + capacity);
 
         // create items from data
         Item[] items = new Item[values.length];
         for (int i = 0; i < values.length; i++) {
-            items[i] = Item.builder().id(i).values(new long[] {values[i]}).build();
+            items[i] = Item.builder().id(i).values(values[i]).build();
         }
 
-        // create single metric
-        Metric[] metrics = new Metric[1];
-        metrics[0] = Metric.builder().capacity(capacity).build();
+        // create metrics
+        Metric[] metrics = new Metric[numMetrics];
+        for (int j = 0; j < numMetrics; j++) {
+            double capacity = sums[j] / numBins;
+            System.out.println("target capacity for metric " + j + " : " + capacity);
+            metrics[j] = Metric.builder().capacity(capacity).build();
+        }
 
         // create a BinPackingIP (provide items and metrics)
         BinPackingIP program = BinPackingIP.builder()
                 .items(items)
                 .metrics(metrics)
                 .trackUnderfill(true)
+                .minimax(true)
                 .build();
 
         /*
@@ -78,14 +81,7 @@ public class BinPackingSolver {
         // program.numBins = program.maxBins = ffd.numBins();
         // program.binCost = 10L;
 
-        program.numBins = program.maxBins = 3;
-
-        // set capacity to sum / numBins (FFD used sum / items.length * numItemsPerBin);
-        // this is necessary since FFD solves for underfilled bins; all best solutions have no overfill and item
-        // swaps are simply zero-sum transfers of underfill slack; hence they're all equally good (not what we want)
-        metrics[0] = Metric.builder()
-                .capacity((double) capacity /* sum / program.numBins*/)
-                .build();
+        program.numBins = program.maxBins = 2;
 
         // penalty of 5L weight per reassignment with maximum of 20 percent of number of items
         // the model MUST use symmetry-breaking constraints when bin range is not fixed to base state numBins
@@ -96,7 +92,7 @@ public class BinPackingSolver {
         // smoothing > 0 || metrics[k].smoothing > 0 significantly degrades performance because QP solver must be used
         // (possible to use piecewise linear approximation to bypass switching to much more expensive QP)
         program.trackOverfill = true;
-        // program.smoothing = 0.2; (from testing => do not use; QP solver takes forever)
+        // program.smoothing = 0.2; // (from testing => do not use; QP solver takes forever)
         program.compile(false);
 
         // solve the model

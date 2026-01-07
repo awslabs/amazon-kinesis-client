@@ -20,7 +20,7 @@ public final class BinPackingOptions {
     public enum Objective {
         /** minimizes sum of slack variables, plus other objectives like minimum bins */
         TOTAL_SLACK,
-        /** minimizes the maximum slack variables per metric (may lead to good balance with much faster solves) */
+        /** minimizes the maximum weighted slack sum across bins (may lead to good balance with much faster solves) */
         MINIMAX,
         /** minimizes sum of squares of slack variables (makes objective quadratic but improves balance) */
         LEAST_SQUARES,
