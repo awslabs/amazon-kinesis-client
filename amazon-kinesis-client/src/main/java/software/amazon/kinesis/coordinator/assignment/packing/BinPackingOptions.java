@@ -11,6 +11,8 @@ public final class BinPackingOptions {
         ANNEAL_WITH_FFD,
         /** minimizes slack with simulated annealing; needs base state provided */
         ANNEAL,
+        /** (conjectured) use with minimax objective; feeds fast integer program solve to simulated annealing */
+        ANNEAL_WITH_IP,
         /** runs first-fit-decreasing algorithm */
         FFD
     }
@@ -18,6 +20,8 @@ public final class BinPackingOptions {
     public enum Objective {
         /** minimizes sum of slack variables, plus other objectives like minimum bins */
         TOTAL_SLACK,
+        /** minimizes the maximum slack variables per metric (may lead to good balance with much faster solves) */
+        MINIMAX,
         /** minimizes sum of squares of slack variables (makes objective quadratic but improves balance) */
         LEAST_SQUARES,
         /** ignores slack and finds feasible solution, respects other objectives like minimum bins */
@@ -38,7 +42,7 @@ public final class BinPackingOptions {
         SOFT,
         /** captures underfill slack only; switches to overfill if infeasible number of bins provided */
         HARD,
-        /** use with flexible bins; soft constraints but auto-computes target capacities as average / numBins */
+        /** use with flexible bins; soft constraints but auto-computes target capacities as sum / numBins */
         AUTO
     }
 

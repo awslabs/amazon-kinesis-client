@@ -12,9 +12,9 @@ public class BinPackingSolver {
         System.out.println("Starting solve...");
 
         // generate data (single metric)
-        int numItems = 1000;
+        int numItems = 300;
         int maxSize = 1000;
-        int itemsPerBin = numItems / 10;
+        int itemsPerBin = numItems / 2;
 
         long sum = 0L;
         long[] values = new long[numItems];
@@ -25,7 +25,7 @@ public class BinPackingSolver {
         }
 
         double average = sum / numItems;
-        double capacity = average * itemsPerBin;
+        long capacity = sum / 3; /*average * itemsPerBin*/ // use long because sum is long
 
         System.out.println("target capacity... " + capacity);
 
@@ -46,6 +46,7 @@ public class BinPackingSolver {
                 .trackUnderfill(true)
                 .build();
 
+        /*
         // start from FFD solution for items
         Packing ffd = program.new Packing(true);
 
@@ -68,25 +69,33 @@ public class BinPackingSolver {
             program.compile(true);
             result = program.solve();
         }
+         */
 
         // use FFD (computed earlier) as base state (can set numBins < maxBins and add binCost to use flexible bins)
         // from testing => flexible bins is relatively expensive, feasible precheck is probably much better usually
         // flexible would be useful if can afford extra bins and solve time for improved least squares (L2) balance
-        program.baseState = ffd;
-        program.numBins = program.maxBins = ffd.numBins();
+        // program.baseState = ffd;
+        // program.numBins = program.maxBins = ffd.numBins();
         // program.binCost = 10L;
 
-        // penalty of 5L weight per reassignment with maximum of 10 percent of number of items
+        program.numBins = program.maxBins = 3;
+
+        // set capacity to sum / numBins (FFD used sum / items.length * numItemsPerBin);
+        // this is necessary since FFD solves for underfilled bins; all best solutions have no overfill and item
+        // swaps are simply zero-sum transfers of underfill slack; hence they're all equally good (not what we want)
+        metrics[0] = Metric.builder()
+                .capacity((double) capacity /* sum / program.numBins*/)
+                .build();
+
+        // penalty of 5L weight per reassignment with maximum of 20 percent of number of items
         // the model MUST use symmetry-breaking constraints when bin range is not fixed to base state numBins
-        program.reassignmentLimit = (int) (numItems * 0.0);
-        program.reassignmentPenalty = 10000L;
+        // program.reassignmentLimit = (int) (numItems * 0.2);
+        // program.reassignmentPenalty = 5L;
 
         // add overfill slack, add smoothing for non-slack, and re-compile with objective
         // smoothing > 0 || metrics[k].smoothing > 0 significantly degrades performance because QP solver must be used
         // (possible to use piecewise linear approximation to bypass switching to much more expensive QP)
-        program.trackOverfill = true; // (no need to track overfill if using FFD / hard-capacity base state)
-        // tracking overfill expands search space as solver explores overpacking the bins when underpacking is just
-        // as good from the objective's perspective; can asymmetrically prioritize, or just drop one side
+        program.trackOverfill = true;
         // program.smoothing = 0.2; (from testing => do not use; QP solver takes forever)
         program.compile(false);
 
@@ -116,6 +125,9 @@ public class BinPackingSolver {
             }
             sb.append(")");
             System.out.println(sb);
+            for (long load : bin.loads) {
+                System.out.println(load);
+            }
         }
     }
 }

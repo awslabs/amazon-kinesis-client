@@ -75,6 +75,8 @@ class BinPackingIP extends BinPackingModel {
             flexibleBins();
         }
 
+        // orderingConstraints();
+
         if (!skipObjective) {
             objective();
         }
@@ -96,10 +98,10 @@ class BinPackingIP extends BinPackingModel {
 
         for (int i = 0; i < items.length; i++) {
             assignmentExpr[i] = model.addExpression("assignment_" + i);
-            assignmentExpr[i].level(1);
+            assignmentExpr[i].level(BigDecimal.ONE);
 
             for (int j = 0; j < maxBins; j++) {
-                assignmentExpr[i].set(assignment[i][j], 1);
+                assignmentExpr[i].set(assignment[i][j], BigDecimal.ONE);
             }
         }
     }
@@ -109,7 +111,7 @@ class BinPackingIP extends BinPackingModel {
 
         for (int j = 0; j < maxBins; j++) {
             for (int k = 0; k < metrics.length; k++) {
-                underfill[j][k] = model.addVariable("underfill" + k + "_" + j).lower(0);
+                underfill[j][k] = model.addVariable("underfill" + k + "_" + j).lower(BigDecimal.ZERO);
             }
         }
     }
@@ -119,7 +121,7 @@ class BinPackingIP extends BinPackingModel {
 
         for (int j = 0; j < maxBins; j++) {
             for (int k = 0; k < metrics.length; k++) {
-                overfill[j][k] = model.addVariable("overfill" + k + "_" + j).lower(0);
+                overfill[j][k] = model.addVariable("overfill" + k + "_" + j).lower(BigDecimal.ZERO);
             }
         }
     }
@@ -143,14 +145,14 @@ class BinPackingIP extends BinPackingModel {
         if (trackUnderfill) {
             for (int j = 0; j < maxBins; j++) {
                 for (int k = 0; k < metrics.length; k++) {
-                    capacity[j][k].set(underfill[j][k], 1);
+                    capacity[j][k].set(underfill[j][k], BigDecimal.ONE);
                 }
             }
         }
         if (trackOverfill) {
             for (int j = 0; j < maxBins; j++) {
                 for (int k = 0; k < metrics.length; k++) {
-                    capacity[j][k].set(overfill[j][k], -1);
+                    capacity[j][k].set(overfill[j][k], BigDecimal.ONE.negate());
                 }
             }
         }
@@ -165,12 +167,12 @@ class BinPackingIP extends BinPackingModel {
             nonEmptyExpr[b] = model.addExpression("nonEmptyExpr_" + b);
 
             for (int i = 0; i < items.length; i++) {
-                nonEmptyExpr[b].set(assignment[i][b], 1);
+                nonEmptyExpr[b].set(assignment[i][b], BigDecimal.ONE);
             }
 
             // big M method: bin.size <= items.length
             nonEmptyExpr[b].set(nonEmpty[b], BigDecimal.valueOf(-items.length));
-            nonEmptyExpr[b].upper(0);
+            nonEmptyExpr[b].upper(BigDecimal.ZERO);
         }
     }
 
@@ -180,9 +182,9 @@ class BinPackingIP extends BinPackingModel {
         // symmetry breaking: cannot use bin b unless bin b-1 is used
         for (int b = 1; b < maxBins; b++) {
             ordering[b] = model.addExpression("ordering_" + b);
-            ordering[b].set(nonEmpty[b], 1);
-            ordering[b].set(nonEmpty[b - 1], -1);
-            ordering[b].upper(0);
+            ordering[b].set(nonEmpty[b], BigDecimal.ONE);
+            ordering[b].set(nonEmpty[b - 1], BigDecimal.ONE.negate());
+            ordering[b].upper(BigDecimal.ZERO);
         }
     }
 
@@ -191,17 +193,20 @@ class BinPackingIP extends BinPackingModel {
 
         nonEmptyConstraints();
         orderingConstraints();
+        numBinsExpression();
+    }
 
+    private void numBinsExpression() {
         numBinsUsed = model.addVariable("numBins").integer();
-        numBinsUsed.lower(1);
+        numBinsUsed.lower(BigDecimal.ONE);
         numBinsUsed.upper(maxBins);
 
         numBinsExpr = model.addExpression("numBinsExpr");
-        numBinsExpr.set(numBinsUsed, 1);
-        numBinsExpr.level(0);
+        numBinsExpr.set(numBinsUsed, BigDecimal.ONE);
+        numBinsExpr.level(BigDecimal.ZERO);
 
         for (int b = 0; b < maxBins; b++) {
-            numBinsExpr.set(nonEmpty[b], -1);
+            numBinsExpr.set(nonEmpty[b], BigDecimal.ONE.negate());
         }
     }
 
@@ -217,9 +222,9 @@ class BinPackingIP extends BinPackingModel {
         for (Bin bin : baseState.bins) {
             for (int i : bin.items.keySet()) {
                 reassignmentExpr[i] = model.addExpression("reassignmentExpr_" + i);
-                reassignmentExpr[i].set(assignment[i][j], 1);
-                reassignmentExpr[i].set(reassignment[i], 1);
-                reassignmentExpr[i].lower(1);
+                reassignmentExpr[i].set(assignment[i][j], BigDecimal.ONE);
+                reassignmentExpr[i].set(reassignment[i], BigDecimal.ONE);
+                reassignmentExpr[i].lower(BigDecimal.ONE);
             }
             j++;
         }
@@ -227,16 +232,16 @@ class BinPackingIP extends BinPackingModel {
 
     private void reassignmentLimit(int limit) {
         reassignmentLimitExpr = model.addExpression("reassignmentLimit");
+        reassignmentLimitExpr.upper(limit);
 
         for (int i = 0; i < items.length; i++) {
-            reassignmentLimitExpr.set(reassignment[i], 1);
+            reassignmentLimitExpr.set(reassignment[i], BigDecimal.ONE);
         }
-        reassignmentLimitExpr.upper(limit);
     }
 
     private void objective() {
         objective = model.addExpression("minimize_slack");
-        objective.weight(1);
+        objective.weight(BigDecimal.ONE);
 
         if (trackUnderfill) {
             for (int j = 0; j < maxBins; j++) {
@@ -248,7 +253,7 @@ class BinPackingIP extends BinPackingModel {
         if (trackOverfill) {
             for (int j = 0; j < maxBins; j++) {
                 for (int k = 0; k < metrics.length; k++) {
-                    objectiveTerm(overfill[j][k], -metrics[k].weight, metrics[k].smoothing);
+                    objectiveTerm(overfill[j][k], metrics[k].weight, metrics[k].smoothing);
                 }
             }
         }
@@ -269,9 +274,11 @@ class BinPackingIP extends BinPackingModel {
         double quadratic = smoothing;
 
         if (linear > 0) {
+            System.out.println("found linear term!");
             objective.set(v, weight * linear);
         }
         if (quadratic > 0) {
+            System.out.println("found quadratic term!");
             objective.set(v, v, weight * quadratic);
         }
     }
@@ -306,12 +313,16 @@ class BinPackingIP extends BinPackingModel {
     public Packing extract() {
         Packing solution = new Packing(false);
 
-        for (int j = 0; j < getNumBinsUsed(); j++) {
+        int numBinsUsed = getNumBinsUsed();
+
+        System.out.println("num bins used: " + numBinsUsed);
+
+        for (int j = 0; j < numBinsUsed; j++) {
             Bin bin = new Bin();
             solution.bins.add(bin);
 
             for (int i = 0; i < items.length; i++) {
-                if (assignment[i][j].getValue().intValue() == 1) {
+                if (assignment[i][j].getValue().compareTo(BigDecimal.valueOf(0.5)) > 0) { // compare with tolerance
                     bin.softAdd(items[i]);
                     solution.itemMap.put(i, bin);
                 }
