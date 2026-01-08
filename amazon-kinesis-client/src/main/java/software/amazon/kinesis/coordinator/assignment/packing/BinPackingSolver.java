@@ -1,5 +1,6 @@
 package software.amazon.kinesis.coordinator.assignment.packing;
 
+import org.ojalgo.netio.BasicLogger;
 import org.ojalgo.optimisation.Optimisation;
 import software.amazon.kinesis.coordinator.assignment.packing.BinPackingModel.Bin;
 import software.amazon.kinesis.coordinator.assignment.packing.BinPackingModel.Item;
@@ -11,8 +12,11 @@ public class BinPackingSolver {
     public static void main(String[] args) {
         System.out.println("Starting solve...");
 
+        // Enable DEBUG level logging
+        // BasicLogger.debug();
+
         // generate data (multiple metrics)
-        int numItems = 100;
+        int numItems = 50;
         int maxSize = 1000;
         int numMetrics = 1;
         int numBins = 2;
@@ -46,7 +50,7 @@ public class BinPackingSolver {
                 .items(items)
                 .metrics(metrics)
                 .trackUnderfill(true)
-                .minimax(true)
+                // .minimax(true)
                 .build();
 
         /*
@@ -81,7 +85,7 @@ public class BinPackingSolver {
         // program.numBins = program.maxBins = ffd.numBins();
         // program.binCost = 10L;
 
-        program.numBins = program.maxBins = 2;
+        program.numBins = program.maxBins = numBins;
 
         // penalty of 5L weight per reassignment with maximum of 20 percent of number of items
         // the model MUST use symmetry-breaking constraints when bin range is not fixed to base state numBins
@@ -95,8 +99,14 @@ public class BinPackingSolver {
         // program.smoothing = 0.2; // (from testing => do not use; QP solver takes forever)
         program.compile(false);
 
+        Optimisation.Result finalResult;
+
         // solve the model
-        Optimisation.Result finalResult = program.solve();
+        BasicLogger.debug();
+        BasicLogger.debug(program.solve());
+        BasicLogger.debug();
+
+        // System.out.println(finalResult);
 
         // extract the solution (known to be feasible)
         Packing solution = program.extract();

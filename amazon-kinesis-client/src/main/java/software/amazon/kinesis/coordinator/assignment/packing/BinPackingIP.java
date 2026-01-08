@@ -22,6 +22,7 @@ class BinPackingIP extends BinPackingModel {
     double smoothing; // smoothing ratio for any non-slack variables (0 is L1/linear, 1 is L2/quadratic)
     boolean flexibleBins;
     boolean minimax;
+    double maxWeightedSum;
 
     // below fields are set with correct sizes/values during compile(); do not use Builder
     ExpressionsBasedModel model;
@@ -43,6 +44,7 @@ class BinPackingIP extends BinPackingModel {
     Variable[] reassignment;
     Variable[] nonEmpty;
     Variable[] weightedSlack;
+    Variable[] orderingViolation;
     Variable numBinsUsed;
     Variable maxSlack;
 
@@ -80,7 +82,11 @@ class BinPackingIP extends BinPackingModel {
             flexibleBins();
         }
 
-        // orderingConstraints();
+        weightedSums();
+
+        // full ordering of bins by weighted slack, where first bin is "worst"
+        // calculate big M as weighted sum if all items were packed into the same bin
+        orderingConstraints(weightedSlack, maxWeightedSum());
 
         if (!skipObjective) {
             objective();
@@ -181,15 +187,30 @@ class BinPackingIP extends BinPackingModel {
         }
     }
 
-    private void orderingConstraints() {
+    private void orderingConstraints(Variable[] binVars, double bigM) {
         ordering = new Expression[maxBins];
+        orderingViolation = new Variable[maxBins];
 
-        // symmetry breaking: cannot use bin b unless bin b-1 is used
+        // avoid null pointer as bin 0 can't violate ordering
+        orderingViolation[0] = model.addVariable("orderingViolationDummy").level(0);
+
+        // symmetry breaking: binVars[b-1] >= binVars[b]
         for (int b = 1; b < maxBins; b++) {
             ordering[b] = model.addExpression("ordering_" + b);
-            ordering[b].set(nonEmpty[b], BigDecimal.ONE);
-            ordering[b].set(nonEmpty[b - 1], BigDecimal.ONE.negate());
+            ordering[b].set(binVars[b], BigDecimal.ONE);
+            ordering[b].set(binVars[b - 1], BigDecimal.ONE.negate());
             ordering[b].upper(BigDecimal.ZERO);
+
+            // soften ordering constraints so solver does not get "stuck" (i.e. branching but weak bounding)
+            // otherwise fractional values from LP relaxation can conflict with preferred ordering
+            // unless solver happens to "pick" the correct bins to be small or big on its first try
+            // which only happens with probability 1/n! where n is maxBins; all else, solver will hang!
+            // remember to add these to the objective
+            if (bigM > 0) {
+                orderingViolation[b] =
+                        model.addVariable("orderingViolation_" + b).lower(BigDecimal.ZERO);
+                ordering[b].set(orderingViolation[b], BigDecimal.valueOf(-bigM));
+            }
         }
     }
 
@@ -197,8 +218,9 @@ class BinPackingIP extends BinPackingModel {
         flexibleBins = true;
 
         nonEmptyConstraints();
-        orderingConstraints();
         numBinsExpression();
+
+        // orderingConstraints(nonEmpty) // need some source of asymmetry in bin ordering, could be bin usage
     }
 
     private void numBinsExpression() {
@@ -244,15 +266,12 @@ class BinPackingIP extends BinPackingModel {
         }
     }
 
-    private void minimax() {
-        maxSlack = model.addVariable("maxSlack");
-
-        maxSlackExpr = new Expression[maxBins];
-        weightedSlackExpr = new Expression[maxBins];
+    private void weightedSums() {
         weightedSlack = new Variable[maxBins];
+        weightedSlackExpr = new Expression[maxBins];
 
         for (int j = 0; j < maxBins; j++) {
-            weightedSlack[j] = model.addVariable("weightedSlack_" + j);
+            weightedSlack[j] = model.addVariable("weightedSlack_" + j).lower(BigDecimal.ZERO);
 
             weightedSlackExpr[j] = model.addExpression("weightedSlackExpr_" + j);
             weightedSlackExpr[j].level(BigDecimal.ZERO);
@@ -268,12 +287,33 @@ class BinPackingIP extends BinPackingModel {
                     weightedTerm(weightedSlackExpr[j], overfill[j][k], -metrics[k].weight, metrics[k].smoothing);
                 }
             }
-
-            maxSlackExpr[j] = model.addExpression("maxSlackExpr_" + j);
-            maxSlackExpr[j].lower(BigDecimal.ZERO);
-            maxSlackExpr[j].set(weightedSlack[j], BigDecimal.ONE.negate());
-            maxSlackExpr[j].set(maxSlack, BigDecimal.ONE);
         }
+    }
+
+    private double maxWeightedSum() {
+        if (maxWeightedSum > 0) {
+            return maxWeightedSum;
+        }
+
+        double[] sums = new double[metrics.length];
+        double sum = 0;
+
+        for (int i = 0; i < items.length; i++) {
+            for (int k = 0; k < metrics.length; k++) {
+                sums[k] += items[i].values[k];
+            }
+        }
+
+        // use same formula as weightedTerm() method
+        for (int k = 0; k < sums.length; k++) {
+            double linear = 1 - metrics[k].smoothing;
+            double quadratic = metrics[k].smoothing;
+
+            sum += sums[k] * linear;
+            sum += Math.pow(sums[k], 2) * quadratic;
+        }
+
+        return (maxWeightedSum = sum);
     }
 
     private void objective() {
@@ -281,24 +321,34 @@ class BinPackingIP extends BinPackingModel {
         objective.weight(BigDecimal.ONE);
 
         if (minimax) {
-            minimax();
-            weightedTerm(objective, maxSlack, 1, smoothing);
-        } else {
-            if (trackUnderfill) {
-                for (int j = 0; j < maxBins; j++) {
-                    for (int k = 0; k < metrics.length; k++) {
-                        weightedTerm(objective, underfill[j][k], metrics[k].weight, metrics[k].smoothing);
-                    }
-                }
+            // max of weighted slacks dominates other objectives like ordering violations
+            weightedTerm(objective, weightedSlack[0], maxWeightedSum, smoothing);
+
+            // ordering violation variables are <= bigM = maxWeightedSum
+            for (int j = 0; j < maxBins; j++) {
+                weightedTerm(objective, orderingViolation[j], 1, 0);
             }
-            if (trackOverfill) {
-                for (int j = 0; j < maxBins; j++) {
-                    for (int k = 0; k < metrics.length; k++) {
-                        weightedTerm(objective, overfill[j][k], metrics[k].weight, metrics[k].smoothing);
-                    }
+        } else {
+            for (int j = 0; j < maxBins; j++) {
+                weightedTerm(objective, weightedSlack[j], 1, 0);
+            }
+        }
+        /*
+        if (trackUnderfill) {
+            for (int j = 0; j < maxBins; j++) {
+                for (int k = 0; k < metrics.length; k++) {
+                    weightedTerm(objective, underfill[j][k], metrics[k].weight, metrics[k].smoothing);
                 }
             }
         }
+        if (trackOverfill) {
+            for (int j = 0; j < maxBins; j++) {
+                for (int k = 0; k < metrics.length; k++) {
+                    weightedTerm(objective, overfill[j][k], metrics[k].weight, metrics[k].smoothing);
+                }
+            }
+        }
+        */
         if (reassignmentPenalty > 0) {
             for (int i = 0; i < reassignment.length; i++) {
                 weightedTerm(objective, reassignment[i], reassignmentPenalty, smoothing);
@@ -358,6 +408,8 @@ class BinPackingIP extends BinPackingModel {
             solution.bins.add(bin);
 
             for (int i = 0; i < items.length; i++) {
+                System.out.println("assignment " + i + "_" + j + " : " + assignment[i][j].getValue());
+
                 if (assignment[i][j].getValue().compareTo(BigDecimal.valueOf(0.5)) > 0) { // compare with tolerance
                     bin.softAdd(items[i]);
                     solution.itemMap.put(i, bin);
