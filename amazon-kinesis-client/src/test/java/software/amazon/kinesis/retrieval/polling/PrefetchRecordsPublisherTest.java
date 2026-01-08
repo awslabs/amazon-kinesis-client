@@ -49,6 +49,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
+import org.mockito.stubbing.OngoingStubbing;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.SdkBytes;
@@ -223,19 +224,85 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testGetRecords() {
-        record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
-
-        final List<KinesisClientRecord> expectedRecords =
-                records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
+        final Record record1 = buildRecordWithData(createByteBufferWithData("First batch".getBytes()));
+        final Record record2 = buildRecordWithData(createByteBufferWithData("Second batch".getBytes()));
+        mockGetRecordsAdapterWithRecordBatches(Collections.singletonList(record1), Collections.singletonList(record2));
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = blockUntilRecordsAvailable().processRecordsInput();
 
-        assertEquals(expectedRecords, result.records());
-        assertEquals(new ArrayList<>(), result.childShards());
+        final List<KinesisClientRecord> expectedRecords1 =
+                Collections.singletonList(KinesisClientRecord.fromRecord(record1));
+        final List<KinesisClientRecord> expectedRecords2 =
+                Collections.singletonList(KinesisClientRecord.fromRecord(record2));
+
+        // Block until both batches are in queue
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == 2,
+                300);
+        // Remaining queue can be filled with empty records by the time this check runs, so ensuring at least 2 batches
+        // were called
+        verify(getRecordsRetrievalStrategy, atLeast(2)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
+        // Evict one batch from the queue
+        final ProcessRecordsInput result1 = evictPublishedEvent().processRecordsInput();
+        assertEquals(expectedRecords1, result1.records());
+        assertEquals(new ArrayList<>(), result1.childShards());
+
+        // Evict second batch
+        final ProcessRecordsInput result2 = evictPublishedEvent().processRecordsInput();
+        assertEquals(expectedRecords2, result2.records());
+        assertEquals(new ArrayList<>(), result2.childShards());
 
         verify(executorService).execute(any());
-        verify(getRecordsRetrievalStrategy, atLeast(1)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
+    }
+
+    @Test
+    public void testMaxPendingProcessRecordsInputIsZero() {
+        final Record record1 = buildRecordWithData(createByteBufferWithData("First batch".getBytes()));
+        final Record record2 = buildRecordWithData(createByteBufferWithData("Second batch".getBytes()));
+        mockGetRecordsAdapterWithRecordBatches(Collections.singletonList(record1), Collections.singletonList(record2));
+
+        getRecordsCache = createPrefetchRecordsPublisher(0, 0L);
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        final List<KinesisClientRecord> expectedRecords1 =
+                Collections.singletonList(KinesisClientRecord.fromRecord(record1));
+        final List<KinesisClientRecord> expectedRecords2 =
+                Collections.singletonList(KinesisClientRecord.fromRecord(record2));
+
+        // Block until first batch is in queue
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == 1,
+                300);
+        // Should only have fetched records once then blocked
+        assertFalse(getRecordsCache.getPublisherSession().prefetchCounters().shouldGetNewRecords());
+        verify(getRecordsRetrievalStrategy, times(1)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
+
+        // Evict one batch from the queue
+        final ProcessRecordsInput result1 = evictPublishedEvent().processRecordsInput();
+        assertEquals(expectedRecords1, result1.records());
+
+        // Block until the second batch is in the queue
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == 1,
+                300);
+
+        // Should have fetched records a second time
+        verify(getRecordsRetrievalStrategy, times(2)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
+        // Evict second batch from queue
+        final ProcessRecordsInput result2 = evictPublishedEvent().processRecordsInput();
+        assertEquals(expectedRecords2, result2.records());
     }
 
     @Test(expected = RuntimeException.class)
@@ -908,13 +975,41 @@ public class PrefetchRecordsPublisherTest {
         }
     }
 
+    private void mockGetRecordsAdapterWithRecordBatches(List<Record>... items) {
+        OngoingStubbing<GetRecordsResponseAdapter> stubbing =
+                when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)));
+        for (List<Record> records : items) {
+            GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(
+                    GetRecordsResponse.builder().records(records).build());
+            stubbing = stubbing.thenReturn(response);
+        }
+
+        // All subsequent calls should return empty records
+        GetRecordsResponseAdapter emptyResponse = new KinesisGetRecordsResponseAdapter(
+                GetRecordsResponse.builder().build());
+        stubbing.thenReturn(emptyResponse);
+    }
+
     private SdkBytes createByteBufferWithSize(int size) {
         return SdkBytes.fromByteArray(new byte[size]);
     }
 
+    private SdkBytes createByteBufferWithData(byte[] data) {
+        return SdkBytes.fromByteArray(data);
+    }
+
+    private Record buildRecordWithData(SdkBytes data) {
+        return Record.builder().data(data).build();
+    }
+
     private PrefetchRecordsPublisher createPrefetchRecordsPublisher(final long idleMillisBetweenCalls) {
+        return createPrefetchRecordsPublisher(MAX_SIZE, idleMillisBetweenCalls);
+    }
+
+    private PrefetchRecordsPublisher createPrefetchRecordsPublisher(
+            int maxPendingProcessRecordsInput, final long idleMillisBetweenCalls) {
         return new PrefetchRecordsPublisher(
-                MAX_SIZE,
+                maxPendingProcessRecordsInput,
                 3 * SIZE_1_MB,
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,

@@ -123,7 +123,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         @Getter
         private final LinkedBlockingQueue<PrefetchRecordsRetrieved> prefetchRecordsQueue;
 
+        @VisibleForTesting
+        @Getter
         private final PrefetchCounters prefetchCounters;
+
         private final DataFetcher dataFetcher;
         private InitialPositionInStreamExtended initialPositionInStreamExtended;
         private String highestSequenceNumber;
@@ -669,7 +672,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private class PrefetchCounters {
+    @VisibleForTesting
+    protected class PrefetchCounters {
         private long size = 0;
         private long byteSize = 0;
         private long pendingProcessRecordsInput = 0;
