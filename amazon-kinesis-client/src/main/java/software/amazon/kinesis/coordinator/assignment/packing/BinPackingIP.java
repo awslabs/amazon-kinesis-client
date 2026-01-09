@@ -23,6 +23,7 @@ class BinPackingIP extends BinPackingModel {
     boolean flexibleBins;
     boolean minimax;
     double maxWeightedSum;
+    double maxWeightedSpread;
 
     // below fields are set with correct sizes/values during compile(); do not use Builder
     ExpressionsBasedModel model;
@@ -30,12 +31,14 @@ class BinPackingIP extends BinPackingModel {
     Expression objective;
     Expression reassignmentLimitExpr;
     Expression numBinsExpr;
+    Expression maxSpreadExpr;
     Expression[] assignmentExpr;
     Expression[] reassignmentExpr;
     Expression[] nonEmptyExpr;
     Expression[] ordering;
     Expression[] weightedSlackExpr;
     Expression[] maxSlackExpr;
+    Expression[] minSlackExpr;
     Expression[][] capacity;
 
     Variable[][] assignment;
@@ -47,6 +50,8 @@ class BinPackingIP extends BinPackingModel {
     Variable[] orderingViolation;
     Variable numBinsUsed;
     Variable maxSlack;
+    Variable minSlack;
+    Variable spread;
 
     Optimisation.Result result;
 
@@ -83,10 +88,14 @@ class BinPackingIP extends BinPackingModel {
         }
 
         weightedSums();
+        // minimax();
 
         // full ordering of bins by weighted slack, where first bin is "worst"
         // calculate big M as weighted sum if all items were packed into the same bin
-        orderingConstraints(weightedSlack, maxWeightedSum());
+        // orderingConstraints(weightedSlack, maxWeightedSum());
+
+        // use partial ordering instead; increases chance of tight top-level LP relaxation to 1/n instead of 1/n!
+        // partialOrderingConstraints(weightedSlack);
 
         if (!skipObjective) {
             objective();
@@ -184,6 +193,18 @@ class BinPackingIP extends BinPackingModel {
             // big M method: bin.size <= items.length
             nonEmptyExpr[b].set(nonEmpty[b], BigDecimal.valueOf(-items.length));
             nonEmptyExpr[b].upper(BigDecimal.ZERO);
+        }
+    }
+
+    private void partialOrderingConstraints(Variable[] binVars) {
+        ordering = new Expression[maxBins];
+
+        // symmetry breaking: binVars[0] >= binVars[b]
+        for (int b = 1; b < maxBins; b++) {
+            ordering[b] = model.addExpression("ordering_" + b);
+            ordering[b].set(binVars[b], BigDecimal.ONE);
+            ordering[b].set(binVars[0], BigDecimal.ONE.negate());
+            ordering[b].upper(BigDecimal.ZERO);
         }
     }
 
@@ -290,6 +311,34 @@ class BinPackingIP extends BinPackingModel {
         }
     }
 
+    private void minimax() {
+        maxSlack = model.addVariable("maxSlack").lower(BigDecimal.ZERO);
+        minSlack = model.addVariable("minSlack").lower(BigDecimal.ZERO);
+
+        for (int b = 0; b < numBins; b++) {
+            // maxSlack >= weightedSlack[b]
+            Expression maxConstraint = model.addExpression("maxSlackExpr_" + b);
+            maxConstraint.set(maxSlack, BigDecimal.ONE);
+            maxConstraint.set(weightedSlack[b], BigDecimal.ONE.negate());
+            maxConstraint.lower(BigDecimal.ZERO);
+
+            // minSlack <= weightedSlack[b]
+            Expression minConstraint = model.addExpression("minSlackExpr_" + b);
+            minConstraint.set(minSlack, BigDecimal.ONE);
+            minConstraint.set(weightedSlack[b], BigDecimal.ONE.negate());
+            minConstraint.upper(BigDecimal.ZERO);
+        }
+
+        spread = model.addVariable("spread").lower(BigDecimal.ZERO);
+        maxSpreadExpr = model.addExpression("maxSpreadExpr");
+
+        // hard constraint (weighted): maxSlack <= (1 + maxSpread) * minSlack
+        // example: maxSpread = 0.03 means maxSlack cannot be more than 3% greater than minSlack
+        maxSpreadExpr.set(maxSlack, BigDecimal.ONE.negate());
+        maxSpreadExpr.set(minSlack, BigDecimal.valueOf(1.0 + maxWeightedSpread));
+        maxSpreadExpr.lower(BigDecimal.ZERO);
+    }
+
     private double maxWeightedSum() {
         if (maxWeightedSum > 0) {
             return maxWeightedSum;
@@ -320,14 +369,23 @@ class BinPackingIP extends BinPackingModel {
         objective = model.addExpression("minimize_slack");
         objective.weight(BigDecimal.ONE);
 
+        /*
+        // "nudge" the bins to be ordered by weighted slack to break the symmetry at the LP relaxation level
+        for (int j = 0; j < maxBins; j++) {
+            weightedTerm(objective, weightedSlack[j], 0.1 * j, 0);
+        }
+         */
+
         if (minimax) {
             // max of weighted slacks dominates other objectives like ordering violations
             weightedTerm(objective, weightedSlack[0], maxWeightedSum, smoothing);
 
+            /*
             // ordering violation variables are <= bigM = maxWeightedSum
             for (int j = 0; j < maxBins; j++) {
                 weightedTerm(objective, orderingViolation[j], 1, 0);
             }
+             */
         } else {
             for (int j = 0; j < maxBins; j++) {
                 weightedTerm(objective, weightedSlack[j], 1, 0);
@@ -408,7 +466,7 @@ class BinPackingIP extends BinPackingModel {
             solution.bins.add(bin);
 
             for (int i = 0; i < items.length; i++) {
-                System.out.println("assignment " + i + "_" + j + " : " + assignment[i][j].getValue());
+                // System.out.println("assignment " + i + "_" + j + " : " + assignment[i][j].getValue());
 
                 if (assignment[i][j].getValue().compareTo(BigDecimal.valueOf(0.5)) > 0) { // compare with tolerance
                     bin.softAdd(items[i]);
