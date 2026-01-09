@@ -147,7 +147,7 @@ public class PrefetchRecordsPublisherTest {
         when(getRecordsRetrievalStrategy.dataFetcher()).thenReturn(dataFetcher);
         when(dataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("testStream"));
         executorService = spy(Executors.newFixedThreadPool(1));
-        getRecordsCache = createPrefetchRecordsPublisher(0L);
+        getRecordsCache = createPrefetchRecordsPublisher(10L);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
         getRecordsResponse = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
@@ -447,7 +447,7 @@ public class PrefetchRecordsPublisherTest {
         // Sleep for a few seconds for the cache to fill up.
         sleep(2000);
 
-        verify(getRecordsRetrievalStrategy, times(MAX_SIZE + 1)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
+        verify(getRecordsRetrievalStrategy, times(MAX_SIZE)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
         assertEquals(spyQueue.size(), MAX_SIZE);
     }
 
