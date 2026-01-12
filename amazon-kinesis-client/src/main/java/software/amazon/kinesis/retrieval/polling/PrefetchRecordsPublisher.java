@@ -123,7 +123,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         @Getter
         private final LinkedBlockingQueue<PrefetchRecordsRetrieved> prefetchRecordsQueue;
 
+        @VisibleForTesting
+        @Getter
         private final PrefetchCounters prefetchCounters;
+
         private final DataFetcher dataFetcher;
         private InitialPositionInStreamExtended initialPositionInStreamExtended;
         private String highestSequenceNumber;
@@ -248,7 +251,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
         this.publisherSession = new PublisherSession(
-                new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput),
+                new LinkedBlockingQueue<>(maxPendingProcessRecordsInput == 0 ? 1 : maxPendingProcessRecordsInput),
                 new PrefetchCounters(),
                 this.getRecordsRetrievalStrategy.dataFetcher());
         this.executorService = executorService;
@@ -669,18 +672,22 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private class PrefetchCounters {
+    @VisibleForTesting
+    protected class PrefetchCounters {
         private long size = 0;
         private long byteSize = 0;
+        private long pendingProcessRecordsInput = 0;
 
         public synchronized void added(final ProcessRecordsInput result) {
             size += getSize(result);
             byteSize += getByteSize(result);
+            pendingProcessRecordsInput++;
         }
 
         public synchronized void removed(final ProcessRecordsInput result) {
             size -= getSize(result);
             byteSize -= getByteSize(result);
+            pendingProcessRecordsInput--;
             this.notifyAll();
         }
 
@@ -706,12 +713,18 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             if (log.isDebugEnabled()) {
                 log.debug("{} : Current Prefetch Counter States: {}", streamAndShardId, this.toString());
             }
-            return size < maxRecordsCount && byteSize < maxByteSize;
+            if (pendingProcessRecordsInput == 0) {
+                return true;
+            }
+            return size < maxRecordsCount
+                    && byteSize < maxByteSize
+                    && pendingProcessRecordsInput < maxPendingProcessRecordsInput;
         }
 
         void reset() {
             size = 0;
             byteSize = 0;
+            pendingProcessRecordsInput = 0;
         }
 
         @Override
