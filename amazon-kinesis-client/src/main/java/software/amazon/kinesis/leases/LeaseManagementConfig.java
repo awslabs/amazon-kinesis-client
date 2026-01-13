@@ -42,6 +42,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
@@ -300,6 +302,15 @@ public class LeaseManagementConfig {
     private long dynamoDbLockBasedLeaderHeartbeatPeriodInMillis = 30_000;
 
     private MetricsFactory metricsFactory = new NullMetricsFactory();
+
+    /**
+     * Allows customers to enable their KCL application to write stream metadata to the Coordinator table
+     * When StreamMetadataMode is set to TRACK_ONLY,
+     * KCL begins back filling metadata for all streams into the Coordinator table
+     */
+    private StreamInfoMode streamInfoMode = StreamInfoMode.DISABLED;
+
+    private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
     @Deprecated
     public LeaseManagementConfig(
