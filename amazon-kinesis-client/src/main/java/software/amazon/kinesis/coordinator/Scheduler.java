@@ -63,6 +63,7 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
+import software.amazon.kinesis.coordinator.assignment.exclusion.WorkerIdExclusionMonitor;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
@@ -377,6 +378,8 @@ public class Scheduler implements Runnable {
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
         this.taskFactory = leaseManagementConfig().consumerTaskFactory();
+
+        WorkerIdExclusionMonitor.create(coordinatorStateDAO, Executors.newScheduledThreadPool(1));
     }
 
     /**
