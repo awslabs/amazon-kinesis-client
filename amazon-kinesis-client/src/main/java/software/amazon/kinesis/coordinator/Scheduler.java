@@ -424,7 +424,9 @@ public class Scheduler implements Runnable {
                         lamThreadPool,
                         System::nanoTime,
                         leaseManagementConfig.maxLeasesForWorker(),
+                        leaseManagementConfig.maxLeasesToStealAtOneTime(),
                         leaseManagementConfig.gracefulLeaseHandoffConfig(),
+                        leaseManagementConfig.leaseAssignmentStrategy(),
                         leaseManagementConfig.leaseAssignmentIntervalMillis()))
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
