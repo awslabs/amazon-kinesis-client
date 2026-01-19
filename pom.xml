@@ -25,7 +25,7 @@
   </licenses>
 
   <properties>
-    <aws-java-sdk.version>1.12.681</aws-java-sdk.version>
+    <aws-java-sdk.version>1.12.797</aws-java-sdk.version>
     <protobuf.version>4.31.0</protobuf.version>
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
