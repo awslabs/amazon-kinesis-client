@@ -20,11 +20,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -52,6 +55,7 @@ import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.utils.BlockingUtils;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -123,6 +127,69 @@ public class ShardConsumerSubscriberTest {
     @After
     public void after() {
         executorService.shutdownNow();
+    }
+
+    @Test
+    public void synchronousBlockingSubscriberTest() throws InterruptedException {
+        AtomicInteger indexInsideFirst = new AtomicInteger();
+        AtomicLong requestedInsideFirst = new AtomicLong();
+
+        doAnswer(invocation -> {
+                    indexInsideFirst.set(recordsPublisher.currentIndex);
+                    requestedInsideFirst.set(recordsPublisher.requested);
+                    synchronized (processedNotifier) {
+                        processedNotifier.notifyAll();
+                    }
+                    return null;
+                })
+                .when(shardConsumer)
+                .handleInput(any(), any());
+
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 0, shardConsumer, 0);
+
+        addItemsToReturn(1);
+        startSubscriptionsAndWait();
+
+        // Verify synchronous behavior - request and index should not be updated until
+        // onNext returns to the publisher
+        assertEquals(1, indexInsideFirst.get());
+        assertEquals(1, requestedInsideFirst.get());
+
+        verify(shardConsumer, times(1)).handleInput(any(), any());
+    }
+
+    @Test
+    public void nonBlockingSubscriberTest() throws InterruptedException {
+
+        CountDownLatch simulatedProcessingLatch = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+                    synchronized (processedNotifier) {
+                        processedNotifier.notifyAll();
+                    }
+                    // Simulate long-running processing and block here
+                    simulatedProcessingLatch.await();
+                    return null;
+                })
+                .when(shardConsumer)
+                .handleInput(any(), any());
+
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 1, shardConsumer, 0);
+
+        addItemsToReturn(1);
+        startSubscriptionsAndWait();
+
+        // With synchronous publisher, it does not wait until subscriber.onNext returns to continue
+        // so recordsPublisher.requested should decrement even though there is a latch inside handleInput()
+        BlockingUtils.blockUntilConditionSatisfied(() -> recordsPublisher.requested == 0, 1000);
+        assertEquals(0, recordsPublisher.requested);
+
+        // Release the latch and allow onNext to complete. This should send another request to the publisher
+        simulatedProcessingLatch.countDown();
+        BlockingUtils.blockUntilConditionSatisfied(() -> recordsPublisher.requested == 1, 1000);
+        assertEquals(1, recordsPublisher.requested);
+
+        verify(shardConsumer, times(1)).handleInput(any(), any());
     }
 
     @Test

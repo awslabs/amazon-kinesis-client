@@ -25,6 +25,8 @@ import lombok.experimental.Accessors;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
+import software.amazon.kinesis.common.ArnConstructor;
+import software.amazon.kinesis.common.DefaultKinesisArnConstructor;
 import software.amazon.kinesis.common.DeprecationUtils;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -98,6 +100,15 @@ public class RetrievalConfig {
      * </p>
      */
     private int maxListShardsRetryAttempts = 50;
+
+    /**
+     * Constructor for building Kinesis stream ARN from stream identifier.
+     *
+     * <p>
+     * Default value: {@link DefaultKinesisArnConstructor}
+     * </p>
+     */
+    private ArnConstructor arnConstructor = new DefaultKinesisArnConstructor();
 
     /**
      * The location in the shard from which the KinesisClientLibrary will start fetching records from

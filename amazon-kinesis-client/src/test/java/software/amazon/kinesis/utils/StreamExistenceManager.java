@@ -28,9 +28,9 @@ import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerReque
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.RetrievalMode;
 import software.amazon.kinesis.common.FutureUtils;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.RetrievalMode;
 
 @Value
 @Slf4j
@@ -133,8 +133,9 @@ public class StreamExistenceManager extends AWSResourceManager {
         if (testConfig.isCrossAccount() && testConfig.getRetrievalMode().equals(RetrievalMode.STREAMING)) {
             final Map<Arn, Arn> streamToConsumerArnsMap = new HashMap<>();
             for (Arn streamArn : testConfig.getStreamArns()) {
-                final Arn consumerArn =
-                        registerConsumerAndWaitForActive(streamArn, KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
+                final String consumerName =
+                        String.join("_", testConfig.getResourcePrefix(), KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
+                final Arn consumerArn = registerConsumerAndWaitForActive(streamArn, consumerName);
                 putResourcePolicyForCrossAccount(
                         consumerArn,
                         getCrossAccountConsumerResourcePolicy(testConfig.getAccountIdForConsumer(), consumerArn));

@@ -1,9 +1,8 @@
-package software.amazon.kinesis.lifecycle;
+package software.amazon.kinesis.application;
 
 import org.junit.Test;
-import software.amazon.kinesis.application.TestConsumer;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryStreamingReshardingTestConfig;
+import software.amazon.kinesis.application.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.ReleaseCanaryStreamingReshardingTestConfig;
 
 public class ReshardIntegrationTest {
     @Test

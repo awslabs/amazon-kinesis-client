@@ -39,6 +39,7 @@ import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -276,6 +277,7 @@ public class KinesisDataFetcher implements DataFetcher {
                 .streamName(streamIdentifier.streamName())
                 .shardId(shardId);
         streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        builder.streamId(StreamIdCache.get(streamIdentifier));
 
         GetShardIteratorRequest request;
         if (isIteratorRestart) {
@@ -369,6 +371,7 @@ public class KinesisDataFetcher implements DataFetcher {
                 .shardIterator(nextIterator)
                 .limit(maxRecords);
         streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        builder.streamId(StreamIdCache.get(streamIdentifier));
         return builder.build();
     }
 

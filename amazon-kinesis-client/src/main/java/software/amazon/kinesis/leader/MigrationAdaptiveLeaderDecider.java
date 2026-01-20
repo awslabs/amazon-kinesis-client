@@ -82,7 +82,7 @@ public class MigrationAdaptiveLeaderDecider implements LeaderDecider {
     }
 
     @Override
-    public void shutdown() {
+    public synchronized void shutdown() {
         if (nonNull(currentLeaderDecider)) {
             log.info("Shutting down current {}", currentLeaderDecider.getClass().getSimpleName());
             currentLeaderDecider.shutdown();

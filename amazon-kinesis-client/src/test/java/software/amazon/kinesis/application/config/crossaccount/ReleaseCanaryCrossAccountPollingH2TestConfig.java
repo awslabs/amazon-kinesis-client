@@ -1,23 +1,22 @@
-package software.amazon.kinesis.config.crossaccount;
+package software.amazon.kinesis.application.config.crossaccount;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
-import software.amazon.kinesis.config.RetrievalMode;
+import software.amazon.kinesis.application.config.RetrievalMode;
 
 /**
- * Config for a streaming consumer with HTTP protocol of HTTP2
+ * Config for a cross account polling consumer with HTTP protocol of HTTP2
  */
 @Slf4j
-public class ReleaseCanaryCrossAccountStreamingTestConfig extends KCLCrossAccountAppConfig {
-    private final UUID uniqueId = UUID.randomUUID();
+public class ReleaseCanaryCrossAccountPollingH2TestConfig extends KCLCrossAccountAppConfig {
 
-    private final String applicationName = "CrossAccountStreamingTest";
-    private final String streamName = "2XCrossAccountStreamingTestStream_" + uniqueId;
+    private final String applicationName = "CrossAccountPollingH2Test";
+
+    private final String streamName = "CrossAccountPollingH2TestStream_";
 
     @Override
     public String getTestName() {
@@ -36,6 +35,6 @@ public class ReleaseCanaryCrossAccountStreamingTestConfig extends KCLCrossAccoun
 
     @Override
     public RetrievalMode getRetrievalMode() {
-        return RetrievalMode.STREAMING;
+        return RetrievalMode.POLLING;
     }
 }
