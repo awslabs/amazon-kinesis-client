@@ -484,16 +484,6 @@ public class Scheduler implements Runnable {
                 try {
                     log.info("Initializing LeaseCoordinator attempt {}", (i + 1));
                     leaseCoordinator.initialize();
-                    if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
-                        if (shouldInitiateLeaseSync()) {
-                            log.info(
-                                    "Worker {} is initiating the lease sync.",
-                                    leaseManagementConfig.workerIdentifier());
-                            leaderElectedPeriodicShardSyncManager.syncShardsOnce();
-                        }
-                    } else {
-                        log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
-                    }
 
                     // Initialize the state machine after lease table has been initialized
                     // Migration state machine creates and waits for GSI if necessary,
@@ -501,6 +491,17 @@ public class Scheduler implements Runnable {
                     // and that requires GSI to be present and active. (migrationStateMachine.initialize is idempotent)
                     migrationStateMachine.initialize();
                     leaderDecider = migrationComponentsInitializer.leaderDecider();
+
+                    if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
+                        if (shouldInitiateLeaseSync()) {
+                            log.info(
+                                    "Worker {} is initiating the lease sync.",
+                                    leaseManagementConfig.workerIdentifier());
+                            leaderElectedPeriodicShardSyncManager.syncShardsOnce(leaderDecider);
+                        }
+                    } else {
+                        log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
+                    }
 
                     leaseCleanupManager.start();
 

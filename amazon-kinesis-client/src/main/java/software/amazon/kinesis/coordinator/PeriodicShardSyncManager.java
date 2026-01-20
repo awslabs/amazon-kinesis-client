@@ -180,15 +180,17 @@ class PeriodicShardSyncManager {
      * Runs shardSync once
      * Does not schedule periodic shardSync
      */
-    public synchronized void syncShardsOnce() throws Exception {
+    public synchronized void syncShardsOnce(final LeaderDecider leaderDecider) throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
-        for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
-            log.info("Syncing Kinesis shard info for {}", streamConfig);
-            final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfig);
-            final TaskResult taskResult = shardSyncTaskManager.callShardSyncTask();
-            if (taskResult.getException() != null) {
-                throw taskResult.getException();
+        if (leaderDecider.isLeader(workerId)) {
+            for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
+                log.info("Syncing Kinesis shard info for {}", streamConfig);
+                final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfig);
+                final TaskResult taskResult = shardSyncTaskManager.callShardSyncTask();
+                if (taskResult.getException() != null) {
+                    throw taskResult.getException();
+                }
             }
         }
     }
