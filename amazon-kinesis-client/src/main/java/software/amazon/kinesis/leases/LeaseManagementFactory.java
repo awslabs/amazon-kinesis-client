@@ -104,7 +104,8 @@ public interface LeaseManagementFactory {
             StreamInfoDAO streamInfoDAO,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             StreamIdOnboardingState streamIdOnboardingState,
-            boolean isMultiStreamMode);
+            boolean isMultiStreamMode,
+            MetricsFactory metricsFactory);
 
     StreamInfoManager createStreamInfoManager(
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,

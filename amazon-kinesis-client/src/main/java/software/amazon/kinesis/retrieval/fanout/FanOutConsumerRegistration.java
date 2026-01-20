@@ -157,15 +157,13 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         final DescribeStreamConsumerRequest request;
 
         if (StringUtils.isEmpty(streamConsumerArn)) {
-            request = requestBuilder
-                    .streamARN(streamArn())
-                    .consumerName(streamConsumerName)
-                    .build();
+            requestBuilder.streamARN(streamArn()).consumerName(streamConsumerName);
         } else {
-            request = requestBuilder.consumerARN(streamConsumerArn).build();
+            requestBuilder.consumerARN(streamConsumerArn);
         }
-        StreamSummaryMetadata streamSummaryMetadata = getStreamARNAndStreamId();
+        final StreamSummaryMetadata streamSummaryMetadata = getStreamARNAndStreamId();
         requestBuilder.streamId(getStreamId(streamSummaryMetadata));
+        request = requestBuilder.build();
 
         final ServiceCallerSupplier<DescribeStreamConsumerResponse> dsc =
                 () -> kinesisClient.describeStreamConsumer(request).get();

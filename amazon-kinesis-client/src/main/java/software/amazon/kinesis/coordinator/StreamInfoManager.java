@@ -66,7 +66,18 @@ public class StreamInfoManager {
         }
         if (!isRunning) {
             scheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(
-                    this::performBackfill, 0L, streamInfoBackfillIntervalMillis, TimeUnit.MILLISECONDS);
+                    () -> {
+                        try {
+                            performBackfill();
+                        } catch (Throwable t) {
+                            log.error(
+                                    "Error in backfill task. Will retry in {} ms", streamInfoBackfillIntervalMillis, t);
+                        }
+                    },
+                    0L,
+                    streamInfoBackfillIntervalMillis,
+                    TimeUnit.MILLISECONDS);
+
             log.info("Started StreamInfoManager");
             isRunning = true;
         }

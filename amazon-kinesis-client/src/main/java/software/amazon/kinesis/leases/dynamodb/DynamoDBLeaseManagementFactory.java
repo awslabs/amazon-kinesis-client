@@ -374,13 +374,15 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             StreamInfoDAO streamInfoDAO,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             StreamIdOnboardingState streamIdOnboardingState,
-            boolean isMultiStreamMode) {
+            boolean isMultiStreamMode,
+            MetricsFactory metricsFactory) {
         return new StreamIdCacheManager(
                 Executors.newSingleThreadScheduledExecutor(),
                 streamInfoDAO,
                 currentStreamConfigMap,
                 streamIdOnboardingState,
-                isMultiStreamMode);
+                isMultiStreamMode,
+                metricsFactory);
     }
 
     @Override

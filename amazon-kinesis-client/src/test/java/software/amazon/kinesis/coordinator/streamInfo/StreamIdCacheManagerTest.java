@@ -20,6 +20,7 @@ import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -351,7 +352,12 @@ public class StreamIdCacheManagerTest {
 
     private StreamIdCacheManager createCacheManager(boolean isMultiStreamMode, StreamIdOnboardingState state) {
         return new StreamIdCacheManager(
-                mockScheduledExecutorService, mockStreamInfoDAO, streamConfigMap, state, isMultiStreamMode);
+                mockScheduledExecutorService,
+                mockStreamInfoDAO,
+                streamConfigMap,
+                state,
+                isMultiStreamMode,
+                new NullMetricsFactory());
     }
 
     private Map<StreamIdentifier, StreamConfig> createMultiStreamConfigMap() {

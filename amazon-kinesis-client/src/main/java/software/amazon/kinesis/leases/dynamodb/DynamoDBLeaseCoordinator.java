@@ -143,7 +143,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 gracefulLeaseHandoffConfig,
                 shardInfoShardConsumerMap,
                 leaseAssignmentIntervalMillis,
-                null); ///  TODO: need to figure out how to handle this);
+                null);
     }
 
     /**

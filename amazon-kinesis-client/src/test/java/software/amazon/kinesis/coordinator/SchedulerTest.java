@@ -1854,7 +1854,8 @@ public class SchedulerTest {
                 StreamInfoDAO streamInfoDAO,
                 Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
                 StreamIdOnboardingState streamIdOnboardingState,
-                boolean isMultiStreamMode) {
+                boolean isMultiStreamMode,
+                MetricsFactory metricsFactory) {
             return streamIdCacheManager;
         }
 

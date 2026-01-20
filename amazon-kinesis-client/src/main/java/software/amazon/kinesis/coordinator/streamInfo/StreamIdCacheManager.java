@@ -15,15 +15,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import lombok.AllArgsConstructor;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
+import software.amazon.kinesis.metrics.MetricsUtil;
 
 @Slf4j
 @AllArgsConstructor
@@ -36,22 +42,34 @@ public class StreamIdCacheManager {
     private final boolean isMultiStreamMode;
     private final ScheduledExecutorService scheduledExecutorService;
 
+    @NonNull
+    private final MetricsFactory metricsFactory;
+
     Queue<String> delayedFetchStreamIdKeys = new ConcurrentLinkedQueue<>();
     final ConcurrentMap<String, CompletableFuture<String>> inFlightRequests = new ConcurrentHashMap<>();
+    private final Set<String> inQueueStreamIdKeys = ConcurrentHashMap.newKeySet();
+
     private static final long STREAM_ID_FETCH_TIMEOUT_MILLIS = 10000L;
     private static final long DELAYED_FETCH_SLEEP_MILLIS = 2000L;
+
+    private static final String METRICS_OPERATION = "StreamIdCacheBackfill";
+    private static final String METRIC_SUCCESS = "Success";
+    private static final String METRIC_FAILURE = "Failure";
+    private static final String METRIC_QUEUE_SIZE = "QueueSize";
 
     public StreamIdCacheManager(
             ScheduledExecutorService scheduledExecutorService,
             StreamInfoDAO streamInfoDAO,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             StreamIdOnboardingState streamIdOnboardingState,
-            boolean isMultiStreamMode) {
+            boolean isMultiStreamMode,
+            @NotNull MetricsFactory metricsFactory) {
         this.scheduledExecutorService = scheduledExecutorService;
         this.streamInfoDAO = streamInfoDAO;
         this.currentStreamConfigMap = currentStreamConfigMap;
         this.streamIdOnboardingState = streamIdOnboardingState;
         this.isMultiStreamMode = isMultiStreamMode;
+        this.metricsFactory = metricsFactory;
         runDelayedStreamIdFetchTask();
     }
 
@@ -73,10 +91,20 @@ public class StreamIdCacheManager {
             return cachedStreamId;
         }
         if (!shouldBlockOnStreamId()) {
-            delayedFetchStreamIdKeys.add(streamIdentifier.toString());
+            final String key = streamIdentifier.toString();
+            if (inQueueStreamIdKeys.add(key)) {
+                delayedFetchStreamIdKeys.add(key);
+            }
             return null;
         }
-        return getStreamId(streamIdentifier);
+        // streamId is required in StreamIdOnboardingState.ONBOARDED state
+        final String streamId = getStreamId(streamIdentifier);
+        if (StringUtils.isEmpty(streamId)) {
+            final String errorMessage = "Unable to get StreamId for stream identifier: " + streamIdentifier;
+            log.error(errorMessage);
+            throw new InvalidStateException(errorMessage);
+        }
+        return streamId;
     }
 
     /**
@@ -189,21 +217,61 @@ public class StreamIdCacheManager {
         scheduledExecutorService.scheduleWithFixedDelay(
                 () -> {
                     try {
-                        while (!delayedFetchStreamIdKeys.isEmpty()) {
-                            resolveAndFetchStreamId(delayedFetchStreamIdKeys.poll());
-                        }
-                    } catch (Exception e) {
-                        final String errorMessage = "Error processing delayed stream ID fetch";
+                        processDelayedStreamIdQueue();
+                    } catch (Throwable t) {
+                        final String message = "Unexpected error in stream ID resolution task. Will retry in {} ms";
                         if (shouldBlockOnStreamId()) {
-                            log.error(errorMessage, e);
+                            log.error(message, DELAYED_FETCH_SLEEP_MILLIS, t);
                         } else {
-                            log.debug(errorMessage, e);
+                            log.debug(message, DELAYED_FETCH_SLEEP_MILLIS, t);
                         }
                     }
                 },
                 0,
                 DELAYED_FETCH_SLEEP_MILLIS,
                 TimeUnit.MILLISECONDS);
+    }
+
+    private void processDelayedStreamIdQueue() {
+        int initialQueueSize = delayedFetchStreamIdKeys.size();
+        if (initialQueueSize == 0) {
+            log.debug("No delayed fetch stream ID keys found");
+            return;
+        }
+
+        final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, METRICS_OPERATION);
+        try {
+            int successCount = 0;
+            int failureCount = 0;
+            String streamIdKey;
+            while ((streamIdKey = delayedFetchStreamIdKeys.poll()) != null) {
+                inQueueStreamIdKeys.remove(streamIdKey);
+                try {
+                    final String result = resolveAndFetchStreamId(streamIdKey);
+                    if (StringUtils.isNotEmpty(result)) {
+                        successCount++;
+                    } else {
+                        failureCount++;
+                    }
+                } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
+                    failureCount++;
+                    if (shouldBlockOnStreamId()) {
+                        log.error("Failed to resolve stream ID for key: {}", streamIdKey, e);
+                    } else {
+                        log.debug(
+                                "Failed to resolve stream ID for key: {}. Stream ID may not be supported in this region.",
+                                streamIdKey,
+                                e);
+                    }
+                }
+            }
+            scope.addData(METRIC_QUEUE_SIZE, initialQueueSize, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData(METRIC_SUCCESS, successCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData(METRIC_FAILURE, failureCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+
+        } finally {
+            MetricsUtil.endScope(scope);
+        }
     }
 
     private boolean shouldBlockOnStreamId() {

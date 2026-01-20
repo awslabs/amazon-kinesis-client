@@ -315,7 +315,8 @@ public class Scheduler implements Runnable {
                 streamInfoDAO,
                 currentStreamConfigMap,
                 leaseManagementConfig.streamIdOnboardingState(),
-                isMultiStreamMode);
+                isMultiStreamMode,
+                metricsFactory);
         this.leaseCoordinator = leaseManagementFactory.createLeaseCoordinator(
                 this.metricsFactory, shardInfoShardConsumerMap, this.streamIdCacheManager);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();

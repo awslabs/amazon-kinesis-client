@@ -50,7 +50,6 @@ public class StreamInfoDAO {
         final String streamId = getStreamId(streamIdentifier);
         log.info("StreamId response from describeStreamSummary call is {} for stream {}", streamId, streamIdentifier);
         if (streamId == null || "null".equals(streamId) || streamId.isEmpty()) {
-            log.error("errorring");
             throw new InvalidStateException("Failed to create stream metadata because StreamId response from "
                     + "describeStreamSummary call is null or empty for streamIdentifier " + streamIdentifier);
         }

@@ -1,5 +1,6 @@
 package software.amazon.kinesis.coordinator.streamInfo;
 
+import com.google.common.annotations.VisibleForTesting;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -21,9 +22,7 @@ public class StreamIdCache {
 
     public static void initialize(StreamIdCacheManager cacheManager, StreamIdOnboardingState onboardingState) {
         if (instance == null) {
-            if (instance == null) {
-                instance = new StreamIdCache(cacheManager, onboardingState);
-            }
+            instance = new StreamIdCache(cacheManager, onboardingState);
         }
     }
 
@@ -74,7 +73,8 @@ public class StreamIdCache {
     }
 
     // For testing purposes only
-    public static void reset() {
+    @VisibleForTesting
+    static void reset() {
         instance = null;
     }
 }
