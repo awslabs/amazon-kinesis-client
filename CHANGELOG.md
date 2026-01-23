@@ -5,6 +5,17 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.3.0 (January 23, 2026)
+* [#1653](https://github.com/awslabs/amazon-kinesis-client/pull/1653) Add missing PR in 3.2.1 changelog
+* [#1656](https://github.com/awslabs/amazon-kinesis-client/pull/1656) Log error if there is an issue in KPL record deaggregation 
+* [#1657](https://github.com/awslabs/amazon-kinesis-client/pull/1657) Fix integ tests and add Github workflow to run integ tests 
+* [#1669](https://github.com/awslabs/amazon-kinesis-client/pull/1669) Catch throwable in LAM performAssignment to prevent zombie leader 
+* [#1662](https://github.com/awslabs/amazon-kinesis-client/pull/1662) Refactor E2E application integration test files to a singular package
+* [#1673](https://github.com/awslabs/amazon-kinesis-client/pull/1673) Avoid race condition in leader lock acquisition during shutdown
+* [#1674](https://github.com/awslabs/amazon-kinesis-client/pull/1674) Add maxPendingProcessRecordsInput config to PollingConfig
+* [#1645](https://github.com/awslabs/amazon-kinesis-client/pull/1645) Bump awssdk.version from 2.37.1 to 2.37.3
+* [#1689](https://github.com/awslabs/amazon-kinesis-client/pull/1689) Bump gsr.version from 1.1.24 to 1.1.27
+
 ### Release 3.2.1 (November 14, 2025)
 * [#1650](https://github.com/awslabs/amazon-kinesis-client/pull/1650) Remove explicit netty dependency to fix mismatched versions
 * [#1648](https://github.com/awslabs/amazon-kinesis-client/pull/1648) Capture subscribe exceptions in onError instead of throwing in RxJava
