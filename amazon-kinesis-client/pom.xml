@@ -138,11 +138,6 @@
       <version>${gsr.version}</version>
     </dependency>
     <dependency>
-      <groupId>software.amazon.glue</groupId>
-      <artifactId>schema-registry-flink-serde</artifactId>
-      <version>${gsr.version}</version>
-    </dependency>
-    <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>32.1.1-jre</version>
