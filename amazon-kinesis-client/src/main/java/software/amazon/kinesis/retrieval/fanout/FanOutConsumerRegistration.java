@@ -18,6 +18,8 @@ package software.amazon.kinesis.retrieval.fanout;
 import java.util.concurrent.ExecutionException;
 
 import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -35,8 +37,11 @@ import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerReque
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.ConsumerRegistration;
@@ -66,6 +71,8 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
 
     @Setter(AccessLevel.PRIVATE)
     private String streamConsumerArn;
+
+    private StreamSummaryMetadata streamSummaryMetadata;
 
     /**
      * @inheritDoc
@@ -128,10 +135,14 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
     private RegisterStreamConsumerResponse registerStreamConsumer() throws DependencyException {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         try {
-            final RegisterStreamConsumerRequest request = KinesisRequestsBuilder.registerStreamConsumerRequestBuilder()
-                    .streamARN(streamArn())
-                    .consumerName(streamConsumerName)
-                    .build();
+            StreamSummaryMetadata streamSummaryMetadata = getStreamARNAndStreamId();
+            final RegisterStreamConsumerRequest.Builder requestBuilder =
+                    KinesisRequestsBuilder.registerStreamConsumerRequestBuilder()
+                            .streamARN(streamSummaryMetadata.streamArn())
+                            .consumerName(streamConsumerName);
+            requestBuilder.streamId(getStreamId(streamSummaryMetadata));
+            // is available
+            final RegisterStreamConsumerRequest request = requestBuilder.build();
             return kinesisClient.registerStreamConsumer(request).get();
         } catch (ExecutionException e) {
             throw exceptionManager.apply(e.getCause());
@@ -146,13 +157,13 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         final DescribeStreamConsumerRequest request;
 
         if (StringUtils.isEmpty(streamConsumerArn)) {
-            request = requestBuilder
-                    .streamARN(streamArn())
-                    .consumerName(streamConsumerName)
-                    .build();
+            requestBuilder.streamARN(streamArn()).consumerName(streamConsumerName);
         } else {
-            request = requestBuilder.consumerARN(streamConsumerArn).build();
+            requestBuilder.consumerARN(streamConsumerArn);
         }
+        final StreamSummaryMetadata streamSummaryMetadata = getStreamARNAndStreamId();
+        requestBuilder.streamId(getStreamId(streamSummaryMetadata));
+        request = requestBuilder.build();
 
         final ServiceCallerSupplier<DescribeStreamConsumerResponse> dsc =
                 () -> kinesisClient.describeStreamConsumer(request).get();
@@ -200,6 +211,47 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         }
 
         return streamArn;
+    }
+
+    private StreamSummaryMetadata getStreamARNAndStreamId() throws DependencyException {
+        if (streamSummaryMetadata == null) {
+            final DescribeStreamSummaryRequest request = KinesisRequestsBuilder.describeStreamSummaryRequestBuilder()
+                    .streamName(streamName)
+                    .build();
+
+            final ServiceCallerSupplier<StreamDescriptionSummary> dss =
+                    () -> kinesisClient.describeStreamSummary(request).get().streamDescriptionSummary();
+
+            StreamDescriptionSummary summary =
+                    retryWhenThrottled(dss, maxDescribeStreamSummaryRetries, "DescribeStreamSummary");
+
+            streamSummaryMetadata = StreamSummaryMetadata.builder()
+                    .streamArn(summary.streamARN())
+                    .streamId(summary.streamId())
+                    .build();
+        }
+        return streamSummaryMetadata;
+    }
+
+    /**
+     * Gets the stream ID based on the onboarding state.
+     *
+     * @return The stream ID if available and required by the current onboarding state
+     * @throws IllegalStateException if stream ID is required but not available
+     */
+    private String getStreamId(StreamSummaryMetadata metadata) {
+        if (StringUtils.isNotEmpty(metadata.streamId())) {
+            return metadata.streamId();
+        }
+        try {
+            if (StreamIdCache.getInstance().getOnboardingState() == StreamIdOnboardingState.ONBOARDED) {
+                log.error("StreamId is required in ONBOARDED state but not available for stream {}", streamName);
+            }
+        } catch (IllegalStateException e) {
+            log.debug("StreamIdCache not initialized. Error accessing StreamIdCache: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     @FunctionalInterface
@@ -252,5 +304,14 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         exceptionManager.add(KinesisException.class, t -> t);
 
         return exceptionManager;
+    }
+
+    @Data
+    @Builder
+    public static class StreamSummaryMetadata {
+        @NonNull
+        private final String streamArn;
+
+        private final String streamId;
     }
 }

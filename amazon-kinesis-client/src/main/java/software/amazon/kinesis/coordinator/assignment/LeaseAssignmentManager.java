@@ -46,10 +46,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -117,6 +121,7 @@ public final class LeaseAssignmentManager {
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
+    private final StreamIdCacheManager streamIdCacheManager;
 
     private Future<?> managerFuture;
 
@@ -384,6 +389,7 @@ public final class LeaseAssignmentManager {
         if (response) {
             // new handoff assignment. add the timeout.
             lease.checkpointOwnerTimeoutTimestampMillis(getCheckpointOwnerTimeoutTimestampMillis());
+            resolveStreamId(lease);
         } else {
             failedAssignmentCounter.incrementAndGet();
         }
@@ -396,6 +402,7 @@ public final class LeaseAssignmentManager {
         if (response) {
             // Successful assignment updates the leaseCounter, update the nanoTime for counter update.
             lease.lastCounterIncrementNanos(nanoTimeProvider.get());
+            resolveStreamId(lease);
         } else {
             failedAssignmentCounter.incrementAndGet();
         }
@@ -453,6 +460,24 @@ public final class LeaseAssignmentManager {
     private void prepareAfterLeaderSwitch() {
         prevRunLeasesState.clear();
         noOfContinuousFailedAttempts = 0;
+    }
+
+    private void resolveStreamId(Lease lease) {
+        if (streamIdCacheManager == null) {
+            log.error("Failed to resolve stream id for lease key {} because streamIdCache is null", lease.leaseKey());
+            return;
+        }
+        try {
+            StreamIdentifier streamIdentifier = null;
+            if (lease instanceof MultiStreamLease) {
+                streamIdentifier = StreamIdentifier.multiStreamInstance(
+                        StreamInfo.multiStreamLeaseKeyToStreamIdentifier(lease.leaseKey()));
+            }
+            streamIdCacheManager.resolveStreamId(streamIdentifier);
+        } catch (Exception e) {
+            // we don't want leaseTaker to be blocked, streamId resolution can be retried when streamId is needed
+            log.warn("Failed to resolve stream id for lease key {}", lease.leaseKey(), e);
+        }
     }
 
     /**
