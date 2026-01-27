@@ -233,6 +233,19 @@ public class LeaseManagementConfig {
             new WorkerUtilizationAwareAssignmentConfig();
 
     /**
+     * Strategy for lease assignment between workers.
+     * <p>
+     * WORKER_UTILIZATION_AWARE (default): Uses KCL v3's advanced worker utilization-based assignment
+     * that considers CPU, memory, and throughput metrics for optimal load balancing.
+     * <p>
+     * LEASE_COUNT_BASED: Uses simple lease count-based assignment that distributes
+     * leases evenly based purely on lease count, ignoring worker utilization metrics.
+     *
+     * <p>Default value: {@link LeaseAssignmentStrategy#WORKER_UTILIZATION_AWARE}</p>
+     */
+    private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
+
+    /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
      * already existing tables.
      *
