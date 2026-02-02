@@ -31,6 +31,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.assignment.exclusion.WorkerIdExclusionMonitor;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -58,7 +59,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     @VisibleForTesting
-    static DynamoDBLockBasedLeaderDecider create(
+    public static DynamoDBLockBasedLeaderDecider create(
             final CoordinatorStateDAO coordinatorStateDao,
             final String workerId,
             final Long leaseDuration,
@@ -112,6 +113,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         if (!lastIsLeaderResult && lastCheckTimeInMillis + heartbeatPeriodMillis > System.currentTimeMillis()) {
             publishIsLeaderMetrics(lastIsLeaderResult);
             return lastIsLeaderResult;
+        }
+        // if there's a worker ID exclusion monitor running, check if own worker ID is excluded
+        // this works based on a regex pattern written into the coordinator table, plus an expiration time
+        WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
+        if (exclusionMonitor != null && exclusionMonitor.isExcludedFromLeadership(workerId)) {
+            log.info("Worker : {} is not eligible to be leader based on exclusion pattern.", workerId);
+            releaseLeadershipIfHeld();
+            publishIsLeaderMetrics(false);
+            return false;
         }
         boolean response;
         // Get the lockItem from storage (if present
