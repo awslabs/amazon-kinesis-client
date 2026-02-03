@@ -29,7 +29,6 @@ public class StreamInfoDAO {
     private static final long MAX_BACKOFF_MILLIS = 5000;
     private static final int MAX_RETRIES = 5;
     private static final int JITTER_RANGE = 100;
-    private static final String ENTITY_TYPE = "STREAM";
 
     public StreamInfoDAO(CoordinatorStateDAO coordinatorStateDAO, KinesisAsyncClient kinesisAsyncClient) {
         this.coordinatorStateDAO = coordinatorStateDAO;
@@ -53,7 +52,7 @@ public class StreamInfoDAO {
             throw new InvalidStateException("Failed to create stream metadata because StreamId response from "
                     + "describeStreamSummary call is null or empty for streamIdentifier " + streamIdentifier);
         }
-        final StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, ENTITY_TYPE);
+        final StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId);
         return coordinatorStateDAO.createCoordinatorStateIfNotExists(streamInfo);
     }
 
@@ -83,7 +82,7 @@ public class StreamInfoDAO {
     public List<StreamInfo> listStreamInfo()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         final List<CoordinatorState> coordinatorStateList =
-                coordinatorStateDAO.listCoordinatorStateByEntityType(ENTITY_TYPE);
+                coordinatorStateDAO.listCoordinatorStateByEntityType(StreamInfo.ENTITY_TYPE);
         return coordinatorStateList.stream()
                 .map(state -> StreamInfo.deserialize(state.getKey(), state.getAttributes()))
                 .collect(Collectors.toList());

@@ -25,12 +25,12 @@ import lombok.experimental.Accessors;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
-import software.amazon.kinesis.common.ArnConstructor;
-import software.amazon.kinesis.common.DefaultKinesisArnConstructor;
+import software.amazon.kinesis.common.DefaultKinesisStreamArnConstructor;
 import software.amazon.kinesis.common.DeprecationUtils;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisClientLibraryPackage;
+import software.amazon.kinesis.common.StreamArnConstructor;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.processor.MultiStreamTracker;
@@ -105,10 +105,10 @@ public class RetrievalConfig {
      * Constructor for building Kinesis stream ARN from stream identifier.
      *
      * <p>
-     * Default value: {@link DefaultKinesisArnConstructor}
+     * Default value: {@link DefaultKinesisStreamArnConstructor}
      * </p>
      */
-    private ArnConstructor arnConstructor = new DefaultKinesisArnConstructor();
+    private StreamArnConstructor streamArnConstructor = new DefaultKinesisStreamArnConstructor();
 
     /**
      * The location in the shard from which the KinesisClientLibrary will start fetching records from

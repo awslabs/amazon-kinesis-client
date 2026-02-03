@@ -1336,7 +1336,7 @@ public class Scheduler implements Runnable {
 
         StreamIdentifier streamIdentifierWithArn = StreamIdentifier.multiStreamInstance(
                 retrievalConfig
-                        .arnConstructor()
+                        .streamArnConstructor()
                         .constructStreamArn(
                                 kinesisRegion,
                                 streamConfig
@@ -1345,6 +1345,11 @@ public class Scheduler implements Runnable {
                                         .get(),
                                 streamConfig.streamIdentifier().streamName()),
                 streamConfig.streamIdentifier().streamCreationEpochOptional().get());
+
+        // Fix for Pod1 ARN parsing: restore the original stream name from customer input
+        // to avoid using the incorrectly extracted Pod1 realm identifier.
+        // Example: arn:aws:kinesis:us-east-1:<account-id>:stream/us-east-1-pod1/<stream-name>
+        // would extract "us-east-1-pod1" instead of "<stream-name>" without this fix.
         streamIdentifierWithArn = streamIdentifierWithArn.toBuilder()
                 .streamName(streamConfig.streamIdentifier().streamName())
                 .build();

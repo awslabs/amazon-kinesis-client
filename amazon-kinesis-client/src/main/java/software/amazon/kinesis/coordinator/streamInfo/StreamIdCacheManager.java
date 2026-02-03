@@ -52,9 +52,8 @@ public class StreamIdCacheManager {
     private static final long STREAM_ID_FETCH_TIMEOUT_MILLIS = 10000L;
     private static final long DELAYED_FETCH_SLEEP_MILLIS = 2000L;
 
-    private static final String METRICS_OPERATION = "StreamIdCacheBackfill";
+    private static final String METRICS_OPERATION = "StreamIdFetch";
     private static final String METRIC_SUCCESS = "Success";
-    private static final String METRIC_FAILURE = "Failure";
     private static final String METRIC_QUEUE_SIZE = "QueueSize";
 
     public StreamIdCacheManager(
@@ -199,6 +198,10 @@ public class StreamIdCacheManager {
                 cache.put(streamIdKey, streamId);
                 return streamId;
             }
+            log.debug(
+                    "StreamInfo not found in coordinator table for key: {}, onboardingState: {}",
+                    streamIdKey,
+                    streamIdOnboardingState);
             if (streamIdOnboardingState == StreamIdOnboardingState.ONBOARDED) {
                 throw new RuntimeException("StreamId not found for " + streamIdKey);
             }
@@ -242,7 +245,6 @@ public class StreamIdCacheManager {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, METRICS_OPERATION);
         try {
             int successCount = 0;
-            int failureCount = 0;
             String streamIdKey;
             while ((streamIdKey = delayedFetchStreamIdKeys.poll()) != null) {
                 inQueueStreamIdKeys.remove(streamIdKey);
@@ -250,11 +252,8 @@ public class StreamIdCacheManager {
                     final String result = resolveAndFetchStreamId(streamIdKey);
                     if (StringUtils.isNotEmpty(result)) {
                         successCount++;
-                    } else {
-                        failureCount++;
                     }
                 } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
-                    failureCount++;
                     if (shouldBlockOnStreamId()) {
                         log.error("Failed to resolve stream ID for key: {}", streamIdKey, e);
                     } else {
@@ -267,7 +266,6 @@ public class StreamIdCacheManager {
             }
             scope.addData(METRIC_QUEUE_SIZE, initialQueueSize, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData(METRIC_SUCCESS, successCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-            scope.addData(METRIC_FAILURE, failureCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
         } finally {
             MetricsUtil.endScope(scope);

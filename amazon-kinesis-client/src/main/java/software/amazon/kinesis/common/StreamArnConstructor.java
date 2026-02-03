@@ -3,7 +3,7 @@ package software.amazon.kinesis.common;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 
-public interface ArnConstructor {
+public interface StreamArnConstructor {
     String STREAM_RESOURCE_PREFIX = "stream/";
 
     /**

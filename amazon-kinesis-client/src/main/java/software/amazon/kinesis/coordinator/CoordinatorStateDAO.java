@@ -329,7 +329,7 @@ public class CoordinatorStateDAO {
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
-        log.info("Coordinator state deleted {}", key);
+        log.debug("Coordinator state deleted {}", key);
         return true;
     }
 

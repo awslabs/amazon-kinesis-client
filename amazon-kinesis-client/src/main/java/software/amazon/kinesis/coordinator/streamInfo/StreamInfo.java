@@ -20,13 +20,14 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 public class StreamInfo extends CoordinatorState {
     public static final String STREAM_ID_ATTRIBUTE_NAME = "streamId";
     public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
+    public static final String ENTITY_TYPE = "STREAM";
 
     private final String streamId;
 
-    public StreamInfo(final String key, final String streamId, final String entityType) {
+    public StreamInfo(final String key, final String streamId) {
         setKey(key);
         this.streamId = streamId;
-        setEntityType(entityType);
+        setEntityType(ENTITY_TYPE);
     }
 
     public HashMap<String, AttributeValue> serialize() {
@@ -39,8 +40,7 @@ public class StreamInfo extends CoordinatorState {
 
     public static StreamInfo deserialize(final String key, final Map<String, AttributeValue> attributes) {
         final String streamId = attributes.get(STREAM_ID_ATTRIBUTE_NAME).s();
-        final String entityType = attributes.get(ENTITY_TYPE_ATTRIBUTE_NAME).s();
-        return new StreamInfo(key, streamId, entityType);
+        return new StreamInfo(key, streamId);
     }
 
     public static String multiStreamLeaseKeyToStreamIdentifier(String multiStreamLeaseKey) {

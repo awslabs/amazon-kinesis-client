@@ -5,7 +5,7 @@ import software.amazon.awssdk.regions.Region;
 
 import static software.amazon.awssdk.services.kinesis.KinesisAsyncClient.SERVICE_NAME;
 
-public class DefaultKinesisArnConstructor implements ArnConstructor {
+public class DefaultKinesisStreamArnConstructor implements StreamArnConstructor {
 
     /**
      * {@inheritDoc}

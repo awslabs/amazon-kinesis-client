@@ -180,7 +180,7 @@ public class StreamInfoDAOTest {
         attributes.put("streamId", AttributeValue.builder().s(streamId).build());
         attributes.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
         attributes.put("streamArn", AttributeValue.builder().s(streamArn).build());
-        StreamInfo mockState = new StreamInfo(streamName, streamId, ENTITY_TYPE);
+        StreamInfo mockState = new StreamInfo(streamName, streamId);
         mockState.setAttributes(attributes);
         when(mockCoordinatorStateDAO.getCoordinatorState(streamName)).thenReturn(mockState);
 
@@ -217,14 +217,14 @@ public class StreamInfoDAOTest {
         Map<String, AttributeValue> attributes1 = new HashMap<>();
         attributes1.put("streamId", AttributeValue.builder().s("stream1").build());
         attributes1.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
-        CoordinatorState state1 = new StreamInfo(streamName1, streamId, ENTITY_TYPE);
+        CoordinatorState state1 = new StreamInfo(streamName1, streamId);
         state1.setAttributes(attributes1);
 
         String streamName2 = "stream-id-key2";
         Map<String, AttributeValue> attributes2 = new HashMap<>();
         attributes2.put("streamId", AttributeValue.builder().s("stream2").build());
         attributes2.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
-        CoordinatorState state2 = new StreamInfo(streamName2, streamId, ENTITY_TYPE);
+        CoordinatorState state2 = new StreamInfo(streamName2, streamId);
         state2.setAttributes(attributes2);
 
         List<CoordinatorState> states = Arrays.asList(state1, state2);

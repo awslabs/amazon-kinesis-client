@@ -110,42 +110,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     private volatile boolean running = false;
 
-    @Deprecated
-    public DynamoDBLeaseCoordinator(
-            final LeaseRefresher leaseRefresher,
-            final String workerIdentifier,
-            final long leaseDurationMillis,
-            final boolean enablePriorityLeaseAssignment,
-            final long epsilonMillis,
-            final int maxLeasesForWorker,
-            final int maxLeasesToStealAtOneTime,
-            final int maxLeaseRenewerThreadCount,
-            final long initialLeaseTableReadCapacity,
-            final long initialLeaseTableWriteCapacity,
-            final MetricsFactory metricsFactory,
-            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
-            final long leaseAssignmentIntervalMillis) {
-        this(
-                leaseRefresher,
-                workerIdentifier,
-                leaseDurationMillis,
-                enablePriorityLeaseAssignment,
-                epsilonMillis,
-                maxLeasesForWorker,
-                maxLeasesToStealAtOneTime,
-                maxLeaseRenewerThreadCount,
-                initialLeaseTableReadCapacity,
-                initialLeaseTableWriteCapacity,
-                metricsFactory,
-                workerUtilizationAwareAssignmentConfig,
-                gracefulLeaseHandoffConfig,
-                shardInfoShardConsumerMap,
-                leaseAssignmentIntervalMillis,
-                null);
-    }
-
     /**
      * Constructor.
      *

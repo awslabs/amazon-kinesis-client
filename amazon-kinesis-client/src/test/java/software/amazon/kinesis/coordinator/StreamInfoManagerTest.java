@@ -24,7 +24,6 @@ import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
@@ -212,7 +211,7 @@ public class StreamInfoManagerTest {
 
         // Setup existing stream info
         List<StreamInfo> streamInfoList = new ArrayList<>();
-        StreamInfo streamInfo = new StreamInfo(streamIdentifier.serialize(), "stream-id", "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamIdentifier.serialize(), "stream-id");
         streamInfoList.add(streamInfo);
         when(mockStreamInfoDAO.listStreamInfo()).thenReturn(streamInfoList);
 
@@ -252,7 +251,7 @@ public class StreamInfoManagerTest {
 
         // Setup one existing stream
         List<StreamInfo> streamInfoList = new ArrayList<>();
-        StreamInfo streamInfo = new StreamInfo(streamId1.serialize(), "stream-id-1", "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamId1.serialize(), "stream-id-1");
         streamInfoList.add(streamInfo);
         when(mockStreamInfoDAO.listStreamInfo()).thenReturn(streamInfoList);
 
@@ -285,59 +284,6 @@ public class StreamInfoManagerTest {
     }
 
     @Test
-    public void testPerformBackfillFailedCreationMaxRetriesExceeded() throws Exception {
-        int maxRetryAttempt = 3;
-        streamInfoManager = createStreamInfoManager(streamConfigMap, false, StreamInfoMode.TRACK_ONLY);
-
-        // Return empty list from listStreamInfo
-        List<StreamInfo> emptyStreamInfoList = new ArrayList<>();
-        when(mockStreamInfoDAO.listStreamInfo()).thenReturn(emptyStreamInfoList);
-
-        // Mock failed creation
-        when(mockStreamInfoDAO.createStreamInfo(streamIdentifier)).thenReturn(false);
-
-        performBackfill();
-
-        verify(mockStreamInfoDAO).listStreamInfo();
-        verify(mockStreamInfoDAO, times(1 + maxRetryAttempt))
-                .createStreamInfo(streamIdentifier); // Once in main loop, once in retry
-    }
-
-    @Test
-    public void testPerformBackfillFailedCreationWithRetrySuccess() throws Exception {
-        streamInfoManager = createStreamInfoManager(streamConfigMap, false, StreamInfoMode.TRACK_ONLY);
-
-        // Return empty list from listStreamInfo
-        List<StreamInfo> emptyStreamInfoList = new ArrayList<>();
-        when(mockStreamInfoDAO.listStreamInfo()).thenReturn(emptyStreamInfoList);
-
-        // Mock failed creation then success
-        when(mockStreamInfoDAO.createStreamInfo(streamIdentifier))
-                .thenReturn(false) // First call fails
-                .thenReturn(true); // Second call succeeds
-
-        performBackfill();
-
-        verify(mockStreamInfoDAO).listStreamInfo();
-        verify(mockStreamInfoDAO, times(2)).createStreamInfo(streamIdentifier);
-    }
-
-    @Test
-    public void testPerformBackfillWithListStreamInfoException() throws Exception {
-        streamInfoManager = createStreamInfoManager(streamConfigMap, false, StreamInfoMode.TRACK_ONLY);
-
-        // Simulate exception when listing stream info
-        when(mockStreamInfoDAO.listStreamInfo()).thenThrow(new RuntimeException("Test exception"));
-        when(mockStreamInfoDAO.createStreamInfo(streamIdentifier)).thenReturn(true);
-        // Use reflection to access and invoke the private performBackfill method
-        performBackfill();
-
-        // Verify the expected interactions with mockStreamInfoDAO
-        verify(mockStreamInfoDAO).listStreamInfo();
-        verify(mockStreamInfoDAO).createStreamInfo(streamIdentifier);
-    }
-
-    @Test
     public void testPerformBackfillWithMultiStreamMode() throws Exception {
         Map<StreamIdentifier, StreamConfig> multiStreamMap = createMultiStreamConfigMap();
         List<StreamIdentifier> streamIds = new ArrayList<>(multiStreamMap.keySet());
@@ -357,93 +303,6 @@ public class StreamInfoManagerTest {
         verify(mockStreamInfoDAO).listStreamInfo();
         verify(mockStreamInfoDAO).createStreamInfo(streamId1); // Should create first stream
         verify(mockStreamInfoDAO).createStreamInfo(streamId2); // Should create second stream
-    }
-
-    @Test
-    public void testPerformBackfillContinuesProcessingAfterException() throws Exception {
-        StreamIdentifier streamId1 = createStreamIdentifier("stream1");
-        StreamIdentifier streamId2 = createStreamIdentifier("stream2");
-        StreamIdentifier streamId3 = createStreamIdentifier("stream3");
-
-        Map<StreamIdentifier, StreamConfig> streamConfigMap = new HashMap<>();
-        streamConfigMap.put(streamId1, new StreamConfig(streamId1, null));
-        streamConfigMap.put(streamId2, new StreamConfig(streamId2, null));
-        streamConfigMap.put(streamId3, new StreamConfig(streamId3, null));
-
-        streamInfoManager = createStreamInfoManager(streamConfigMap, true, StreamInfoMode.TRACK_ONLY);
-
-        // Return empty list from listStreamInfo to simulate no existing data
-        List<StreamInfo> emptyStreamInfoList = new ArrayList<>();
-        when(mockStreamInfoDAO.listStreamInfo()).thenReturn(emptyStreamInfoList);
-
-        when(mockStreamInfoDAO.createStreamInfo(streamId1)).thenReturn(true);
-        when(mockStreamInfoDAO.createStreamInfo(streamId2))
-                .thenThrow(new DependencyException("Test exception for stream2", null));
-        when(mockStreamInfoDAO.createStreamInfo(streamId3)).thenReturn(true);
-
-        performBackfill();
-
-        // Verify that all three streams were processed
-        verify(mockStreamInfoDAO).createStreamInfo(streamId1);
-        // Once in main loop, once in retry
-        verify(mockStreamInfoDAO, times(2)).createStreamInfo(streamId2);
-        verify(mockStreamInfoDAO).createStreamInfo(streamId3);
-    }
-
-    @Test
-    public void testPerformBackfillMultipleExceptions() throws Exception {
-        StreamIdentifier streamId1 = createStreamIdentifier("stream1");
-        StreamIdentifier streamId2 = createStreamIdentifier("stream2");
-        StreamIdentifier streamId3 = createStreamIdentifier("stream3");
-
-        Map<StreamIdentifier, StreamConfig> streamConfigMap = new HashMap<>();
-        streamConfigMap.put(streamId1, new StreamConfig(streamId1, null));
-        streamConfigMap.put(streamId2, new StreamConfig(streamId2, null));
-        streamConfigMap.put(streamId3, new StreamConfig(streamId3, null));
-
-        streamInfoManager = createStreamInfoManager(streamConfigMap, true, StreamInfoMode.TRACK_ONLY);
-
-        List<StreamInfo> emptyStreamInfoList = new ArrayList<>();
-        when(mockStreamInfoDAO.listStreamInfo()).thenReturn(emptyStreamInfoList);
-
-        when(mockStreamInfoDAO.createStreamInfo(streamId1))
-                .thenThrow(new DependencyException("Test exception for stream1", null));
-        when(mockStreamInfoDAO.createStreamInfo(streamId2))
-                .thenThrow(new DependencyException("Test exception for stream2", null));
-        when(mockStreamInfoDAO.createStreamInfo(streamId3))
-                .thenThrow(new DependencyException("Test exception for stream3", null));
-
-        // Execute the performBackfill method
-        performBackfill();
-
-        // Verify that all three streams were processed in the main loop and attempted again
-        verify(mockStreamInfoDAO, times(2)).createStreamInfo(streamId1);
-        verify(mockStreamInfoDAO, times(2)).createStreamInfo(streamId2);
-        verify(mockStreamInfoDAO, times(2)).createStreamInfo(streamId3);
-    }
-
-    @Test
-    public void testPerformBackfillExceptionInListStreamInfo_ContinuesWithRetry() throws Exception {
-        StreamIdentifier streamId1 = createStreamIdentifier("stream1");
-        StreamIdentifier streamId2 = createStreamIdentifier("stream2");
-
-        Map<StreamIdentifier, StreamConfig> streamConfigMap = new HashMap<>();
-        streamConfigMap.put(streamId1, new StreamConfig(streamId1, null));
-        streamConfigMap.put(streamId2, new StreamConfig(streamId2, null));
-
-        streamInfoManager = createStreamInfoManager(streamConfigMap, true, StreamInfoMode.TRACK_ONLY);
-
-        // Mock listStreamInfo to throw exception
-        when(mockStreamInfoDAO.listStreamInfo()).thenThrow(new RuntimeException("Test exception in listStreamInfo"));
-        when(mockStreamInfoDAO.createStreamInfo(any(StreamIdentifier.class))).thenReturn(true);
-
-        performBackfill();
-
-        verify(mockStreamInfoDAO).listStreamInfo();
-
-        // Verify that both streams were processed in the retry phase
-        verify(mockStreamInfoDAO).createStreamInfo(streamId1);
-        verify(mockStreamInfoDAO).createStreamInfo(streamId2);
     }
 
     @Test

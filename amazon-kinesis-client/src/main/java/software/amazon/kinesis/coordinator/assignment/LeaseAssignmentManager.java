@@ -462,11 +462,9 @@ public final class LeaseAssignmentManager {
         noOfContinuousFailedAttempts = 0;
     }
 
+    // Resolves and caches the stream ID for a given lease during lease acquisition.
+    // If resolution fails, it will be retried when the stream ID is actually needed for processing.
     private void resolveStreamId(Lease lease) {
-        if (streamIdCacheManager == null) {
-            log.error("Failed to resolve stream id for lease key {} because streamIdCache is null", lease.leaseKey());
-            return;
-        }
         try {
             StreamIdentifier streamIdentifier = null;
             if (lease instanceof MultiStreamLease) {

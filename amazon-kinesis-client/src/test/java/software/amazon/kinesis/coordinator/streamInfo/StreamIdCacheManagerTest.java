@@ -83,7 +83,7 @@ public class StreamIdCacheManagerTest {
     public void testGetWithNullIdentifierInSingleStreamModeFetchesFromDAOWhenNotCached()
             throws InvalidStateException, ProvisionedThroughputException, DependencyException {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
-        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId);
         when(mockStreamInfoDAO.getStreamInfo(streamIdentifier.toString())).thenReturn(streamInfo);
 
         String result = cacheManager.get(null);
@@ -106,7 +106,7 @@ public class StreamIdCacheManagerTest {
         cacheManager = createCacheManager(true, StreamIdOnboardingState.ONBOARDED);
 
         StreamIdentifier streamId1 = multiStreamMap.keySet().iterator().next();
-        StreamInfo streamInfo = new StreamInfo(streamId1.toString(), "multi-stream-id", "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamId1.toString(), "multi-stream-id");
         when(mockStreamInfoDAO.getStreamInfo(streamId1.toString())).thenReturn(streamInfo);
 
         String result = cacheManager.get(streamId1);
@@ -118,7 +118,7 @@ public class StreamIdCacheManagerTest {
     @Test
     public void testResolveStreamIdInOnboardedStateAddsToCache() throws Exception {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
-        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId);
         when(mockStreamInfoDAO.getStreamInfo(streamIdentifier.toString())).thenReturn(streamInfo);
 
         cacheManager.resolveStreamId(streamIdentifier);
@@ -165,7 +165,7 @@ public class StreamIdCacheManagerTest {
         StreamIdentifier streamId2 = streamIds[1];
 
         // Mock the DAO responses for delayed fetch
-        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1", "STREAM");
+        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1");
         when(mockStreamInfoDAO.getStreamInfo(streamId1.toString())).thenReturn(streamInfo1);
 
         // Call get() - should return null and queue for delayed fetch
@@ -198,7 +198,7 @@ public class StreamIdCacheManagerTest {
     public void testGetWithConcurrentCallsForSameStreamCallsDAOOnlyOnce() throws Exception {
         cacheManager = createCacheManager(false, StreamIdOnboardingState.ONBOARDED);
 
-        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId, "STREAM");
+        StreamInfo streamInfo = new StreamInfo(streamIdentifier.toString(), streamId);
         when(mockStreamInfoDAO.getStreamInfo(streamIdentifier.toString())).thenReturn(streamInfo);
 
         ExecutorService executorService = Executors.newFixedThreadPool(5);
@@ -268,8 +268,8 @@ public class StreamIdCacheManagerTest {
         StreamIdentifier streamId1 = streamIds[0];
         StreamIdentifier streamId2 = streamIds[1];
 
-        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1", "STREAM");
-        StreamInfo streamInfo2 = new StreamInfo(streamId2.toString(), "id2", "STREAM");
+        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1");
+        StreamInfo streamInfo2 = new StreamInfo(streamId2.toString(), "id2");
         when(mockStreamInfoDAO.getStreamInfo(streamId1.toString())).thenReturn(streamInfo1);
         when(mockStreamInfoDAO.getStreamInfo(streamId2.toString())).thenReturn(streamInfo2);
 
@@ -291,8 +291,8 @@ public class StreamIdCacheManagerTest {
         StreamIdentifier streamId1 = streamIds[0];
         StreamIdentifier streamId2 = streamIds[1];
 
-        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1", "STREAM");
-        StreamInfo streamInfo2 = new StreamInfo(streamId2.toString(), "id2", "STREAM");
+        StreamInfo streamInfo1 = new StreamInfo(streamId1.toString(), "id1");
+        StreamInfo streamInfo2 = new StreamInfo(streamId2.toString(), "id2");
         when(mockStreamInfoDAO.getStreamInfo(streamId1.toString())).thenReturn(streamInfo1);
         when(mockStreamInfoDAO.getStreamInfo(streamId2.toString())).thenReturn(streamInfo2);
 
