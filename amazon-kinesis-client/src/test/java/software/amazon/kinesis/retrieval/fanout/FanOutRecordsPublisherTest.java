@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -56,6 +57,10 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheTestUtil;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -104,9 +109,21 @@ public class FanOutRecordsPublisherTest {
 
     private SubscribeToShardEvent batchEvent;
 
+    @Mock
+    private StreamIdentifier streamIdentifier;
+
+    @Mock
+    private StreamIdCacheManager mockCacheManager;
+
+    @Before
+    public void setup() {
+        StreamIdCacheTestUtil.initializeForTest(mockCacheManager, StreamIdOnboardingState.NOT_ONBOARDED);
+    }
+
     @Test
     public void testSimple() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -182,7 +199,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testInvalidEvent() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -263,7 +281,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testIfAllEventsReceivedWhenNoTasksRejectedByExecutor() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -347,7 +366,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testIfEventsAreNotDeliveredToShardConsumerWhenPreviousEventDeliveryTaskGetsRejected() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -431,7 +451,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -549,7 +570,8 @@ public class FanOutRecordsPublisherTest {
                 .when(kinesisClient)
                 .subscribeToShard(any(SubscribeToShardRequest.class), any());
 
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -663,7 +685,8 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfShardEndEventAndOnCompleteAreDeliveredInOrderWithBackpressureAdheringServicePublisher()
             throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -801,7 +824,8 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfStreamOfEventsAndOnErrorAreDeliveredInOrderWithBackpressureAdheringServicePublisher()
             throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -918,7 +942,8 @@ public class FanOutRecordsPublisherTest {
     public void
             testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisherHavingInitialBurstWithinLimit()
                     throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -1025,7 +1050,8 @@ public class FanOutRecordsPublisherTest {
     public void
             testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisherHavingInitialBurstOverLimit()
                     throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -1178,7 +1204,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void largeRequestTest() throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -1254,7 +1281,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testResourceNotFoundForShard() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);
@@ -1281,7 +1309,11 @@ public class FanOutRecordsPublisherTest {
     public void testReadTimeoutExceptionForShard() {
         class SimulatedReadTimeoutException extends Exception {}
 
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(
+                kinesisClient,
+                SHARD_ID,
+                CONSUMER_ARN,
+                software.amazon.kinesis.common.StreamIdentifier.singleStreamInstance("test-stream"));
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);
@@ -1300,7 +1332,8 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testContinuesAfterSequence() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -1392,7 +1425,7 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfBufferingRecordsWithinCapacityPublishesOneEvent() {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         RecordsRetrieved recordsRetrieved = ProcessRecordsInput.builder()::build;
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001-001");
@@ -1421,7 +1454,7 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfBufferingRecordsOverCapacityPublishesOneEventAndThrows() {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         RecordsRetrieved recordsRetrieved = ProcessRecordsInput.builder()::build;
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
@@ -1455,7 +1488,7 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfPublisherAlwaysPublishesWhenQueueIsEmpty() {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
@@ -1489,7 +1522,7 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void testIfPublisherIgnoresStaleEventsAndContinuesWithNextFlow() {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
@@ -1529,7 +1562,7 @@ public class FanOutRecordsPublisherTest {
     public void testIfPublisherIgnoresStaleEventsAndContinuesWithNextFlowWhenDeliveryQueueIsNotEmpty()
             throws InterruptedException {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
@@ -1573,7 +1606,7 @@ public class FanOutRecordsPublisherTest {
     @Test(expected = IllegalStateException.class)
     public void testIfPublisherThrowsWhenMismatchAckforActiveFlowSeen() throws InterruptedException {
         FanOutRecordsPublisher fanOutRecordsPublisher =
-                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier);
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "Shard-001-1");
         final int[] totalRecordsRetrieved = {0};
@@ -1615,13 +1648,14 @@ public class FanOutRecordsPublisherTest {
     @Test
     public void acquireTimeoutTriggersLogMethodForActiveFlow() {
         AtomicBoolean acquireTimeoutLogged = new AtomicBoolean(false);
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN) {
-            @Override
-            protected void logAcquireTimeoutMessage(Throwable t) {
-                super.logAcquireTimeoutMessage(t);
-                acquireTimeoutLogged.set(true);
-            }
-        };
+        FanOutRecordsPublisher source =
+                new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, streamIdentifier) {
+                    @Override
+                    protected void logAcquireTimeoutMessage(Throwable t) {
+                        super.logAcquireTimeoutMessage(t);
+                        acquireTimeoutLogged.set(true);
+                    }
+                };
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);

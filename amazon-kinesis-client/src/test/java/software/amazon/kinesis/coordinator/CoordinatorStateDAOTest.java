@@ -390,6 +390,42 @@ public class CoordinatorStateDAOTest {
     }
 
     @Test
+    public void testListCoordinatorStateByEntityType()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final String entityType = "STREAM";
+        /* Test setup - create class under test and initialize **/
+        final CoordinatorStateDAO doaUnderTest =
+                new CoordinatorStateDAO(dynamoDbAsyncClient, getCoordinatorStateConfig("testListCoordinatorState"));
+        doaUnderTest.initialize();
+
+        /* Test step - create a few coordinatorState items with different schema and invoke the test to list items */
+        createCoordinatorStateWithEntityType("key1", entityType);
+        createCoordinatorStateWithEntityType("key2", entityType);
+        createCoordinatorStateWithEntityType("key3", entityType);
+        createCoordinatorStateWithEntityType("key4", entityType);
+        createCoordinatorState("key5");
+        createCoordinatorStateWithEntityType("key6", entityType + "-new");
+
+        final List<CoordinatorState> stateList = doaUnderTest.listCoordinatorStateByEntityType("STREAM");
+
+        /* Verify **/
+        Assertions.assertEquals(4, stateList.size());
+        stateList.forEach(state -> {
+            final String keyValue = state.getKey();
+            Assertions.assertEquals(3, state.getAttributes().size());
+            Assertions.assertEquals(
+                    keyValue + "_strVal",
+                    state.getAttributes().get(keyValue + "-StrAttr").s());
+            Assertions.assertEquals(
+                    100,
+                    Integer.valueOf(
+                            state.getAttributes().get(keyValue + "-IntAttr").n()));
+            Assertions.assertEquals(
+                    entityType, state.getAttributes().get("entityType").s());
+        });
+    }
+
+    @Test
     public void testCreateCoordinatorState_ItemNotExists()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         /* Test setup - create class under test and initialize **/
@@ -550,6 +586,88 @@ public class CoordinatorStateDAOTest {
         Assertions.assertFalse(updated);
     }
 
+    @Test
+    public void testDeleteCoordinatorState_ExistingKey()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        /* Test setup - create class under test and initialize **/
+        final CoordinatorStateDAO doaUnderTest =
+                new CoordinatorStateDAO(dynamoDbAsyncClient, getCoordinatorStateConfig("testDeleteCoordinatorState"));
+        doaUnderTest.initialize();
+        createCoordinatorState("key1");
+
+        /* Verify item exists before deletion */
+        CoordinatorState stateBeforeDelete = doaUnderTest.getCoordinatorState("key1");
+        Assertions.assertNotNull(stateBeforeDelete);
+
+        /* Test step - delete the state */
+        boolean deleted = doaUnderTest.deleteCoordinatorState("key1");
+
+        /* Verify - delete succeeded and item no longer exists */
+        Assertions.assertTrue(deleted);
+        CoordinatorState stateAfterDelete = doaUnderTest.getCoordinatorState("key1");
+        Assertions.assertNull(stateAfterDelete);
+    }
+
+    @Test
+    public void testDeleteCoordinatorState_NonExistentKey()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        /* Test setup - create class under test and initialize **/
+        final CoordinatorStateDAO doaUnderTest =
+                new CoordinatorStateDAO(dynamoDbAsyncClient, getCoordinatorStateConfig("testDeleteCoordinatorState"));
+        doaUnderTest.initialize();
+
+        /* Verify item doesn't exist before deletion */
+        CoordinatorState stateBeforeDelete = doaUnderTest.getCoordinatorState("nonExistentKey");
+        Assertions.assertNull(stateBeforeDelete);
+
+        /* Test step - delete the non-existent state */
+        boolean deleted = doaUnderTest.deleteCoordinatorState("nonExistentKey");
+
+        /* Verify - delete operation still returns true even though item didn't exist */
+        Assertions.assertTrue(deleted);
+        CoordinatorState stateAfterDelete = doaUnderTest.getCoordinatorState("nonExistentKey");
+        Assertions.assertNull(stateAfterDelete);
+    }
+
+    @Test
+    public void testDeleteCoordinatorState_MultipleItems()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final CoordinatorStateDAO doaUnderTest =
+                new CoordinatorStateDAO(dynamoDbAsyncClient, getCoordinatorStateConfig("testDeleteCoordinatorState"));
+        doaUnderTest.initialize();
+        createCoordinatorState("key1");
+        createCoordinatorState("key2");
+        createCoordinatorState("key3");
+
+        /* Verify items exist before deletion */
+        List<CoordinatorState> statesBeforeDelete = doaUnderTest.listCoordinatorState();
+        Assertions.assertEquals(3, statesBeforeDelete.size());
+
+        /* Test step - delete one state */
+        boolean deleted = doaUnderTest.deleteCoordinatorState("key2");
+
+        /* Verify - delete succeeded and only the specified item was deleted */
+        Assertions.assertTrue(deleted);
+        List<CoordinatorState> statesAfterDelete = doaUnderTest.listCoordinatorState();
+        Assertions.assertEquals(2, statesAfterDelete.size());
+
+        boolean foundKey1 = false;
+        boolean foundKey3 = false;
+
+        for (CoordinatorState state : statesAfterDelete) {
+            if ("key1".equals(state.getKey())) {
+                foundKey1 = true;
+            } else if ("key3".equals(state.getKey())) {
+                foundKey3 = true;
+            } else if ("key2".equals(state.getKey())) {
+                Assertions.fail("key2 should have been deleted");
+            }
+        }
+
+        Assertions.assertTrue(foundKey1, "key1 should still exist");
+        Assertions.assertTrue(foundKey3, "key3 should still exist");
+    }
+
     private CoordinatorStateTableConfig getCoordinatorStateConfig(final String applicationName) {
         return getCoordinatorStateConfig(applicationName, BillingMode.PAY_PER_REQUEST, null, null);
     }
@@ -590,6 +708,22 @@ public class CoordinatorStateDAOTest {
                                 put(keyValue + "-StrAttr", AttributeValue.fromS(keyValue + "_strVal"));
                                 put(keyValue + "-IntAttr", AttributeValue.fromN("100"));
                                 put(keyValue + "-BoolAttr", AttributeValue.fromBool(true));
+                            }
+                        })
+                        .build())
+                .join();
+    }
+
+    private void createCoordinatorStateWithEntityType(final String keyValue, String entityType) {
+        dynamoDbAsyncClient
+                .putItem(PutItemRequest.builder()
+                        .tableName(tableNameForTest)
+                        .item(new HashMap<String, AttributeValue>() {
+                            {
+                                put("key", AttributeValue.fromS(keyValue));
+                                put(keyValue + "-StrAttr", AttributeValue.fromS(keyValue + "_strVal"));
+                                put(keyValue + "-IntAttr", AttributeValue.fromN("100"));
+                                put("entityType", AttributeValue.fromS(entityType));
                             }
                         })
                         .build())

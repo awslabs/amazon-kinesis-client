@@ -36,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseDiscoverer;
@@ -134,6 +135,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      *            Used to publish metrics about lease operations
      * @param leaseAssignmentIntervalMillis
      *            Interval at which Lease assignment manager runs
+     * @param streamIdCacheManager
+     *             StreamIdCacheManager instance to use
      */
     public DynamoDBLeaseCoordinator(
             final LeaseRefresher leaseRefresher,
@@ -150,10 +153,12 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
             final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
-            final long leaseAssignmentIntervalMillis) {
+            final long leaseAssignmentIntervalMillis,
+            final StreamIdCacheManager streamIdCacheManager) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = createExecutorService(maxLeaseRenewerThreadCount, LEASE_RENEWAL_THREAD_FACTORY);
-        this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
+        this.leaseTaker = new DynamoDBLeaseTaker(
+                        leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory, streamIdCacheManager)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime)
                 .withEnablePriorityLeaseAssignment(enablePriorityLeaseAssignment);

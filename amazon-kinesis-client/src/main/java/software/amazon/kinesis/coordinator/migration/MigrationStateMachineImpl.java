@@ -104,6 +104,7 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
     public void initialize() throws DependencyException {
         if (startingClientVersion == null) {
             log.info("Initializing MigrationStateMachine");
+            // Coordinator table exists at this point. This line can potentially be removed in future
             coordinatorStateDAO.initialize();
             final MigrationClientVersionStateInitializer startingStateInitializer =
                     new MigrationClientVersionStateInitializer(

@@ -19,7 +19,6 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,7 +28,7 @@ import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.utils.Validate;
 
-@Builder(access = AccessLevel.PRIVATE)
+@Builder(toBuilder = true)
 @EqualsAndHashCode
 @Getter
 @Accessors(fluent = true)

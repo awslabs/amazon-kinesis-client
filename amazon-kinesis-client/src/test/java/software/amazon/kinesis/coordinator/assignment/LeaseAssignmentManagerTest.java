@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
@@ -26,6 +27,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
@@ -57,6 +59,8 @@ import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.TRIM_HORIZON;
 
 class LeaseAssignmentManagerTest {
+    @Mock
+    StreamIdCacheManager streamIdCacheManager;
 
     private static final String TEST_LEADER_WORKER_ID = "workerId";
     private static final String TEST_TAKE_WORKER_ID = "workerIdTake";
@@ -1177,7 +1181,8 @@ class LeaseAssignmentManagerTest {
                 System::nanoTime,
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
-                2 * failoverTimeMillis);
+                2 * failoverTimeMillis,
+                streamIdCacheManager);
 
         leaseAssignmentManager.start();
 
@@ -1207,7 +1212,8 @@ class LeaseAssignmentManagerTest {
                 System::nanoTime,
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
-                leaseAssignmentIntervalMillis);
+                leaseAssignmentIntervalMillis,
+                streamIdCacheManager);
 
         leaseAssignmentManager.start();
 
@@ -1246,7 +1252,8 @@ class LeaseAssignmentManagerTest {
                 nanoTimeProvider,
                 maxLeasesPerWorker,
                 gracefulLeaseHandoffConfig,
-                2 * leaseDurationMillis);
+                2 * leaseDurationMillis,
+                streamIdCacheManager);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }

@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -33,6 +34,7 @@ import software.amazon.kinesis.checkpoint.dynamodb.DynamoDBCheckpointer;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -71,6 +73,9 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
 
     private static DynamoDBLeaseRefresher leaseRefresher;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
+
+    @Mock
+    private StreamIdCacheManager mockStreamIdCacheManager;
 
     private LeaseCoordinator coordinator;
     private final String leaseKey = "shd-1";
@@ -129,7 +134,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
                 new ConcurrentHashMap<>(),
-                2 * LEASE_DURATION_MILLIS);
+                2 * LEASE_DURATION_MILLIS,
+                mockStreamIdCacheManager);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 
