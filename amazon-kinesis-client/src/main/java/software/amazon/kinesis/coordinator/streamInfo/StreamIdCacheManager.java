@@ -244,16 +244,18 @@ public class StreamIdCacheManager {
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, METRICS_OPERATION);
         try {
-            int successCount = 0;
             String streamIdKey;
             while ((streamIdKey = delayedFetchStreamIdKeys.poll()) != null) {
                 inQueueStreamIdKeys.remove(streamIdKey);
                 try {
                     final String result = resolveAndFetchStreamId(streamIdKey);
                     if (StringUtils.isNotEmpty(result)) {
-                        successCount++;
+                        scope.addData(METRIC_SUCCESS, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                    } else {
+                        scope.addData(METRIC_SUCCESS, 0, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                     }
                 } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
+                    scope.addData(METRIC_SUCCESS, 0, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                     if (shouldBlockOnStreamId()) {
                         log.error("Failed to resolve stream ID for key: {}", streamIdKey, e);
                     } else {
@@ -265,7 +267,6 @@ public class StreamIdCacheManager {
                 }
             }
             scope.addData(METRIC_QUEUE_SIZE, initialQueueSize, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-            scope.addData(METRIC_SUCCESS, successCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
         } finally {
             MetricsUtil.endScope(scope);
