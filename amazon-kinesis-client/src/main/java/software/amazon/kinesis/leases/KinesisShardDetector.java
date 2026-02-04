@@ -55,6 +55,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 
 /**
@@ -252,6 +253,8 @@ public class KinesisShardDetector implements ShardDetector {
         } else {
             builder.nextToken(nextToken);
         }
+        builder.streamId(StreamIdCache.get(streamIdentifier));
+
         final ListShardsRequest request = builder.build();
         log.info("Stream {}: listing shards with list shards request {}", streamIdentifier, request);
 
@@ -343,6 +346,7 @@ public class KinesisShardDetector implements ShardDetector {
                         .shardIteratorType(ShardIteratorType.LATEST)
                         .shardId(shardId);
         streamIdentifier.streamArnOptional().ifPresent(arn -> getShardIteratorRequestBuilder.streamARN(arn.toString()));
+        getShardIteratorRequestBuilder.streamId(StreamIdCache.get(streamIdentifier));
 
         final GetShardIteratorResponse getShardIteratorResponse = FutureUtils.resolveOrCancelFuture(
                 kinesisClient.getShardIterator(getShardIteratorRequestBuilder.build()), kinesisRequestTimeout);
@@ -350,6 +354,7 @@ public class KinesisShardDetector implements ShardDetector {
         final GetRecordsRequest.Builder getRecordsRequestBuilder = KinesisRequestsBuilder.getRecordsRequestBuilder()
                 .shardIterator(getShardIteratorResponse.shardIterator());
         streamIdentifier.streamArnOptional().ifPresent(arn -> getRecordsRequestBuilder.streamARN(arn.toString()));
+        getRecordsRequestBuilder.streamId(StreamIdCache.get(streamIdentifier));
 
         final GetRecordsResponse getRecordsResponse = FutureUtils.resolveOrCancelFuture(
                 kinesisClient.getRecords(getRecordsRequestBuilder.build()), kinesisRequestTimeout);

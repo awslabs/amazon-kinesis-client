@@ -43,13 +43,17 @@ import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -117,6 +121,7 @@ public final class LeaseAssignmentManager {
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
+    private final StreamIdCacheManager streamIdCacheManager;
 
     private Future<?> managerFuture;
 
@@ -259,13 +264,18 @@ public final class LeaseAssignmentManager {
             deleteStaleWorkerMetricsEntries(inMemoryStorageView, metricsScope);
             success = true;
             noOfContinuousFailedAttempts = 0;
-        } catch (final Exception e) {
+        } catch (final Throwable e) {
             log.error("LeaseAssignmentManager failed to perform lease assignment.", e);
             noOfContinuousFailedAttempts++;
-            if (noOfContinuousFailedAttempts >= DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER) {
+
+            final boolean isError = e instanceof Error;
+            final int failureThreshold = isError ? 1 : DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER;
+
+            if (noOfContinuousFailedAttempts >= failureThreshold) {
                 log.error(
-                        "Failed to perform assignment {} times in a row, releasing leadership from worker : {}",
-                        DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER,
+                        "Failed to perform assignment {} times in a row{}, releasing leadership from worker : {}",
+                        failureThreshold,
+                        isError ? " (Error detected)" : "",
                         currentWorkerId);
                 MetricsUtil.addCount(metricsScope, FORCE_LEADER_RELEASE_METRIC_NAME, 1, MetricsLevel.SUMMARY);
                 leaderDecider.releaseLeadershipIfHeld();
@@ -379,6 +389,7 @@ public final class LeaseAssignmentManager {
         if (response) {
             // new handoff assignment. add the timeout.
             lease.checkpointOwnerTimeoutTimestampMillis(getCheckpointOwnerTimeoutTimestampMillis());
+            resolveStreamId(lease);
         } else {
             failedAssignmentCounter.incrementAndGet();
         }
@@ -391,6 +402,7 @@ public final class LeaseAssignmentManager {
         if (response) {
             // Successful assignment updates the leaseCounter, update the nanoTime for counter update.
             lease.lastCounterIncrementNanos(nanoTimeProvider.get());
+            resolveStreamId(lease);
         } else {
             failedAssignmentCounter.incrementAndGet();
         }
@@ -448,6 +460,22 @@ public final class LeaseAssignmentManager {
     private void prepareAfterLeaderSwitch() {
         prevRunLeasesState.clear();
         noOfContinuousFailedAttempts = 0;
+    }
+
+    // Resolves and caches the stream ID for a given lease during lease acquisition.
+    // If resolution fails, it will be retried when the stream ID is actually needed for processing.
+    private void resolveStreamId(Lease lease) {
+        try {
+            StreamIdentifier streamIdentifier = null;
+            if (lease instanceof MultiStreamLease) {
+                streamIdentifier = StreamIdentifier.multiStreamInstance(
+                        StreamInfo.multiStreamLeaseKeyToStreamIdentifier(lease.leaseKey()));
+            }
+            streamIdCacheManager.resolveStreamId(streamIdentifier);
+        } catch (Exception e) {
+            // we don't want leaseTaker to be blocked, streamId resolution can be retried when streamId is needed
+            log.warn("Failed to resolve stream id for lease key {}", lease.leaseKey(), e);
+        }
     }
 
     /**

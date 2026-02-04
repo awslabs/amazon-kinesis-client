@@ -58,7 +58,7 @@ public class TestRecordProcessor implements ShardRecordProcessor {
                 String recordValidatorKey = streamIdentifier.toString() + "-" + shardId;
                 recordValidator.add(recordValidatorKey, data);
             }
-
+            processRecordsInput.checkpointer().checkpoint();
         } catch (Throwable t) {
             log.error("Caught throwable while processing records. Aborting.", t);
             Runtime.getRuntime().halt(1);

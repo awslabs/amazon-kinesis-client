@@ -31,9 +31,13 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseTaker;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -64,6 +68,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private final long leaseDurationNanos;
     private final long leaseRenewalIntervalMillis;
     private final MetricsFactory metricsFactory;
+    private final StreamIdCacheManager streamIdCacheManager;
 
     final Map<String, Lease> allLeases = new HashMap<>();
     // TODO: Remove these defaults and use the defaults in the config
@@ -78,11 +83,21 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             String workerIdentifier,
             long leaseDurationMillis,
             final MetricsFactory metricsFactory) {
+        this(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory, null);
+    }
+
+    public DynamoDBLeaseTaker(
+            LeaseRefresher leaseRefresher,
+            String workerIdentifier,
+            long leaseDurationMillis,
+            final MetricsFactory metricsFactory,
+            StreamIdCacheManager streamIdCacheManager) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
         this.leaseRenewalIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, 0);
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
         this.metricsFactory = metricsFactory;
+        this.streamIdCacheManager = streamIdCacheManager;
     }
 
     /**
@@ -221,6 +236,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                             if (leaseRefresher.takeLease(lease, workerIdentifier)) {
                                 lease.lastCounterIncrementNanos(System.nanoTime());
                                 takenLeases.put(leaseKey, lease);
+                                resolveStreamId(lease);
                             } else {
                                 untakenLeaseKeys.add(leaseKey);
                             }
@@ -383,6 +399,24 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         // Remove dead leases from allLeases
         for (String key : notUpdated) {
             allLeases.remove(key);
+        }
+    }
+
+    private void resolveStreamId(Lease lease) {
+        if (streamIdCacheManager == null) {
+            log.error("Failed to resolve stream id for lease key {} because streamIdCache is null", lease.leaseKey());
+            return;
+        }
+        try {
+            StreamIdentifier streamIdentifier = null;
+            if (lease instanceof MultiStreamLease) {
+                streamIdentifier = StreamIdentifier.multiStreamInstance(
+                        StreamInfo.multiStreamLeaseKeyToStreamIdentifier(lease.leaseKey()));
+            }
+            streamIdCacheManager.resolveStreamId(streamIdentifier);
+        } catch (Exception e) {
+            // we don't want leaseTaker to be blocked, streamId resolution can be retried when streamId is needed
+            log.warn("Failed to resolve stream id for lease key {}", lease.leaseKey(), e);
         }
     }
 

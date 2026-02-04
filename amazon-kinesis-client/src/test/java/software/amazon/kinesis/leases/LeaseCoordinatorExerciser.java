@@ -40,6 +40,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
@@ -88,7 +89,7 @@ public class LeaseCoordinatorExerciser {
                 LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
                 LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
                 DefaultSdkAutoConstructList.getInstance());
-
+        StreamIdCacheManager mockStreamIdCacheManager = mock(StreamIdCacheManager.class);
         MigrationAdaptiveLeaseAssignmentModeProvider mockModeProvider =
                 mock(MigrationAdaptiveLeaseAssignmentModeProvider.class, Mockito.RETURNS_MOCKS);
         when(mockModeProvider.getLeaseAssignmentMode())
@@ -133,7 +134,8 @@ public class LeaseCoordinatorExerciser {
                     new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
                     LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
                     new ConcurrentHashMap<>(),
-                    2 * leaseDurationMillis);
+                    2 * leaseDurationMillis,
+                    mockStreamIdCacheManager);
 
             coordinators.add(coord);
         }

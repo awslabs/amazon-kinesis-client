@@ -88,38 +88,13 @@ public class ShardConsumer {
 
     private final ConsumerTaskFactory taskFactory;
 
-    //
-    // TODO: Make bufferSize configurable
-    //
     public ShardConsumer(
             RecordsPublisher recordsPublisher,
             ExecutorService executorService,
             ShardInfo shardInfo,
             Optional<Long> logWarningForTaskAfterMillis,
             ShardConsumerArgument shardConsumerArgument,
-            TaskExecutionListener taskExecutionListener,
-            int readTimeoutsToIgnoreBeforeWarning,
-            ConsumerTaskFactory consumerTaskFactory) {
-        this(
-                recordsPublisher,
-                executorService,
-                shardInfo,
-                logWarningForTaskAfterMillis,
-                shardConsumerArgument,
-                ConsumerStates.INITIAL_STATE,
-                8,
-                taskExecutionListener,
-                readTimeoutsToIgnoreBeforeWarning,
-                consumerTaskFactory);
-    }
-
-    public ShardConsumer(
-            RecordsPublisher recordsPublisher,
-            ExecutorService executorService,
-            ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis,
-            ShardConsumerArgument shardConsumerArgument,
-            ConsumerState initialState,
+            ConsumerState consumerState,
             int bufferSize,
             TaskExecutionListener taskExecutionListener,
             int readTimeoutsToIgnoreBeforeWarning,
@@ -131,8 +106,8 @@ public class ShardConsumer {
         this.shardConsumerArgument = shardConsumerArgument;
         this.logWarningForTaskAfterMillis = logWarningForTaskAfterMillis;
         this.taskExecutionListener = taskExecutionListener;
-        this.currentState = initialState;
-        subscriber = new ShardConsumerSubscriber(
+        this.currentState = consumerState == null ? ConsumerStates.INITIAL_STATE : consumerState;
+        this.subscriber = new ShardConsumerSubscriber(
                 recordsPublisher, executorService, bufferSize, this, readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 

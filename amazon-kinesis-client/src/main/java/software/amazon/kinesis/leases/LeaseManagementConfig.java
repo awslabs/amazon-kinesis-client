@@ -42,6 +42,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
+import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
@@ -282,7 +284,33 @@ public class LeaseManagementConfig {
     private long listShardsCacheAllowedAgeInSeconds = 30;
     private int cacheMissWarningModulus = 250;
 
+    /**
+     * The length of time that the lease for the leader will be granted for. If this duration passes without
+     * the leader sending a heartbeat (which would happen if the box or the heartbeat thread dies, for example),
+     * then the worker's leadership will expire and a new leadership election will be held.
+     *
+     * <p>Default value: 120,000 milliseconds</p>
+     */
+    private long dynamoDbLockBasedLeaderLeaseDurationInMillis = 120_000;
+
+    /**
+     * How often the leader should send an update to DynamoDB to note that the worker is still running. It's
+     * recommended to make this at least 3 times smaller than the lease duration.
+     *
+     * <p>Default value: 30,000 milliseconds</p>
+     */
+    private long dynamoDbLockBasedLeaderHeartbeatPeriodInMillis = 30_000;
+
     private MetricsFactory metricsFactory = new NullMetricsFactory();
+
+    /**
+     * Allows customers to enable their KCL application to write stream metadata to the Coordinator table
+     * When StreamMetadataMode is set to TRACK_ONLY,
+     * KCL begins back filling metadata for all streams into the Coordinator table
+     */
+    private StreamInfoMode streamInfoMode = StreamInfoMode.DISABLED;
+
+    private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
     @Deprecated
     public LeaseManagementConfig(

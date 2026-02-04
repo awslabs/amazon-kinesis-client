@@ -1,24 +1,18 @@
-package software.amazon.kinesis.config.crossaccount;
+package software.amazon.kinesis.application.config;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
-import software.amazon.kinesis.config.RetrievalMode;
 
 /**
- * Config for a cross account polling consumer with HTTP protocol of HTTP2
+ * Config for a polling consumer with HTTP protocol of HTTP2
  */
-@Slf4j
-public class ReleaseCanaryCrossAccountPollingH2TestConfig extends KCLCrossAccountAppConfig {
-    private final UUID uniqueId = UUID.randomUUID();
+public class ReleaseCanaryPollingH2TestConfig extends KCLAppConfig {
 
-    private final String applicationName = "CrossAccountPollingH2Test";
-
-    private final String streamName = "2XCrossAccountPollingH2TestStream_" + uniqueId;
+    private final String applicationName = "PollingH2Test";
+    private final String streamName = "PollingH2TestStream";
 
     @Override
     public String getTestName() {

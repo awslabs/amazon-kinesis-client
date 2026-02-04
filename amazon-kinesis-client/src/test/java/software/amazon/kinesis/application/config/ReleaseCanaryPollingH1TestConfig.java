@@ -1,20 +1,18 @@
-package software.amazon.kinesis.config;
+package software.amazon.kinesis.application.config;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
 
 /**
- * Config for a streaming consumer with HTTP protocol of HTTP2
+ * Config for a polling consumer with HTTP protocol of HTTP1
  */
-public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
-    private final UUID uniqueId = UUID.randomUUID();
+public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
 
-    private final String applicationName = "StreamingTest";
-    private final String streamName = "2XStreamingTestStream_" + uniqueId;
+    private final String applicationName = "PollingH1Test";
+    private final String streamName = "PollingH1TestStream";
 
     @Override
     public String getTestName() {
@@ -28,11 +26,11 @@ public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
 
     @Override
     public Protocol getKinesisClientProtocol() {
-        return Protocol.HTTP2;
+        return Protocol.HTTP1_1;
     }
 
     @Override
     public RetrievalMode getRetrievalMode() {
-        return RetrievalMode.STREAMING;
+        return RetrievalMode.POLLING;
     }
 }

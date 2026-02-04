@@ -1,8 +1,8 @@
-package software.amazon.kinesis.config.crossaccount;
+package software.amazon.kinesis.application.config.crossaccount;
 
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
-import software.amazon.kinesis.config.KCLAppConfig;
+import software.amazon.kinesis.application.config.KCLAppConfig;
 
 /**
  * Config class to configure cross account integration tests.
