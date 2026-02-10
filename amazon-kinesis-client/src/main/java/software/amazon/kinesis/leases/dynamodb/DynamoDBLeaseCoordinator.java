@@ -406,6 +406,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public void stopLeaseTaker() {
+        log.info("Stopping lease taker...");
         // the method is called in worker graceful shutdown. We want to stop any further lease shutdown
         // so we don't interrupt worker shutdown.
         Optional.ofNullable(leaseGracefulShutdownHandler).ifPresent(LeaseGracefulShutdownHandler::stop);
