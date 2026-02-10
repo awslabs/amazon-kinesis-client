@@ -26,6 +26,7 @@ import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.collect.EvictingQueue;
@@ -131,9 +132,11 @@ public final class WorkerMetricStatsManager {
     }
 
     public void startManager() {
+        // adding jitter to prevent workers from throttling when getting the CPU metrics
+        final long jitter = ThreadLocalRandom.current().nextLong(inMemoryStatsCaptureThreadFrequencyMillis);
         managerProcessFuture = scheduledExecutorService.scheduleWithFixedDelay(
-                this::recordWorkerMetrics, 0, inMemoryStatsCaptureThreadFrequencyMillis, TimeUnit.MILLISECONDS);
-        log.info("Started manager process...");
+                this::recordWorkerMetrics, jitter, inMemoryStatsCaptureThreadFrequencyMillis, TimeUnit.MILLISECONDS);
+        log.info("Started manager process with {} ms initial delay...", jitter);
     }
 
     public void stopManager() {

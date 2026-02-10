@@ -547,7 +547,8 @@ public class LeaseManagementConfig {
     @Accessors(fluent = true)
     public static class WorkerUtilizationAwareAssignmentConfig {
         /**
-         * This defines the frequency of capturing worker metric stats in memory. Default is 1s
+         * This defines the frequency of capturing worker metric stats in memory. This value should
+         * be less than workerMetricsReporterFreqInMillis. Default is 1s
          */
         private long inMemoryWorkerMetricsCaptureFrequencyMillis =
                 Duration.ofSeconds(1L).toMillis();
