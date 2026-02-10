@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -405,12 +406,12 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public void stopLeaseTaker() {
+        // the method is called in worker graceful shutdown. We want to stop any further lease shutdown
+        // so we don't interrupt worker shutdown.
+        Optional.ofNullable(leaseGracefulShutdownHandler).ifPresent(LeaseGracefulShutdownHandler::stop);
+        Optional.ofNullable(leaseDiscoveryFuture).ifPresent(f -> f.cancel(false));
         if (takerFuture != null) {
             takerFuture.cancel(false);
-            leaseDiscoveryFuture.cancel(false);
-            // the method is called in worker graceful shutdown. We want to stop any further lease shutdown
-            // so we don't interrupt worker shutdown.
-            leaseGracefulShutdownHandler.stop();
         }
     }
 
