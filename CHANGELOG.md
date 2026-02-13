@@ -5,6 +5,10 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.4.0 (February 12, 2026)
+* [#1664](https://github.com/awslabs/amazon-kinesis-client/pull/1664) Add streamId support in KCL (reserved for future use)
+* [#1698](https://github.com/awslabs/amazon-kinesis-client/pull/1698) Introduce jitter to WorkerMetricStatsManager startup
+
 ### Release 3.3.0 (January 23, 2026)
 * [#1653](https://github.com/awslabs/amazon-kinesis-client/pull/1653) Add missing PR in 3.2.1 changelog
 * [#1656](https://github.com/awslabs/amazon-kinesis-client/pull/1656) Log error if there is an issue in KPL record deaggregation 
