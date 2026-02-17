@@ -252,7 +252,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
     public void stopLeaseTakerCancelsLeaseDiscoveryFuture() throws Exception {
         TestHarnessBuilder builder = new TestHarnessBuilder();
 
-        Map<String, Lease> addedLeases = builder.withLease("1", WORKER_ID)
+        builder.withLease("1", WORKER_ID)
                 .withLease("2", WORKER_ID)
                 .withLease("3", WORKER_ID)
                 .withLease("4", WORKER_ID)
@@ -260,7 +260,6 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 .build();
 
         coordinator.stopLeaseTaker();
-        // ensure that LeaseDiscoveryFuture is run at least once
         Thread.sleep(LEASE_DURATION_MILLIS);
 
         assertEquals(0, coordinator.getAssignments().size());
