@@ -197,6 +197,12 @@
     </dependency>
 
     <dependency>
+      <groupId>org.ojalgo</groupId>
+      <artifactId>ojalgo</artifactId>
+      <version>56.1.1</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
       <version>1.18.38</version>
@@ -375,6 +381,7 @@
         <version>3.7.0</version>
         <configuration>
           <excludePackageNames>com.amazonaws.services.kinesis.producer.protobuf</excludePackageNames>
+          <skip>true</skip>
         </configuration>
         <executions>
           <execution>
