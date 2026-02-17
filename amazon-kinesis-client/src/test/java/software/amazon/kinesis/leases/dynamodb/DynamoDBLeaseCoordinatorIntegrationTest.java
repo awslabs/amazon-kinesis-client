@@ -101,9 +101,9 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                     DefaultSdkAutoConstructList.getInstance());
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
-        leaseRefresher.waitUntilLeaseTableExists(10L, 900L);
+        leaseRefresher.waitUntilLeaseTableExists(10L, 600L);
         leaseRefresher.createLeaseOwnerToLeaseKeyIndexIfNotExists();
-        leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(10L, 600L);
+        leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(10L, 900L);
 
         int retryLeft = ATTEMPTS;
 
