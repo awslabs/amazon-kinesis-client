@@ -101,6 +101,9 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                     DefaultSdkAutoConstructList.getInstance());
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        leaseRefresher.waitUntilLeaseTableExists(10L, 600L);
+        leaseRefresher.createLeaseOwnerToLeaseKeyIndexIfNotExists();
+        leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(10L, 900L);
 
         int retryLeft = ATTEMPTS;
 
@@ -223,6 +226,43 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         List<Lease> allLeases = coordinator.allLeases();
         assertThat(allLeases.size(), equalTo(addedLeases.size()));
         assertThat(allLeases.containsAll(addedLeases.values()), equalTo(true));
+    }
+
+    /**
+     * Tests if leaseDiscoveryFuture runs at least once after waiting for LEASE_DURATION_MILLIS
+     */
+    @Test
+    public void testLeaseDiscoveryFutureRuns() throws Exception {
+        TestHarnessBuilder builder = new TestHarnessBuilder();
+
+        Map<String, Lease> addedLeases = builder.withLease("1", WORKER_ID)
+                .withLease("2", WORKER_ID)
+                .withLease("3", WORKER_ID)
+                .withLease("4", WORKER_ID)
+                .withLease("5", WORKER_ID)
+                .build();
+
+        // ensure that LeaseDiscoveryFuture is run at least once
+        Thread.sleep(LEASE_DURATION_MILLIS);
+
+        assertEquals(addedLeases.size(), coordinator.getAssignments().size());
+    }
+
+    @Test
+    public void stopLeaseTakerCancelsLeaseDiscoveryFuture() throws Exception {
+        TestHarnessBuilder builder = new TestHarnessBuilder();
+
+        builder.withLease("1", WORKER_ID)
+                .withLease("2", WORKER_ID)
+                .withLease("3", WORKER_ID)
+                .withLease("4", WORKER_ID)
+                .withLease("5", WORKER_ID)
+                .build();
+
+        coordinator.stopLeaseTaker();
+        Thread.sleep(LEASE_DURATION_MILLIS);
+
+        assertEquals(0, coordinator.getAssignments().size());
     }
 
     /**
