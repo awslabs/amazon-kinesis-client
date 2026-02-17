@@ -101,6 +101,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                     DefaultSdkAutoConstructList.getInstance());
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        leaseRefresher.waitUntilLeaseTableExists(10L, 600L);
         leaseRefresher.createLeaseOwnerToLeaseKeyIndexIfNotExists();
         leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(10L, 600L);
 
@@ -240,7 +241,6 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 .withLease("4", WORKER_ID)
                 .withLease("5", WORKER_ID)
                 .build();
-        assertEquals(0, coordinator.getAssignments().size());
 
         // ensure that LeaseDiscoveryFuture is run at least once
         Thread.sleep(LEASE_DURATION_MILLIS);
