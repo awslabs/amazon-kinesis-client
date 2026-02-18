@@ -997,6 +997,7 @@ public class Scheduler implements Runnable {
             // no more leases will be acquired.
             //
             migrationComponentsInitializer.shutdown();
+            migrationStateMachine.shutdown();
             leaseCoordinator.stopLeaseTaker();
 
             Collection<Lease> leases = leaseCoordinator.getAssignments();

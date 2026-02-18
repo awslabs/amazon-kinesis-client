@@ -65,6 +65,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
+import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
@@ -1292,29 +1294,31 @@ public class SchedulerTest {
      * initializer should still be shutdown.
      */
     @Test
-    public void testGracefulShutdownCallsMigrationComponentsInitializerShutdown() throws Exception {
+    public void testGracefulShutdownCallsShutdownForComponents() throws Exception {
         DynamicMigrationComponentsInitializer mockInitializer = mock(DynamicMigrationComponentsInitializer.class);
+        MigrationStateMachine mockMigrationStateMachine = mock(MigrationStateMachineImpl.class);
 
-        Field initializerField = Scheduler.class.getDeclaredField("migrationComponentsInitializer");
-        initializerField.setAccessible(true);
-        initializerField.set(scheduler, mockInitializer);
+        setSchedulerFieldToAccessible("migrationComponentsInitializer", mockInitializer);
+        setSchedulerFieldToAccessible("migrationStateMachine", mockMigrationStateMachine);
 
         scheduler.startGracefulShutdown().get();
 
         verify(mockInitializer, times(2)).shutdown();
+        verify(mockMigrationStateMachine, times(2)).shutdown();
     }
 
     @Test
-    public void testSchedulerShutdownCallsMigrationComponentsInitializerShutdown() throws Exception {
+    public void testSchedulerShutdownCallsShutdownForComponents() throws Exception {
         DynamicMigrationComponentsInitializer mockInitializer = mock(DynamicMigrationComponentsInitializer.class);
+        MigrationStateMachine mockMigrationStateMachine = mock(MigrationStateMachineImpl.class);
 
-        Field initializerField = Scheduler.class.getDeclaredField("migrationComponentsInitializer");
-        initializerField.setAccessible(true);
-        initializerField.set(scheduler, mockInitializer);
+        setSchedulerFieldToAccessible("migrationComponentsInitializer", mockInitializer);
+        setSchedulerFieldToAccessible("migrationStateMachine", mockMigrationStateMachine);
 
         scheduler.shutdown();
 
         verify(mockInitializer, times(1)).shutdown();
+        verify(mockMigrationStateMachine, times(1)).shutdown();
     }
 
     @Test
@@ -1594,6 +1598,13 @@ public class SchedulerTest {
                         metricsConfig,
                         processorConfig,
                         retrievalConfig));
+    }
+
+    private void setSchedulerFieldToAccessible(final String varName, final Object mockComponent)
+            throws NoSuchFieldException, IllegalAccessException {
+        Field field = Scheduler.class.getDeclaredField(varName);
+        field.setAccessible(true);
+        field.set(scheduler, mockComponent);
     }
 
     private static String constructStreamIdentifierSer(long accountId, String streamName) {
