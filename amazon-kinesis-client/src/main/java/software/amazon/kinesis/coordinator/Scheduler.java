@@ -996,6 +996,7 @@ public class Scheduler implements Runnable {
             // Stop accepting new leases. Once we do this we can be sure that
             // no more leases will be acquired.
             //
+            migrationComponentsInitializer.shutdown();
             leaseCoordinator.stopLeaseTaker();
 
             Collection<Lease> leases = leaseCoordinator.getAssignments();

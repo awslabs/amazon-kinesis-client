@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.coordinator;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1283,6 +1284,37 @@ public class SchedulerTest {
         verify(leaseCoordinator, times(1)).stop();
         verify(workerStateChangeListener, times(1))
                 .onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
+    }
+
+    /**
+     * The initializer gets shutdown in two places - once in the GracefulShutdownCallable and another during the
+     * shutdown() method of the scheduler. In the case where startGracefulShutdown isn't called, the
+     * initializer should still be shutdown.
+     */
+    @Test
+    public void testGracefulShutdownCallsMigrationComponentsInitializerShutdown() throws Exception {
+        DynamicMigrationComponentsInitializer mockInitializer = mock(DynamicMigrationComponentsInitializer.class);
+
+        Field initializerField = Scheduler.class.getDeclaredField("migrationComponentsInitializer");
+        initializerField.setAccessible(true);
+        initializerField.set(scheduler, mockInitializer);
+
+        scheduler.startGracefulShutdown();
+
+        verify(mockInitializer, times(2)).shutdown();
+    }
+
+    @Test
+    public void testSchedulerShutdownCallsMigrationComponentsInitializerShutdown() throws Exception {
+        DynamicMigrationComponentsInitializer mockInitializer = mock(DynamicMigrationComponentsInitializer.class);
+
+        Field initializerField = Scheduler.class.getDeclaredField("migrationComponentsInitializer");
+        initializerField.setAccessible(true);
+        initializerField.set(scheduler, mockInitializer);
+
+        scheduler.shutdown();
+
+        verify(mockInitializer, times(1)).shutdown();
     }
 
     @Test
