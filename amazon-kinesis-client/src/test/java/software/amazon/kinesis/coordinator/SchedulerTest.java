@@ -1299,7 +1299,7 @@ public class SchedulerTest {
         initializerField.setAccessible(true);
         initializerField.set(scheduler, mockInitializer);
 
-        scheduler.startGracefulShutdown();
+        scheduler.startGracefulShutdown().get();
 
         verify(mockInitializer, times(2)).shutdown();
     }
