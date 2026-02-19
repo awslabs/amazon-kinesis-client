@@ -231,15 +231,16 @@ public final class DynamicMigrationComponentsInitializer {
         threadPool.shutdown();
         try {
             if (!threadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                log.info("{} did not shutdown in {}s, forcefully shutting down",
-                        threadPoolName, SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
+                log.info(
+                        "{} did not shutdown in {}s, forcefully shutting down",
+                        threadPoolName,
+                        SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
                 lamThreadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
             log.warn("Interrupted while waiting for shutdown of {} thread pool", threadPoolName, e);
             lamThreadPool.shutdownNow();
         }
-
     }
 
     private void startWorkerMetricsReporting() throws DependencyException {
