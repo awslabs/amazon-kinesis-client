@@ -213,37 +213,33 @@ public final class DynamicMigrationComponentsInitializer {
             // since scheduler still accesses the leader decider while shutting down
             stopWorkerMetricsReporter();
             workerMetricsManager.stopManager();
+            initialized = false;
         }
 
         // lam does not manage lifecycle of its threadpool to easily stop/start dynamically.
         // once migration code is obsolete (i.e. all 3x functionality is the baseline and no
         // migration is needed), it can be moved inside lam
-        log.info("Shutting down lamThreadPool and workerMetrics reporter thread pool");
-        lamThreadPool.shutdown();
-        workerMetricsThreadPool.shutdown();
+        shutdownThreadPool(lamThreadPool, "LeaseAssignmentManager");
+        shutdownThreadPool(workerMetricsThreadPool, "WorkerMetrics");
+    }
+
+    private void shutdownThreadPool(final ScheduledExecutorService threadPool, final String threadPoolName) {
+        if (threadPool.isShutdown()) {
+            return;
+        }
+        log.info("Shutting down {} thread pool", threadPoolName);
+        threadPool.shutdown();
         try {
-            if (!lamThreadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            if (!threadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 log.info(
-                        "LamThreadPool did not shutdown in {}s, forcefully shutting down",
+                        "{} did not shutdown in {}s, forcefully shutting down",
+                        threadPoolName,
                         SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
                 lamThreadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
-            log.warn("Interrupted while waiting for shutdown of LeaseAssignmentManager ThreadPool", e);
+            log.warn("Interrupted while waiting for shutdown of {} thread pool", threadPoolName, e);
             lamThreadPool.shutdownNow();
-        }
-
-        try {
-            if (!workerMetricsThreadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                log.info(
-                        "WorkerMetricsThreadPool did not shutdown in {}s, forcefully shutting down",
-                        SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
-                workerMetricsThreadPool.shutdownNow();
-            }
-        } catch (final InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Interrupted while waiting for shutdown of WorkerMetricStatsManager ThreadPool", e);
-            workerMetricsThreadPool.shutdownNow();
         }
     }
 
