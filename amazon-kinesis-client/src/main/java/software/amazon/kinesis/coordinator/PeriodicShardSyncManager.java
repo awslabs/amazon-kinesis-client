@@ -49,6 +49,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.common.StreamIdentifier.StreamType;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
@@ -453,7 +454,9 @@ class PeriodicShardSyncManager {
         // Sort the hash ranges by starting hash key.
         List<Lease> sortedLeasesWithHashKeyRanges = sortLeasesByHashRange(leasesWithHashKeyRanges);
         if (sortedLeasesWithHashKeyRanges.isEmpty()) {
-            log.error("No leases with valid hashranges found for stream {}", streamIdentifier);
+            if (isHashRangeErrorLoggingEnabled(streamIdentifier)) {
+                log.error("No leases with valid hashranges found for stream {}", streamIdentifier);
+            }
             return Optional.of(new HashRangeHole());
         }
         // Validate for hashranges bounds.
@@ -467,11 +470,13 @@ class PeriodicShardSyncManager {
                         .hashKeyRangeForLease()
                         .endingHashKey()
                         .equals(MAX_HASH_KEY)) {
-            log.error(
-                    "Incomplete hash range found for stream {} between {} and {}.",
-                    streamIdentifier,
-                    sortedLeasesWithHashKeyRanges.get(0),
-                    sortedLeasesWithHashKeyRanges.get(sortedLeasesWithHashKeyRanges.size() - 1));
+            if (isHashRangeErrorLoggingEnabled(streamIdentifier)) {
+                log.error(
+                        "Incomplete hash range found for stream {} between {} and {}.",
+                        streamIdentifier,
+                        sortedLeasesWithHashKeyRanges.get(0),
+                        sortedLeasesWithHashKeyRanges.get(sortedLeasesWithHashKeyRanges.size() - 1));
+            }
             return Optional.of(new HashRangeHole(
                     sortedLeasesWithHashKeyRanges.get(0).hashKeyRangeForLease(),
                     sortedLeasesWithHashKeyRanges
@@ -498,11 +503,13 @@ class PeriodicShardSyncManager {
                     // Case of non overlapping leases when rangediff is positive. signum() will be 1 for positive.
                     // If rangeDiff is 1, then it is a case of continuous hashrange. If not, it is a hole.
                     if (!rangeDiff.equals(BigInteger.ONE)) {
-                        log.error(
-                                "Incomplete hash range found for {} between {} and {}.",
-                                streamIdentifier,
-                                leftMostLeaseToReportInCaseOfHole,
-                                sortedLeasesWithHashKeyRanges.get(i));
+                        if (isHashRangeErrorLoggingEnabled(streamIdentifier)) {
+                            log.error(
+                                    "Incomplete hash range found for {} between {} and {}.",
+                                    streamIdentifier,
+                                    leftMostLeaseToReportInCaseOfHole,
+                                    sortedLeasesWithHashKeyRanges.get(i));
+                        }
                         return Optional.of(new HashRangeHole(
                                 leftMostLeaseToReportInCaseOfHole.hashKeyRangeForLease(),
                                 sortedLeasesWithHashKeyRanges.get(i).hashKeyRangeForLease()));
@@ -522,6 +529,15 @@ class PeriodicShardSyncManager {
         }
         Collections.sort(leasesWithHashKeyRanges, new HashKeyRangeComparator());
         return leasesWithHashKeyRanges;
+    }
+
+    /**
+     * Returns true if hash range error logging is enabled for the given stream.
+     * DynamoDB Streams uses dummy hash ranges and does not require hash range validation,
+     * so error logs are suppressed for DynamoDB Streams identifiers.
+     */
+    private static boolean isHashRangeErrorLoggingEnabled(StreamIdentifier streamIdentifier) {
+        return streamIdentifier.streamType() != StreamType.DYNAMODB_STREAMS;
     }
 
     @Value
