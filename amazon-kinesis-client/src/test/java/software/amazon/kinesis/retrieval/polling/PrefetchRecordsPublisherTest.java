@@ -43,6 +43,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -265,13 +266,21 @@ public class PrefetchRecordsPublisherTest {
         final Record record2 = buildRecordWithData(createByteBufferWithData("Second batch".getBytes()));
         mockGetRecordsAdapterWithRecordBatches(Collections.singletonList(record1), Collections.singletonList(record2));
 
-        getRecordsCache = createPrefetchRecordsPublisher(0, 0L);
+        getRecordsCache = createPrefetchRecordsPublisher(0, 100L);
         getRecordsCache.start(sequenceNumber, initialPosition);
 
         final List<KinesisClientRecord> expectedRecords1 =
                 Collections.singletonList(KinesisClientRecord.fromRecord(record1));
         final List<KinesisClientRecord> expectedRecords2 =
                 Collections.singletonList(KinesisClientRecord.fromRecord(record2));
+
+        final Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
+        final ArgumentCaptor<Subscription> subscriptionCaptor = ArgumentCaptor.forClass(Subscription.class);
+        getRecordsCache.subscribe(mockSubscriber);
+        verify(mockSubscriber).onSubscribe(subscriptionCaptor.capture());
+
+        // Update to one demand for the subscriber
+        subscriptionCaptor.getValue().request(1);
 
         // Block until first batch is in queue
         blockUntilConditionSatisfied(
@@ -288,6 +297,9 @@ public class PrefetchRecordsPublisherTest {
         // Evict one batch from the queue
         final ProcessRecordsInput result1 = evictPublishedEvent().processRecordsInput();
         assertEquals(expectedRecords1, result1.records());
+
+        // Get second demand
+        subscriptionCaptor.getValue().request(1);
 
         // Block until the second batch is in the queue
         blockUntilConditionSatisfied(

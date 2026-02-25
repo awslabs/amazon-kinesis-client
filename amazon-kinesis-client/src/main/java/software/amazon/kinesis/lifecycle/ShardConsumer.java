@@ -127,9 +127,7 @@ public class ShardConsumer {
             markForShutdown(ShutdownReason.SHARD_END);
             shardEndProcessRecordsInput = input;
             subscription.cancel();
-            return;
         }
-        subscription.request(1);
     }
 
     public void executeLifecycle() {
