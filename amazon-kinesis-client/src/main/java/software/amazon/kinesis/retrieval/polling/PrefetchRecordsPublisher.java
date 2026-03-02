@@ -109,7 +109,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
-    private Instant lastEventDeliveryTime = Instant.EPOCH;
+    private Instant lastEventDeliveryTime = Instant.now();
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
     private final ThrottlingReporter throttlingReporter;
     private final SleepTimeController sleepTimeController;
@@ -402,7 +402,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @Override
             public void request(long n) {
                 publisherSession.requestedResponses().addAndGet(n);
-                drainQueueForRequests();
+                if (maxPendingProcessRecordsInput != 0) {
+                    drainQueueForRequests();
+                }
             }
 
             @Override
@@ -417,7 +419,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     @Override
     public synchronized void notify(RecordsDeliveryAck recordsDeliveryAck) {
-        publisherSession.handleRecordsDeliveryAck(recordsDeliveryAck, streamAndShardId, () -> drainQueueForRequests());
+        if (maxPendingProcessRecordsInput != 0) {
+            publisherSession.handleRecordsDeliveryAck(
+                    recordsDeliveryAck, streamAndShardId, () -> drainQueueForRequests());
+        } else {
+            publisherSession.handleRecordsDeliveryAck(recordsDeliveryAck, streamAndShardId, () -> {});
+        }
         // Take action based on the time spent by the event in queue.
         takeDelayedDeliveryActionIfRequired(streamAndShardId, lastEventDeliveryTime, log);
     }
@@ -712,6 +719,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         public synchronized boolean shouldGetNewRecords() {
             if (log.isDebugEnabled()) {
                 log.debug("{} : Current Prefetch Counter States: {}", streamAndShardId, this.toString());
+            }
+            if (maxPendingProcessRecordsInput == 0 && !getPublisherSession().hasDemandToPublish()) {
+                return false;
             }
             if (pendingProcessRecordsInput == 0) {
                 return true;

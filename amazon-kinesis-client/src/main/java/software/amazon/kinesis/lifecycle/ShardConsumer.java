@@ -129,7 +129,9 @@ public class ShardConsumer {
             subscription.cancel();
             return;
         }
-        subscription.request(1);
+        if (bufferSize != 0) {
+            subscription.request(1);
+        }
     }
 
     public void executeLifecycle() {
