@@ -50,7 +50,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
     @VisibleForTesting
     protected static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT_LIMIT = 5;
 
-    public static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT = 4;
+    private static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT = 4;
 
     public static final long MIN_IDLE_MILLIS_BETWEEN_READS = 200L;
 
