@@ -109,7 +109,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
-    private Instant lastEventDeliveryTime = Instant.EPOCH;
+    private Instant lastEventDeliveryTime = Instant.now();
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
     private final ThrottlingReporter throttlingReporter;
     private final SleepTimeController sleepTimeController;
