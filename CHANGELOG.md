@@ -5,6 +5,11 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.4.1 (March 2, 2026)
+* [#1708](https://github.com/awslabs/amazon-kinesis-client/pull/1708) Fix bug that occurs when maxPendingProcessRecordsInput is set to 0
+* [#1702](https://github.com/awslabs/amazon-kinesis-client/pull/1702) Shutdown migrationComponentsInitializer as part of graceful shutdown
+* [#1700](https://github.com/awslabs/amazon-kinesis-client/pull/1700) Fix shutdown behavior for DDBLeaseCoordinator
+
 ### Release 3.4.0 (February 12, 2026)
 * [#1664](https://github.com/awslabs/amazon-kinesis-client/pull/1664) Add streamId support in KCL (reserved for future use)
 * [#1698](https://github.com/awslabs/amazon-kinesis-client/pull/1698) Introduce jitter to WorkerMetricStatsManager startup
