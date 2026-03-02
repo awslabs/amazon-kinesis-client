@@ -49,6 +49,11 @@ public class PollingConfigTest {
         config.maxRecords(PollingConfig.DEFAULT_MAX_RECORDS + 1);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testMaxPendingProcessRecordsInputLimit() {
+        config.maxPendingProcessRecordsInput(PollingConfig.DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT_LIMIT + 1);
+    }
+
     @Test
     public void testMinIdleMillisLimit() {
         config.idleTimeBetweenReadsInMillis(0);

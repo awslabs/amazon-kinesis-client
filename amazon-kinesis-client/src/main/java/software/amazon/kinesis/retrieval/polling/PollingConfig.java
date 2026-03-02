@@ -46,6 +46,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
+    public static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT_LIMIT = 5;
+
     public static final int DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT = 4;
 
     public static final long MIN_IDLE_MILLIS_BETWEEN_READS = 200L;
@@ -192,6 +194,16 @@ public class PollingConfig implements RetrievalSpecificConfig {
                     + " but current value is " + maxRecords());
         }
         this.maxRecords = maxRecords;
+        return this;
+    }
+
+    public PollingConfig maxPendingProcessRecordsInput(int maxPendingProcessRecordsInput) {
+        if (maxPendingProcessRecordsInput > 5) {
+            throw new IllegalArgumentException("maxPendingProcessRecordsInput must be less than or equal to "
+                    + DEFAULT_MAX_PENDING_PROCESS_RECORDS_INPUT_LIMIT
+                    + " but current value is " + maxPendingProcessRecordsInput);
+        }
+        this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
         return this;
     }
 

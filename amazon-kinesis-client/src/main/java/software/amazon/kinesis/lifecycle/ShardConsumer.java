@@ -127,6 +127,10 @@ public class ShardConsumer {
             markForShutdown(ShutdownReason.SHARD_END);
             shardEndProcessRecordsInput = input;
             subscription.cancel();
+            return;
+        }
+        if (bufferSize != 0) {
+            subscription.request(1);
         }
     }
 
