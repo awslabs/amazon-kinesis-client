@@ -224,7 +224,7 @@ public class AggregatorUtil {
 
     private byte[] md5(byte[] data) {
         try {
-            MessageDigest d = MessageDigest.getInstance("MD5");
+            MessageDigest d = MessageDigest.getInstance("SHA-512");
             return d.digest(data);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
