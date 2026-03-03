@@ -123,6 +123,28 @@ public class PeriodicShardSyncManagerTest {
     }
 
     @Test
+    public void testHoleDetectedForDynamoDBStreamsWithoutErrorLog() {
+        // DynamoDB Streams uses dummy hash ranges (0, 1) — hole detection should still return a hole
+        // but without logging an ERROR. This test verifies the hole is still detected.
+        StreamIdentifier ddbStreamIdentifier = StreamIdentifier.multiStreamInstance(
+                "123456789012:stream:456", StreamIdentifier.StreamType.DYNAMODB_STREAMS);
+        List<Lease> hashRanges = new ArrayList<HashKeyRangeForLease>() {
+            {
+                add(deserialize("0", "1")); // Incomplete — missing 2 to MAX_HASH_KEY
+            }
+        }.stream()
+                .map(hashKeyRangeForLease -> {
+                    Lease lease = new MultiStreamLease();
+                    lease.hashKeyRange(hashKeyRangeForLease);
+                    lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+                    return lease;
+                })
+                .collect(Collectors.toList());
+        Assert.assertTrue(PeriodicShardSyncManager.checkForHoleInHashKeyRanges(ddbStreamIdentifier, hashRanges)
+                .isPresent());
+    }
+
+    @Test
     public void testForSuccessWhenHashRangesAreComplete() {
         List<Lease> hashRanges = new ArrayList<HashKeyRangeForLease>() {
             {
