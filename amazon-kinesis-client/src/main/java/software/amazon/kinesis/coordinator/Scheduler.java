@@ -469,6 +469,7 @@ public class Scheduler implements Runnable {
      */
     @Override
     public void run() {
+        log.info("Running with custom KCL code");
         if (shutdown) {
             return;
         }

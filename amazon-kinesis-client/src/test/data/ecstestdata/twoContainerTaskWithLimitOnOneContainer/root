@@ -1,0 +1,51 @@
+{
+  "DockerId": "d1af158b11844d178eeb9c145a560fd4-1511132861",
+  "Name": "my-app",
+  "DockerName": "my-app",
+  "Image": "111122223333.dkr.ecr.us-east-1.amazonaws.com/my-app-image@sha256:83bdaf5a1d94b969329d45bb6e34753f5962bf38a2786ebe39446434365f56e5",
+  "ImageID": "sha256:83bdaf5a1d94b969329d45bb6e34753f5962bf38a2786ebe39446434365f56e5",
+  "Labels": {
+    "com.amazonaws.ecs.cluster": "arn:aws:ecs:us-east-1:111122223333:cluster/my-cluster",
+    "com.amazonaws.ecs.container-name": "my-app",
+    "com.amazonaws.ecs.task-arn": "arn:aws:ecs:us-east-1:111122223333:task/my-cluster/d1af158b11844d178eeb9c145a560fd4",
+    "com.amazonaws.ecs.task-definition-family": "my-app",
+    "com.amazonaws.ecs.task-definition-version": "5"
+  },
+  "DesiredStatus": "RUNNING",
+  "KnownStatus": "RUNNING",
+  "Limits": {
+    "CPU": 2
+  },
+  "CreatedAt": "2026-03-02T18:36:40.536953826Z",
+  "StartedAt": "2026-03-02T18:36:40.536953826Z",
+  "Type": "NORMAL",
+  "LogDriver": "awslogs",
+  "LogOptions": {
+    "awslogs-create-group": "true",
+    "awslogs-group": "/ecs/my-app",
+    "awslogs-region": "us-east-1",
+    "awslogs-stream": "ecs/my-app/d1af158b11844d178eeb9c145a560fd4",
+    "mode": "non-blocking"
+  },
+  "ContainerARN": "arn:aws:ecs:us-east-1:111122223333:container/my-cluster/d1af158b11844d178eeb9c145a560fd4/64296f09-6bfc-4fef-b712-e4a6e9fce548",
+  "Networks": [
+    {
+      "NetworkMode": "awsvpc",
+      "IPv4Addresses": [
+        "172.31.29.183"
+      ],
+      "AttachmentIndex": 0,
+      "MACAddress": "0a:ff:cb:bb:07:25",
+      "IPv4SubnetCIDRBlock": "172.31.16.0/20",
+      "DomainNameServers": [
+        "172.31.0.2"
+      ],
+      "DomainNameSearchList": [
+        "ec2.internal"
+      ],
+      "PrivateDNSName": "ip-172-31-29-183.ec2.internal",
+      "SubnetGatewayIpv4Address": "172.31.16.1/20"
+    }
+  ],
+  "Snapshotter": "overlayfs"
+}
