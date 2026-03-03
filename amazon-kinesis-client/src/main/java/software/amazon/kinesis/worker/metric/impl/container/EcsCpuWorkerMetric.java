@@ -178,7 +178,8 @@ public class EcsCpuWorkerMetric implements WorkerMetric {
         final Iterator<JsonNode> containersIterator =
                 taskStatsRootNode.path("Containers").iterator();
 
-        double currentContainerCpuShare = 0;
+        // The default if this value is not provided is 2 CPU shares (in ECS agent versions >= 1.2.0)
+        double currentContainerCpuShare = 2;
         double containersCpuShareSum = 0;
 
         // If ECS is being used with FARGATE, some containers may not have a CPU limit set, but the Task level limit
