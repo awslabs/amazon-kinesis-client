@@ -26,6 +26,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -35,6 +36,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
 /**
@@ -86,12 +88,22 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         this.shardId = shardId;
     }
 
+    @Deprecated
     @Override
-    public GetRecordsResponse getRecords(final int maxRecords) {
+    public GetRecordsResponse getRecords(int maxRecords) {
+        return getRecordsGeneric(maxRecords, DataFetcherResult::accept);
+    }
+
+    @Override
+    public GetRecordsResponseAdapter getRecordsAdapter(final int maxRecords) {
+        return getRecordsGeneric(maxRecords, DataFetcherResult::acceptAdapter);
+    }
+
+    private <T> T getRecordsGeneric(final int maxRecords, Function<DataFetcherResult, T> acceptMethod) {
         if (executorService.isShutdown()) {
             throw new IllegalStateException("Strategy has been shutdown");
         }
-        GetRecordsResponse result = null;
+        T result = null;
         CompletionService<DataFetcherResult> completionService = completionServiceSupplier.get();
         Set<Future<DataFetcherResult>> futures = new HashSet<>();
         Callable<DataFetcherResult> retrieverCall = createRetrieverCallable();
@@ -112,7 +124,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
                         // to the caller.  This ensures that the shard iterator is consistently advance in step with
                         // what the caller sees.
                         //
-                        result = resultFuture.get().accept();
+                        result = acceptMethod.apply(resultFuture.get());
                         break;
                     }
                 } catch (ExecutionException e) {
