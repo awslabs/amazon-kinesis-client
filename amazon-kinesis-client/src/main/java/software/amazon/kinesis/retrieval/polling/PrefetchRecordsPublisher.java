@@ -16,7 +16,6 @@
 package software.amazon.kinesis.retrieval.polling;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -54,7 +53,6 @@ import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingFactory;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
 import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
@@ -570,14 +568,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     lastGetRecordsReturnedRecordsCount =
                             getRecordsResult.records().size();
 
-                    final List<KinesisClientRecord> records = getRecordsResult.records();
-                    ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
-                            .records(records)
-                            .millisBehindLatest(getRecordsResult.millisBehindLatest())
+                    ProcessRecordsInput processRecordsInput = getRecordsResult.toProcessRecordsInput().toBuilder()
                             .cacheEntryTime(lastSuccessfulCall)
                             .isAtShardEnd(
                                     getRecordsRetrievalStrategy.dataFetcher().isShardEndReached())
-                            .childShards(getRecordsResult.childShards())
                             .build();
 
                     PrefetchRecordsRetrieved recordsRetrieved = new PrefetchRecordsRetrieved(
