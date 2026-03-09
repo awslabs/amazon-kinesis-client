@@ -449,11 +449,10 @@ public class MultiLangDaemonConfigurationTest {
         utilsBean.setProperty(configuration, "retrievalMode", "invalid");
     }
 
-    // @Test
-    // TODO : Enable this test once https://github.com/awslabs/amazon-kinesis-client/issues/692 is resolved
+    @Test
     public void testmetricsEnabledDimensions() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
-        configuration.setMetricsEnabledDimensions(new String[] {"Operation"});
+        configuration.setMetricsEnabledDimensions(new String[] {"Operation, ShardId"});
         configuration.resolvedConfiguration(shardRecordProcessorFactory);
     }
 
