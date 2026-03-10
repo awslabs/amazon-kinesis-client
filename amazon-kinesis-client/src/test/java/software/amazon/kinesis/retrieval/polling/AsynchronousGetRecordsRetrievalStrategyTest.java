@@ -83,8 +83,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
                 GetRecordsResponse.builder().build());
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
-        when(dataFetcherResult.accept())
-                .thenReturn(((KinesisGetRecordsResponseAdapter) expectedResponses).getRecordsResponse());
+        when(dataFetcherResult.acceptAdapter()).thenReturn(expectedResponses);
     }
 
     @Test
@@ -103,6 +102,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(completionService).submit(any());
         verify(completionService).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
         verify(successfulFuture).get();
+        verify(dataFetcherResult).acceptAdapter();
         verify(successfulFuture).cancel(eq(true));
 
         assertThat(result, equalTo(expectedResponses));
@@ -125,6 +125,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(completionService, times(2)).submit(any());
         verify(completionService, times(2)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
         verify(successfulFuture).get();
+        verify(dataFetcherResult).acceptAdapter();
         verify(blockedFuture, never()).get();
         verify(successfulFuture).cancel(eq(true));
         verify(blockedFuture).cancel(eq(true));

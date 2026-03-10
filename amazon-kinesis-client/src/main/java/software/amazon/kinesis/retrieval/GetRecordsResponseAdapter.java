@@ -19,6 +19,7 @@ import java.util.List;
 
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 
 @KinesisClientInternalApi
 public interface GetRecordsResponseAdapter {
@@ -57,4 +58,18 @@ public interface GetRecordsResponseAdapter {
      * @return String containing the request id
      */
     String requestId();
+
+    /**
+     * Transforms itself into a ProcessRecordsInput.
+     * This method allows adapter to customize its mapping to ProcessRecordsInput
+     *
+     * @return ProcessRecordsInput
+     */
+    default ProcessRecordsInput toProcessRecordsInput() {
+        return ProcessRecordsInput.builder()
+                .records(this.records())
+                .millisBehindLatest(this.millisBehindLatest())
+                .childShards(this.childShards())
+                .build();
+    }
 }
