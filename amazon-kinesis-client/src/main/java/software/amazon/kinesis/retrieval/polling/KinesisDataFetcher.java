@@ -47,8 +47,10 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -168,7 +170,7 @@ public class KinesisDataFetcher implements DataFetcher {
 
         if (nextIterator != null) {
             try {
-                return new AdvancingResult(getRecords(nextIterator));
+                return new AdvancingResult(getRecordsAdapterWithMetrics(nextIterator));
             } catch (ResourceNotFoundException e) {
                 log.info("Caught ResourceNotFoundException when fetching records for shard {}", streamAndShardId);
                 return TERMINAL_RESULT;
@@ -182,39 +184,49 @@ public class KinesisDataFetcher implements DataFetcher {
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
         // CHECKSTYLE.ON: MemberName
         @Override
-        public GetRecordsResponse getResult() {
-            return GetRecordsResponse.builder()
+        public GetRecordsResponseAdapter getResultAdapter() {
+            return new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                     .millisBehindLatest(null)
                     .records(Collections.emptyList())
                     .nextShardIterator(null)
                     .childShards(Collections.emptyList())
-                    .build();
+                    .build());
         }
 
         @Override
-        public GetRecordsResponse accept() {
+        public GetRecordsResponseAdapter acceptAdapter() {
             isShardEndReached = true;
-            return getResult();
+            return getResultAdapter();
         }
 
         @Override
         public boolean isShardEnd() {
             return isShardEndReached;
         }
+
+        @Override
+        public GetRecordsResponse getResult() {
+            throw new UnsupportedOperationException("Unimplemented method 'getResult', use 'getResultAdapter' instead");
+        }
+
+        @Override
+        public GetRecordsResponse accept() {
+            throw new UnsupportedOperationException("Unimplemented method 'accept', use 'acceptAdapter' instead");
+        }
     };
 
     @Data
     class AdvancingResult implements DataFetcherResult {
 
-        final GetRecordsResponse result;
+        final GetRecordsResponseAdapter result;
 
         @Override
-        public GetRecordsResponse getResult() {
+        public GetRecordsResponseAdapter getResultAdapter() {
             return result;
         }
 
         @Override
-        public GetRecordsResponse accept() {
+        public GetRecordsResponseAdapter acceptAdapter() {
             nextIterator = result.nextShardIterator();
             if (result.records() != null && !result.records().isEmpty()) {
                 lastKnownSequenceNumber = Iterables.getLast(result.records()).sequenceNumber();
@@ -222,12 +234,22 @@ public class KinesisDataFetcher implements DataFetcher {
             if (nextIterator == null) {
                 isShardEndReached = true;
             }
-            return getResult();
+            return getResultAdapter();
         }
 
         @Override
         public boolean isShardEnd() {
             return isShardEndReached;
+        }
+
+        @Override
+        public GetRecordsResponse getResult() {
+            throw new UnsupportedOperationException("Unimplemented method 'getResult', use 'getResultAdapter' instead");
+        }
+
+        @Override
+        public GetRecordsResponse accept() {
+            throw new UnsupportedOperationException("Unimplemented method 'accept', use 'acceptAdapter' instead");
         }
     }
 
@@ -387,14 +409,8 @@ public class KinesisDataFetcher implements DataFetcher {
     public GetRecordsResponse getRecords(@NonNull final String nextIterator) {
         GetRecordsRequest request = getGetRecordsRequest(nextIterator);
 
-        final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
-        MetricsUtil.addStreamId(metricsScope, streamIdentifier);
-        MetricsUtil.addShardId(metricsScope, shardId);
-        boolean success = false;
-        long startTime = System.currentTimeMillis();
         try {
             final GetRecordsResponse response = getGetRecordsResponse(request);
-            success = true;
             return response;
         } catch (ExecutionException e) {
             throw AWS_EXCEPTION_MANAGER.apply(e.getCause());
@@ -404,6 +420,23 @@ public class KinesisDataFetcher implements DataFetcher {
             throw new RuntimeException(e);
         } catch (TimeoutException e) {
             throw new RetryableRetrievalException(e.getMessage(), e);
+        }
+    }
+
+    protected GetRecordsResponseAdapter getRecordsAdapter(String nextIterator) {
+        return new KinesisGetRecordsResponseAdapter(getRecords(nextIterator));
+    }
+
+    private GetRecordsResponseAdapter getRecordsAdapterWithMetrics(String nextIterator) {
+        final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
+        MetricsUtil.addStreamId(metricsScope, streamIdentifier);
+        MetricsUtil.addShardId(metricsScope, shardId);
+        boolean success = false;
+        long startTime = System.currentTimeMillis();
+        try {
+            final GetRecordsResponseAdapter response = getRecordsAdapter(nextIterator);
+            success = true;
+            return response;
         } finally {
             MetricsUtil.addSuccessAndLatency(
                     metricsScope,
