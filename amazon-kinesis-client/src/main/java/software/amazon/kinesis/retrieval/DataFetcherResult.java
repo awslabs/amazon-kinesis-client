@@ -33,7 +33,9 @@ public interface DataFetcherResult {
      * The result of the request to Kinesis
      *
      * @return The result of the request, this can be null if the request failed.
+     * @deprecated implement {@link DataFetcherResult#getResultAdapter()} directly
      */
+    @Deprecated
     GetRecordsResponse getResult();
 
     /**
@@ -51,7 +53,9 @@ public interface DataFetcherResult {
      * further progress can be made.
      *
      * @return the result of the request, this can be null if the request failed.
+     * @deprecated implement {@link DataFetcherResult#acceptAdapter()} directly
      */
+    @Deprecated
     GetRecordsResponse accept();
 
     /**
