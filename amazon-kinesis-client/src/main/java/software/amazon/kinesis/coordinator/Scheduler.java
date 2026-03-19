@@ -1346,11 +1346,8 @@ public class Scheduler implements Runnable {
                                         .accountIdOptional()
                                         .get(),
                                 streamConfig.streamIdentifier().streamName()),
-                streamConfig.streamIdentifier().streamCreationEpochOptional().get());
-
-        streamIdentifierWithArn = streamIdentifierWithArn.toBuilder()
-                .streamName(streamConfig.streamIdentifier().streamName())
-                .build();
+                streamConfig.streamIdentifier().streamCreationEpochOptional().get(),
+                streamConfig.streamIdentifier().streamName());
         return new StreamConfig(
                 streamIdentifierWithArn, streamConfig.initialPositionInStreamExtended(), streamConfig.consumerArn());
     }
