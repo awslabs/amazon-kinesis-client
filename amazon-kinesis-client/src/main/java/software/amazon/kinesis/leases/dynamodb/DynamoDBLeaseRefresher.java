@@ -1473,6 +1473,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             log.warn("Lease and updatedLease have different owners. Lease {}, updatedLease {}", lease, ddbLease);
             return false;
         }
+        if (ddbLease.checkpointOwner().equals(ddbLease.leaseOwner())) {
+            log.warn(
+                    "Lease and checkpoint owners are the same for the updatedLease. Not expected so not renewing"
+                            + " this lease. Lease {}, updatedLease {}",
+                    lease,
+                    ddbLease);
+            return false;
+        }
         // This updates the checkpointOwner and leaseOwner of the authoritative lease so the
         // thread handling the lease graceful shutdown can perform the shutdown logic by checking this signal.
         lease.checkpointOwner(ddbLease.checkpointOwner());

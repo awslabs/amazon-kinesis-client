@@ -215,6 +215,65 @@ class DynamoDBLeaseRenewerTest {
         assertEquals(TRIM_HORIZON, currentLease.checkpoint());
     }
 
+    @Test
+    void testInitializeSkipsPendingCheckpointLeases() throws Exception {
+        leaseRefresher.createLeaseTableIfNotExists();
+        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+
+        // Create lease in pending checkpoint state
+        Lease pendingLease = createDummyLease("pendingLease", WORKER_ID);
+        pendingLease.checkpointOwner("OtherWorker");
+        leaseRefresher.createLeaseIfNotExists(pendingLease);
+
+        // Create normal lease
+        Lease normalLease = createDummyLease("normalLease", WORKER_ID);
+        leaseRefresher.createLeaseIfNotExists(normalLease);
+
+        leaseRenewer.initialize();
+
+        // Should only have the normal lease, not the pending checkpoint one
+        Map<String, Lease> heldLeases = leaseRenewer.getCurrentlyHeldLeases();
+        assertEquals(1, heldLeases.size());
+        assertTrue(heldLeases.containsKey("normalLease"));
+    }
+
+    @Test
+    void testRenewalDropsLeaseWhenCheckpointOwnerMismatch() throws Exception {
+        leaseRefresher.createLeaseTableIfNotExists();
+        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+
+        Lease lease = createDummyLease("testLease", WORKER_ID);
+        lease.checkpointOwner("other worker");
+        leaseRefresher.createLeaseIfNotExists(lease);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+
+        // Verify lease is held initially
+        assertEquals(1, leaseRenewer.getCurrentlyHeldLeases().size());
+
+        // Attempt renewal - should drop the lease because checkpointOwner doesn't match WORKER_ID
+        leaseRenewer.renewLeases();
+
+        // Lease should be dropped
+        Map<String, Lease> heldLeases = leaseRenewer.getCurrentlyHeldLeases();
+        assertEquals(0, heldLeases.size());
+    }
+
+    @Test
+    void testRenewalRenewShutdownRequestedLeasesIfCheckpointOwnerMatches() throws Exception {
+        leaseRefresher.createLeaseTableIfNotExists();
+        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+
+        Lease lease = createDummyLease("testLease", "random");
+        lease.checkpointOwner(WORKER_ID);
+        leaseRefresher.createLeaseIfNotExists(lease);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+
+        assertEquals(1, leaseRenewer.getCurrentlyHeldLeases().size());
+
+        leaseRenewer.renewLeases();
+        assertEquals(1, leaseRenewer.getCurrentlyHeldLeases().size());
+    }
+
     private void createAndPutBadLeaseEntryInTable() {
         final PutItemRequest putItemRequest = PutItemRequest.builder()
                 .tableName(TEST_LEASE_TABLE)
