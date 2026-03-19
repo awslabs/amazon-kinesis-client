@@ -34,6 +34,11 @@ import software.amazon.awssdk.utils.Validate;
 @Accessors(fluent = true)
 public class StreamIdentifier {
 
+    /**
+     * Stream type identifier for Amazon Kinesis Data Streams.
+     */
+    public static final String STREAM_TYPE_KINESIS = "Kinesis";
+
     @Builder.Default
     private final Optional<String> accountIdOptional = Optional.empty();
 
@@ -46,6 +51,15 @@ public class StreamIdentifier {
     @Builder.Default
     @EqualsAndHashCode.Exclude
     private final Optional<Arn> streamArnOptional = Optional.empty();
+
+    /**
+     * The type of stream this identifier represents.
+     * Defaults to {@link #STREAM_TYPE_KINESIS} for standard Kinesis Data Streams.
+     * Adapters for other streaming sources may set a different value.
+     */
+    @Builder.Default
+    @EqualsAndHashCode.Exclude
+    private final String streamType = STREAM_TYPE_KINESIS;
 
     /**
      * Pattern for a serialized {@link StreamIdentifier}. The valid format is
@@ -97,6 +111,18 @@ public class StreamIdentifier {
      * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
      */
     public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
+        return multiStreamInstance(streamIdentifierSer, STREAM_TYPE_KINESIS);
+    }
+
+    /**
+     * Create a multi stream instance for StreamIdentifier from serialized stream identifier
+     * of format {@link #STREAM_IDENTIFIER_PATTERN} with a specified stream type.
+     *
+     * @param streamIdentifierSer a String of {@code account:stream:creationEpoch}
+     * @param streamType the type of stream
+     * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
+     */
+    public static StreamIdentifier multiStreamInstance(String streamIdentifierSer, String streamType) {
         final Matcher matcher = STREAM_IDENTIFIER_PATTERN.matcher(streamIdentifierSer);
         if (matcher.matches()) {
             final String accountId = matcher.group("accountId");
@@ -109,6 +135,7 @@ public class StreamIdentifier {
                     .accountIdOptional(Optional.of(accountId))
                     .streamName(streamName)
                     .streamCreationEpochOptional(Optional.of(creationEpoch))
+                    .streamType(streamType)
                     .build();
         }
 
@@ -148,9 +175,22 @@ public class StreamIdentifier {
      * @param streamName stream name of a Kinesis stream
      */
     public static StreamIdentifier singleStreamInstance(String streamName) {
+        return singleStreamInstance(streamName, STREAM_TYPE_KINESIS);
+    }
+
+    /**
+     * Create a single stream instance for StreamIdentifier from stream name with a specified stream type.
+     *
+     * @param streamName stream name
+     * @param streamType the type of stream
+     */
+    public static StreamIdentifier singleStreamInstance(String streamName, String streamType) {
         Validate.notEmpty(streamName, "StreamName should not be empty");
 
-        return StreamIdentifier.builder().streamName(streamName).build();
+        return StreamIdentifier.builder()
+                .streamName(streamName)
+                .streamType(streamType)
+                .build();
     }
 
     /**
