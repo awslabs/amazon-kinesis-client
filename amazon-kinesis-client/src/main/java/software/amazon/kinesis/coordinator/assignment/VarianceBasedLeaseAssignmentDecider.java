@@ -114,7 +114,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         for (final Lease lease : expiredOrUnAssignedLeases) {
             final WorkerMetricStats workerToAssignLease = assignableWorkerSortedByAvailableCapacity.poll();
             if (nonNull(workerToAssignLease)) {
-                assignLease(lease, workerToAssignLease);
+                assignLease(lease, workerToAssignLease, true);
                 assignedLeases.add(lease);
             } else {
                 log.info("No worker available to assign lease {}", lease.leaseKey());
@@ -280,7 +280,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                     break;
                 }
                 if (nonNull(workerToAssign)) {
-                    assignLease(lease, workerToAssign);
+                    assignLease(lease, workerToAssign, false);
                 }
             }
         }
@@ -305,19 +305,42 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         return getLeasesCombiningToThroughput(workerId, throughputToTake);
     }
 
-    private void assignLease(final Lease lease, final WorkerMetricStats workerMetrics) {
-        if (nonNull(lease.actualOwner()) && lease.actualOwner().equals(workerMetrics.getWorkerId())) {
+    private void assignLease(final Lease lease, final WorkerMetricStats workerMetrics, boolean isExpiredLease) {
+        // Handle edge case: If a lease is in pending checkpoint state (checkpointOwner set) and expired,
+        // we need to allow reassignment even if actualOwner matches the target worker.
+        // This can happen when:
+        // 1. Lease has leaseOwner=A, checkpointOwner=B
+        // 2. Worker B is the only active worker and restarts
+        // 3. Worker B skips the lease (checkpointOwner != null)
+        // 4. Leader sees actualOwner()=B matches target worker B and skips assignment
+        // 5. Lease is stuck - nobody will ever process it
+        // By detecting expired pending checkpoints, we allow the leader to reassign and clear the stuck state.
+        boolean isPendingCheckpointExpired = isExpiredLease && lease.shutdownRequested();
+
+        if (!isPendingCheckpointExpired
+                && nonNull(lease.actualOwner())
+                && lease.actualOwner().equals(workerMetrics.getWorkerId())) {
             // if a new owner and current owner are same then no assignment to do
             // put back the worker as well as no assignment is done
             assignableWorkerSortedByAvailableCapacity.add(workerMetrics);
             return;
         }
+
+        if (isPendingCheckpointExpired) {
+            log.info(
+                    "Assigning expired pending checkpoint lease {} (checkpointOwner={}) to worker {}",
+                    lease.leaseKey(),
+                    lease.checkpointOwner(),
+                    workerMetrics.getWorkerId());
+        } else {
+            log.info("Assigning lease : {} to worker : {}", lease.leaseKey(), workerMetrics.getWorkerId());
+        }
+
         workerMetrics.extrapolateMetricStatValuesForAddedThroughput(
                 workerMetricsToFleetLevelAverageMap,
                 inMemoryStorageView.getTargetAverageThroughput(),
                 lease.throughputKBps(),
                 targetLeasePerWorker);
-        log.info("Assigning lease : {} to worker : {}", lease.leaseKey(), workerMetrics.getWorkerId());
         inMemoryStorageView.performLeaseAssignment(lease, workerMetrics.getWorkerId());
         if (inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(workerMetrics.getWorkerId())
                 && inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId())) {

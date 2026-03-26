@@ -189,6 +189,18 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         return renewLease(lease, false);
     }
 
+    private boolean isCheckpointOwner(Lease lease) {
+        if (!lease.shutdownRequested()) {
+            return true;
+        }
+        // if lease graceful shutdown is requested, the only valid states are:
+        // Current worker ID: A
+        // 1) lease(leaseOwner=A,checkpointOwner=null) (worker has not learnt that lease is pending shutdown)
+        // 2) lease(leaseOwner=newOwner,checkpointOwner=A) (worker learnt that lease is pending shutdown)
+        // So if lease is shutdownRequested (case 2), checkpointOwner needs to match the worker ID.
+        return workerIdentifier.equals(lease.checkpointOwner()) && !workerIdentifier.equals(lease.leaseOwner());
+    }
+
     private boolean renewLease(Lease lease, boolean renewEvenIfExpired)
             throws DependencyException, InvalidStateException {
         String leaseKey = lease.leaseKey();
@@ -199,6 +211,17 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         boolean renewedLease = false;
         long startTime = System.currentTimeMillis();
         try {
+            // Check if this worker should be responsible for renewing this lease
+            if (!isCheckpointOwner(lease)) {
+                log.warn(
+                        "Worker {} not renewing shutdown-requested lease {} with checkpointOwner {}",
+                        workerIdentifier,
+                        lease,
+                        lease.checkpointOwner());
+                ownedLeases.remove(leaseKey);
+                return false;
+            }
+
             for (int i = 1; i <= RENEWAL_RETRIES; i++) {
                 try {
                     synchronized (lease) {
@@ -470,6 +493,14 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
             for (Lease lease : response.getKey()) {
                 if (workerIdentifier.equals(lease.leaseOwner())) {
+                    // Skip leases in pending checkpoint state - they're still being shut down by previous owner
+                    // If previous owner is unable to shutdown the lease, the leader will reassign it. If leaseTaker
+                    // is running instead, it will remove the checkpoint owner and aqcuire the lease.
+                    if (lease.checkpointOwner() != null) {
+                        log.info("Worker {} skipping lease {} in pending checkpoint state", workerIdentifier, lease);
+                        continue;
+                    }
+
                     log.info(" Worker {} found lease {}", workerIdentifier, lease);
                     // Okay to renew even if lease is expired, because we start with an empty list and we add the lease
                     // to
