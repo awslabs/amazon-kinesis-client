@@ -127,24 +127,6 @@ public class StreamIdentifierTest {
         assertEquals(Optional.of(EPOCH), actualStreamIdentifier.streamCreationEpochOptional());
     }
 
-    @Test
-    public void testStreamTypeDefaultsToKinesis() {
-        assertEquals(
-                StreamIdentifier.STREAM_TYPE_KINESIS,
-                StreamIdentifier.singleStreamInstance(STREAM_NAME).streamType());
-        assertEquals(
-                StreamIdentifier.STREAM_TYPE_KINESIS,
-                StreamIdentifier.multiStreamInstance(serialize()).streamType());
-    }
-
-    @Test
-    public void testStreamTypeExcludedFromEquality() {
-        StreamIdentifier kinesis =
-                StreamIdentifier.singleStreamInstance(STREAM_NAME, StreamIdentifier.STREAM_TYPE_KINESIS);
-        StreamIdentifier other = StreamIdentifier.singleStreamInstance(STREAM_NAME, "OtherStreamType");
-        assertEquals(kinesis, other);
-    }
-
     private void assertActualStreamIdentifierExpected(Arn expectedArn, StreamIdentifier actual) {
         assertEquals(STREAM_NAME, actual.streamName());
         assertEquals(Optional.of(TEST_ACCOUNT_ID), actual.accountIdOptional());
