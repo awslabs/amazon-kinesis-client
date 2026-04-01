@@ -21,7 +21,7 @@
   <parent>
     <artifactId>amazon-kinesis-client-pom</artifactId>
     <groupId>software.amazon.kinesis</groupId>
-    <version>3.4.1</version>
+    <version>3.4.2</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
