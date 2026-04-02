@@ -48,7 +48,7 @@
   </licenses>
 
   <properties>
-    <protobuf.version>4.27.5</protobuf.version>
+    <protobuf.version>4.33.5</protobuf.version>
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
