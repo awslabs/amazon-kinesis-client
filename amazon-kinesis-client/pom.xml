@@ -258,7 +258,7 @@
     <dependency>
       <groupId>org.hamcrest</groupId>
       <artifactId>hamcrest-core</artifactId>
-      <version>1.3</version>
+      <version>3.0</version>
       <scope>test</scope>
     </dependency>
     <!-- Using older version to be compatible with Java 8   -->
