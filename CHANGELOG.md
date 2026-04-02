@@ -5,6 +5,13 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+
+### Release (3.4.2 - April 1, 2026)
+* [#1718](https://github.com/awslabs/amazon-kinesis-client/pull/1718) Fix stuck leases when worker restarts with pending checkpoint leases
+* [#1717](https://github.com/awslabs/amazon-kinesis-client/pull/1717) Refactor KinesisDataFetcher to use GetRecordsResponseAdapter
+* [#1715](https://github.com/awslabs/amazon-kinesis-client/pull/1715) Revert to use Set for metricsEnabledDimension
+* [#1713](https://github.com/awslabs/amazon-kinesis-client/pull/1713) Allow GetRecordsResponseAdapter to provide ProcessRecordsInput Mapping
+
 ### Release 3.4.1 (March 2, 2026)
 * [#1708](https://github.com/awslabs/amazon-kinesis-client/pull/1708) Fix bug that occurs when maxPendingProcessRecordsInput is set to 0
 * [#1702](https://github.com/awslabs/amazon-kinesis-client/pull/1702) Shutdown migrationComponentsInitializer as part of graceful shutdown
