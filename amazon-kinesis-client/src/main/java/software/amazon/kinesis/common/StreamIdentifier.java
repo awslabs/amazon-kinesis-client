@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -28,11 +29,16 @@ import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.utils.Validate;
 
-@Builder(toBuilder = true)
+@Builder(access = AccessLevel.PRIVATE)
 @EqualsAndHashCode
 @Getter
 @Accessors(fluent = true)
 public class StreamIdentifier {
+
+    /**
+     * Stream type identifier for Amazon Kinesis Data Streams.
+     */
+    public static final String STREAM_TYPE_KINESIS = "Kinesis";
 
     @Builder.Default
     private final Optional<String> accountIdOptional = Optional.empty();
@@ -46,6 +52,15 @@ public class StreamIdentifier {
     @Builder.Default
     @EqualsAndHashCode.Exclude
     private final Optional<Arn> streamArnOptional = Optional.empty();
+
+    /**
+     * The type of stream this identifier represents.
+     * Defaults to {@link #STREAM_TYPE_KINESIS} for standard Kinesis Data Streams.
+     * Adapters for other streaming sources may set a different value.
+     */
+    @Builder.Default
+    @EqualsAndHashCode.Exclude
+    private final String streamType = STREAM_TYPE_KINESIS;
 
     /**
      * Pattern for a serialized {@link StreamIdentifier}. The valid format is
@@ -97,6 +112,18 @@ public class StreamIdentifier {
      * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
      */
     public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
+        return multiStreamInstance(streamIdentifierSer, STREAM_TYPE_KINESIS);
+    }
+
+    /**
+     * Create a multi stream instance for StreamIdentifier from serialized stream identifier
+     * of format {@link #STREAM_IDENTIFIER_PATTERN} with a specified stream type.
+     *
+     * @param streamIdentifierSer a String of {@code account:stream:creationEpoch}
+     * @param streamType the type of stream
+     * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
+     */
+    public static StreamIdentifier multiStreamInstance(String streamIdentifierSer, String streamType) {
         final Matcher matcher = STREAM_IDENTIFIER_PATTERN.matcher(streamIdentifierSer);
         if (matcher.matches()) {
             final String accountId = matcher.group("accountId");
@@ -109,6 +136,7 @@ public class StreamIdentifier {
                     .accountIdOptional(Optional.of(accountId))
                     .streamName(streamName)
                     .streamCreationEpochOptional(Optional.of(creationEpoch))
+                    .streamType(streamType)
                     .build();
         }
 
@@ -119,6 +147,19 @@ public class StreamIdentifier {
      * Create a multi stream instance for StreamIdentifier from stream {@link Arn}.
      *
      * @param streamArn an {@link Arn} of format {@link #STREAM_ARN_PATTERN}
+     * @param creationEpoch Creation epoch of the stream.
+     * @return StreamIdentifier with {@link #accountIdOptional}, {@link #streamCreationEpochOptional},
+     *         and {@link #streamArnOptional} present
+     */
+    public static StreamIdentifier multiStreamInstance(Arn streamArn, long creationEpoch) {
+        return multiStreamInstance(
+                streamArn, creationEpoch, streamArn.resource().resource());
+    }
+
+    /**
+     * Create a multi stream instance for StreamIdentifier from stream {@link Arn} with an overridden stream name.
+     *
+     * @param streamArn an {@link Arn} of format {@link #STREAM_ARN_PATTERN}
      * @param creationEpoch Creation epoch of the stream. This value will
      *         reflect in the lease key and is assumed to be correct. (KCL could
      *         verify, but that creates issues for both bootstrapping and, with large
@@ -127,16 +168,17 @@ public class StreamIdentifier {
      *         account -- such as deleting and recreating a stream -- then KCL will
      *         <b>be unable to differentiate leases between the old and new stream</b>
      *         since the lease keys collide on this creation epoch.
+     * @param streamName the stream name to use
      * @return StreamIdentifier with {@link #accountIdOptional}, {@link #streamCreationEpochOptional},
      *         and {@link #streamArnOptional} present
      */
-    public static StreamIdentifier multiStreamInstance(Arn streamArn, long creationEpoch) {
+    public static StreamIdentifier multiStreamInstance(Arn streamArn, long creationEpoch, String streamName) {
         validateArn(streamArn);
         validateCreationEpoch(creationEpoch);
 
         return StreamIdentifier.builder()
                 .accountIdOptional(streamArn.accountId())
-                .streamName(streamArn.resource().resource())
+                .streamName(streamName)
                 .streamCreationEpochOptional(Optional.of(creationEpoch))
                 .streamArnOptional(Optional.of(streamArn))
                 .build();
@@ -148,9 +190,22 @@ public class StreamIdentifier {
      * @param streamName stream name of a Kinesis stream
      */
     public static StreamIdentifier singleStreamInstance(String streamName) {
+        return singleStreamInstance(streamName, STREAM_TYPE_KINESIS);
+    }
+
+    /**
+     * Create a single stream instance for StreamIdentifier from stream name with a specified stream type.
+     *
+     * @param streamName stream name
+     * @param streamType the type of stream
+     */
+    public static StreamIdentifier singleStreamInstance(String streamName, String streamType) {
         Validate.notEmpty(streamName, "StreamName should not be empty");
 
-        return StreamIdentifier.builder().streamName(streamName).build();
+        return StreamIdentifier.builder()
+                .streamName(streamName)
+                .streamType(streamType)
+                .build();
     }
 
     /**
