@@ -80,6 +80,24 @@ class EcsCpuWorkerMetricsTest {
     }
 
     /**
+     * Stats has pre cpu usage 100000000 and pre system cpu usage 100000000
+     * Stats has cpu usage 150000000 and system cpu usage 200000000
+     * Diff cpu usage is 50000000 and diff system cpu usage is 100000000
+     * The container that is running is DockerId d1af158b11844d178eeb9c145a560fd4-1511132861
+     * The CPU task limit is set to 6 CPU shares
+     * The KCL container has 0 CPU shares and is in the same task a sidecar container with 1 CPU share (5 unreserved CPU shares)
+     * The container can use 5/6 = 83.33% of the CPU time allocated to the task
+     * Total CPU core time the container can use is 6 * 83.33% = 5
+     * CPU usage is 50000000 / 100000000 * 6 = 3 CPU core time
+     * 3 CPU core time used / 5 available = 60% usage
+     */
+    @Test
+    void sanity_capture_twoContainerTaskWithLimitOnOneContainer() throws IOException {
+        final String testDataPath = "src/test/data/ecstestdata/twoContainerTaskWithLimitOnOneContainer";
+        runWorkerMetricTest(testDataPath, 60D);
+    }
+
+    /**
      * Using the same test data as sanity_capture_taskCpuLimitOneContainer.
      */
     @Test
