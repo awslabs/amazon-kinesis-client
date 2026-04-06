@@ -312,6 +312,8 @@ public class LeaseManagementConfig {
 
     private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
+    private final LeaseAssignmentMetric leaseAssignmentMetric = LeaseAssignmentMetric.CPU;
+
     @Deprecated
     public LeaseManagementConfig(
             String tableName,

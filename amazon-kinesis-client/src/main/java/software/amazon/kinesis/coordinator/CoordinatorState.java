@@ -46,6 +46,8 @@ public class CoordinatorState {
      */
     public static final String LEADER_HASH_KEY = "Leader";
 
+    public static final String DEPLOYING_LEADER_HASH_KEY = "DeployingLeader";
+
     public String entityType;
 
     private String key;

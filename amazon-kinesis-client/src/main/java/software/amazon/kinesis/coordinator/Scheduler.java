@@ -114,6 +114,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
@@ -224,6 +225,8 @@ public class Scheduler implements Runnable {
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
 
     private boolean leasesSyncedOnAppInit = false;
+
+    private final FleetSegmentingHandler segmentingHandler;
 
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
@@ -400,6 +403,7 @@ public class Scheduler implements Runnable {
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
         this.taskFactory = leaseManagementConfig().consumerTaskFactory();
+        this.segmentingHandler = new FleetSegmentingHandler(this.leaseManagementConfig);
     }
 
     /**
@@ -457,7 +461,8 @@ public class Scheduler implements Runnable {
                         leaseCoordinator.workerIdentifier(),
                         metricsFactory,
                         leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
-                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()))
+                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
+                        segmentingHandler))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)

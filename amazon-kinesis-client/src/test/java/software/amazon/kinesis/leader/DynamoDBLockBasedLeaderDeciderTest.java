@@ -7,11 +7,13 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal;
 import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -21,12 +23,16 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.LeaseAssignmentMetric;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 
 class DynamoDBLockBasedLeaderDeciderTest {
 
@@ -37,17 +43,26 @@ class DynamoDBLockBasedLeaderDeciderTest {
     private final DynamoDbClient dynamoDBSyncClient = dynamoDBEmbedded.dynamoDbClient();
     private final Map<String, DynamoDBLockBasedLeaderDecider> workerIdToLeaderDeciderMap = new HashMap<>();
 
+    private FleetSegmentingHandler mockSegmentingHandler;
+
     @BeforeEach
     void setup() throws DependencyException {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
         c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
         final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateTableConfig());
         dao.initialize();
+        mockSegmentingHandler = mock(FleetSegmentingHandler.class);
+        Mockito.when(mockSegmentingHandler.getVersionHashDDBKey()).thenReturn("versionHash");
+        Mockito.when(mockSegmentingHandler.getVersionHash())
+                .thenReturn(String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode()));
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock(any(AmazonDynamoDBLockClient.class)))
+                .thenReturn(CoordinatorState.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(
                     workerId,
-                    DynamoDBLockBasedLeaderDecider.create(dao, workerId, 100L, 10L, new NullMetricsFactory()));
+                    DynamoDBLockBasedLeaderDecider.create(
+                            dao, workerId, 100L, 10L, new NullMetricsFactory(), mockSegmentingHandler));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
