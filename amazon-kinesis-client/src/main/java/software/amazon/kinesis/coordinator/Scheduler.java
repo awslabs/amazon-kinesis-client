@@ -104,6 +104,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import software.amazon.kinesis.metrics.OtelMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.ProcessorConfig;
@@ -1096,6 +1097,8 @@ public class Scheduler implements Runnable {
         }
         if (metricsFactory instanceof CloudWatchMetricsFactory) {
             ((CloudWatchMetricsFactory) metricsFactory).shutdown();
+        } else if (metricsFactory instanceof OtelMetricsFactory) {
+            ((OtelMetricsFactory) metricsFactory).shutdown();
         }
         shutdownComplete = true;
         finalShutdownLatch.countDown();

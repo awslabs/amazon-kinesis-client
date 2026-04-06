@@ -15,6 +15,9 @@
 
 package software.amazon.kinesis.metrics;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
@@ -106,19 +109,90 @@ public class MetricsConfig {
      */
     private int publisherFlushBuffer = 200;
 
+    /**
+     * The metrics publishing backend to use.
+     *
+     * <p>
+     * Default value: {@link MetricsBackend#CLOUDWATCH}
+     * </p>
+     */
+    private MetricsBackend metricsBackend = MetricsBackend.CLOUDWATCH;
+
+    /**
+     * The OTEL endpoint URL for publishing metrics when using the {@link MetricsBackend#CLOUDWATCH_OTEL} backend.
+     * Required when metricsBackend is set to CLOUDWATCH_OTEL.
+     */
+    private String otelEndpoint;
+
+    /**
+     * User-supplied OTEL resource attributes as key-value pairs.
+     * These override any auto-detected resource attributes with the same key.
+     *
+     * <p>
+     * Default value: empty map
+     * </p>
+     */
+    private Map<String, String> otelResourceAttributes = Collections.emptyMap();
+
     private MetricsFactory metricsFactory;
+
+    /**
+     * Default buffer time for CloudWatch metrics in milliseconds.
+     */
+    private static final long CLOUDWATCH_DEFAULT_BUFFER_TIME_MILLIS = 10000L;
+
+    /**
+     * Default buffer time for OTEL metrics in milliseconds.
+     */
+    private static final long OTEL_DEFAULT_BUFFER_TIME_MILLIS = 30000L;
 
     public MetricsFactory metricsFactory() {
         if (metricsFactory == null) {
-            metricsFactory = new CloudWatchMetricsFactory(
-                    cloudWatchClient(),
-                    namespace(),
-                    metricsBufferTimeMillis(),
-                    metricsMaxQueueSize(),
-                    metricsLevel(),
-                    metricsEnabledDimensions(),
-                    publisherFlushBuffer());
+            switch (metricsBackend) {
+                case CLOUDWATCH_OTEL:
+                    if (otelEndpoint == null || otelEndpoint.isEmpty()) {
+                        throw new IllegalStateException(
+                                "otelEndpoint must be configured when using MetricsBackend.CLOUDWATCH_OTEL");
+                    }
+                    long otelBufferTime = metricsBufferTimeMillis == CLOUDWATCH_DEFAULT_BUFFER_TIME_MILLIS
+                            ? OTEL_DEFAULT_BUFFER_TIME_MILLIS
+                            : metricsBufferTimeMillis;
+                    metricsFactory = new OtelMetricsFactory(
+                            new OtelMetricsPublisher(
+                                    namespace(),
+                                    otelEndpoint,
+                                    buildAutoDetectedResourceAttributes(),
+                                    otelResourceAttributes),
+                            otelBufferTime,
+                            metricsMaxQueueSize(),
+                            metricsLevel(),
+                            metricsEnabledDimensions(),
+                            publisherFlushBuffer());
+                    break;
+                case CLOUDWATCH:
+                default:
+                    metricsFactory = new CloudWatchMetricsFactory(
+                            cloudWatchClient(),
+                            namespace(),
+                            metricsBufferTimeMillis(),
+                            metricsMaxQueueSize(),
+                            metricsLevel(),
+                            metricsEnabledDimensions(),
+                            publisherFlushBuffer());
+                    break;
+            }
         }
         return metricsFactory;
+    }
+
+    /**
+     * Builds auto-detected OTEL resource attributes from KCL configuration.
+     */
+    private Map<String, String> buildAutoDetectedResourceAttributes() {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("service.name", namespace());
+        attributes.put("cloud.provider", "aws");
+        attributes.put("messaging.system", "aws_kinesis");
+        return attributes;
     }
 }
