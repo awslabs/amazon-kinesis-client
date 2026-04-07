@@ -325,6 +325,7 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
+        this.segmentingHandler = new FleetSegmentingHandler(leaseManagementConfig);
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,
@@ -403,7 +404,6 @@ public class Scheduler implements Runnable {
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
         this.taskFactory = leaseManagementConfig().consumerTaskFactory();
-        this.segmentingHandler = new FleetSegmentingHandler(this.leaseManagementConfig);
     }
 
     /**
@@ -466,6 +466,7 @@ public class Scheduler implements Runnable {
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
+                .segmentingHandler(segmentingHandler)
                 .build();
     }
 

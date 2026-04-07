@@ -84,7 +84,6 @@ public class FleetSegmentingHandlerTest {
     }
 
     private ConfigsBuilder getTestConfigsBuilder() {
-        ShardRecordProcessorFactory mockShardRecordProcessorFactory = mock(ShardRecordProcessorFactory.class);
         return new ConfigsBuilder(
                 "StreamName",
                 "AppName",
@@ -92,6 +91,6 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(CloudWatchAsyncClient.class),
                 "dummyWorkerIdentifier",
-                mockShardRecordProcessorFactory);
+                Mockito.mock(ShardRecordProcessorFactory.class));
     }
 }

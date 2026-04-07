@@ -27,7 +27,7 @@ public class FleetSegmentingHandler {
      * to determine if the version hash of a worker is outdated.
      * @return String in the format of {versionHash}:{lastUpdatedTime}
      */
-    public String constructVersionHashWithLastUpdatedTime(final int epoch) {
+    public String getVersionHashWithLastUpdatedTime(final long epoch) {
         return String.format("%s:%s", versionHash, epoch);
     }
 

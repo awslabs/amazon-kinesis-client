@@ -23,6 +23,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 /**
  * Reporter that is periodically executed to report WorkerMetricStats. It collects
@@ -36,6 +37,7 @@ public class WorkerMetricStatsReporter implements Runnable {
     private final String workerIdentifier;
     private final WorkerMetricStatsManager workerMetricsManager;
     private final WorkerMetricStatsDAO workerMetricsDAO;
+    private final FleetSegmentingHandler segmentingHandler;
 
     @Override
     public void run() {
@@ -49,11 +51,13 @@ public class WorkerMetricStatsReporter implements Runnable {
              * case where a worker can have a failure for some time and thus does not update the workerMetrics entry
              * and LeaseAssigmentManager cleans it and then worker ends updating entry without operating range.
              */
+            final long lastUpdateTime = Instant.now().getEpochSecond();
             final WorkerMetricStats workerMetrics = WorkerMetricStats.builder()
                     .workerId(workerIdentifier)
                     .metricStats(workerMetricsManager.computeMetrics())
                     .operatingRange(workerMetricsManager.getOperatingRange())
-                    .lastUpdateTime(Instant.now().getEpochSecond())
+                    .lastUpdateTime(lastUpdateTime)
+                    .versionHash(segmentingHandler.getVersionHashWithLastUpdatedTime(lastUpdateTime))
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
             success = true;
