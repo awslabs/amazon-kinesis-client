@@ -19,6 +19,8 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +40,22 @@ public class FleetSegmentingHandlerTest {
         expectedVersionHash = String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode());
         config = getTestConfigsBuilder().leaseManagementConfig();
         handler = new FleetSegmentingHandler(config);
+    }
+
+    /**
+     * The hash code for strings will be consistent across JVMs. This test verifies that the returned version hash
+     * will always the hash code of the LeaseAssignmentMetric's name and not the hash code of the enum.
+     */
+    @Test
+    void getVersionHash_returnsDeterministicValue() {
+        String expected = String.valueOf("CPU".hashCode());
+        assertEquals(expected, handler.getVersionHash());
+    }
+
+    @Test
+    void getVersionHash_isSameAcrossInstances() {
+        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config);
+        assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
     @Test
@@ -67,12 +85,6 @@ public class FleetSegmentingHandlerTest {
                 .thenReturn(Collections.singletonMap("versionHash", AttributeValue.fromS("differentHash")));
 
         assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(mockLockClient));
-    }
-
-    @Test
-    void getVersionHash_returnsHashOfMetricName() {
-        // TODO: unit test that confirms that the version hash is not dependent on location of memory
-        assertEquals(expectedVersionHash, handler.getVersionHash());
     }
 
     @Test
