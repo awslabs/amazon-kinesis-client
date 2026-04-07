@@ -7,7 +7,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal;
 import com.google.common.collect.ImmutableMap;
@@ -31,7 +30,6 @@ import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 
 class DynamoDBLockBasedLeaderDeciderTest {
@@ -55,8 +53,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         Mockito.when(mockSegmentingHandler.getVersionHashDDBKey()).thenReturn("versionHash");
         Mockito.when(mockSegmentingHandler.getVersionHash())
                 .thenReturn(String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode()));
-        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock(any(AmazonDynamoDBLockClient.class)))
-                .thenReturn(CoordinatorState.LEADER_HASH_KEY);
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(

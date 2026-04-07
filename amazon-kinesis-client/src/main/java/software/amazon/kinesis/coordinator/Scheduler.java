@@ -325,7 +325,10 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
-        this.segmentingHandler = new FleetSegmentingHandler(leaseManagementConfig);
+        this.segmentingHandler = new FleetSegmentingHandler(
+                leaseManagementConfig,
+                new DynamoDbAsyncToSyncClientAdapter(leaseManagementConfig.dynamoDBClient()),
+                coordinatorConfig.coordinatorStateTableConfig().tableName());
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,

@@ -1,10 +1,12 @@
 package software.amazon.kinesis.segmenting;
 
-import java.util.Optional;
+import java.util.Collections;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
-import com.amazonaws.services.dynamodbv2.LockItem;
 import lombok.Getter;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -18,7 +20,14 @@ public class FleetSegmentingHandler {
     @Getter
     private final String versionHashDDBKey = "versionHash";
 
-    public FleetSegmentingHandler(final LeaseManagementConfig config) {
+    private final String leaderTableName;
+
+    private final DynamoDbClient ddbClient;
+
+    public FleetSegmentingHandler(
+            final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
+        this.leaderTableName = leaderTableName;
+        this.ddbClient = ddbClient;
         versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
     }
 
@@ -35,18 +44,25 @@ public class FleetSegmentingHandler {
      * Returns the key of the leader lock to take depending on the worker's own version hash.
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      */
-    public String getHashKeyForLeaderLock(final AmazonDynamoDBLockClient lockClient) {
-        final Optional<LockItem> leaderLock = lockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty());
-        if (!leaderLock.isPresent()
-                || (leaderLock.get().getAdditionalAttributes().containsKey(versionHashDDBKey)
-                        && leaderLock
-                                .get()
-                                .getAdditionalAttributes()
-                                .get(versionHashDDBKey)
-                                .s()
-                                .equals(versionHash))) {
+    public String getHashKeyForLeaderLock() {
+        final GetItemRequest getLeaderItemRequest = GetItemRequest.builder()
+                .tableName(leaderTableName)
+                .key(Collections.singletonMap(
+                        CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
+                        AttributeValue.fromS(CoordinatorState.LEADER_HASH_KEY)))
+                .build();
+        final GetItemResponse getLeaderItemResponse = ddbClient.getItem(getLeaderItemRequest);
+
+        if (!getLeaderItemResponse.hasItem() || doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse)) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
+    }
+
+    private boolean doesVersionHashMatchLeaderVersionHash(final GetItemResponse response) {
+        if (response.hasItem() && response.item().containsKey(versionHashDDBKey)) {
+            return versionHash.equals(response.item().get(versionHashDDBKey).s());
+        }
+        return false;
     }
 }

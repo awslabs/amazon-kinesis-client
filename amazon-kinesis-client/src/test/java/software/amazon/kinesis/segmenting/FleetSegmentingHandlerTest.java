@@ -1,16 +1,17 @@
 package software.amazon.kinesis.segmenting;
 
-import java.util.Collections;
-import java.util.Optional;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
-import com.amazonaws.services.dynamodbv2.LockItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.coordinator.CoordinatorState;
@@ -19,33 +20,33 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
 
-    private AmazonDynamoDBLockClient mockLockClient;
-    private LockItem mockLockItem;
+    private DynamoDbClient mockDdbClient;
     private FleetSegmentingHandler handler;
     private String expectedVersionHash;
-
     private LeaseManagementConfig config;
 
     @BeforeEach
     void setup() {
-        mockLockClient = mock(AmazonDynamoDBLockClient.class);
-        mockLockItem = mock(LockItem.class);
+        mockDdbClient = mock(DynamoDbClient.class);
         expectedVersionHash = String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode());
-        config = getTestConfigsBuilder().leaseManagementConfig();
-        handler = new FleetSegmentingHandler(config);
+        config = new ConfigsBuilder(
+                        "StreamName",
+                        "AppName",
+                        Mockito.mock(KinesisAsyncClient.class),
+                        Mockito.mock(DynamoDbAsyncClient.class),
+                        Mockito.mock(CloudWatchAsyncClient.class),
+                        "dummyWorkerIdentifier",
+                        Mockito.mock(ShardRecordProcessorFactory.class))
+                .leaseManagementConfig();
+        handler = new FleetSegmentingHandler(config, mockDdbClient, "dummyTableName");
     }
 
-    /**
-     * The hash code for strings will be consistent across JVMs. This test verifies that the returned version hash
-     * will always the hash code of the LeaseAssignmentMetric's name and not the hash code of the enum.
-     */
     @Test
     void getVersionHash_returnsDeterministicValue() {
         String expected = String.valueOf("CPU".hashCode());
@@ -54,55 +55,45 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getVersionHash_isSameAcrossInstances() {
-        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config);
+        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, mockDdbClient, "dummyTableName");
         assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashMatches() {
-        when(mockLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty()))
-                .thenReturn(Optional.of(mockLockItem));
-        when(mockLockItem.getAdditionalAttributes())
-                .thenReturn(Collections.singletonMap("versionHash", AttributeValue.fromS(expectedVersionHash)));
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS(expectedVersionHash));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(mockLockClient));
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashKeyMissing() {
-        when(mockLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty()))
-                .thenReturn(Optional.of(mockLockItem));
-        when(mockLockItem.getAdditionalAttributes()).thenReturn(Collections.emptyMap());
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("someOtherKey", AttributeValue.fromS("value"));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
 
-        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(mockLockClient));
+        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() {
-        when(mockLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty()))
-                .thenReturn(Optional.of(mockLockItem));
-        when(mockLockItem.getAdditionalAttributes())
-                .thenReturn(Collections.singletonMap("versionHash", AttributeValue.fromS("differentHash")));
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("differentHash"));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
 
-        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(mockLockClient));
+        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenLockNotPresent() {
-        when(mockLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty()))
-                .thenReturn(Optional.empty());
+    void getHashKeyForLeaderLock_returnsLeaderKey_whenItemNotPresent() {
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().build());
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(mockLockClient));
-    }
-
-    private ConfigsBuilder getTestConfigsBuilder() {
-        return new ConfigsBuilder(
-                "StreamName",
-                "AppName",
-                Mockito.mock(KinesisAsyncClient.class),
-                Mockito.mock(DynamoDbAsyncClient.class),
-                Mockito.mock(CloudWatchAsyncClient.class),
-                "dummyWorkerIdentifier",
-                Mockito.mock(ShardRecordProcessorFactory.class));
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 }

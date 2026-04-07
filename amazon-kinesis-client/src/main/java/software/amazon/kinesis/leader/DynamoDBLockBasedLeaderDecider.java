@@ -125,7 +125,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
         boolean response;
 
-        final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock(dynamoDBLockClient);
+        final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
@@ -201,7 +201,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     @Override
     public synchronized void releaseLeadershipIfHeld() {
         try {
-            final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock(dynamoDBLockClient);
+            final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
             final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
             if (lockItem.isPresent()
                     && !lockItem.get().isExpired()

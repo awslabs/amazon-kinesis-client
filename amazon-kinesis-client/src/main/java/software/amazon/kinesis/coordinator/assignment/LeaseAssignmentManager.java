@@ -224,6 +224,8 @@ public final class LeaseAssignmentManager {
                     "ExpiredLeases", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
+
+            // TODO: if using old VH, then assign expired or unassigned leases. otherwise, no-op
             leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
             MetricsUtil.addLatency(
                     metricsScope,

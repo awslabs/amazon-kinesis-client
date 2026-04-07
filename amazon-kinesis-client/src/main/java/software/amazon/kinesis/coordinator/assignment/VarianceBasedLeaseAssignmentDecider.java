@@ -184,6 +184,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
      */
     @Override
     public void balanceWorkerVariance() {
+        // TODO: change this to filter by version hash. This is the list of workers that the LAM is considering
         final List<WorkerMetricStats> activeWorkerMetrics = inMemoryStorageView.getActiveWorkerMetrics();
 
         log.info("WorkerMetricStats to corresponding fleet level average : {}", workerMetricsToFleetLevelAverageMap);
@@ -199,6 +200,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
             // new WorkerMetricStats and currently in phase of deployment.
+            // TODO: add filter by version hash. This is the list of workers that the LAM is considering
             final List<WorkerMetricStats> currentWorkerMetrics = activeWorkerMetrics.stream()
                     .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
                     .collect(Collectors.toList());
@@ -269,6 +271,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                     leasesToTake.stream().map(Lease::leaseKey).collect(Collectors.toSet()));
 
             for (final Lease lease : leasesToTake) {
+                // TODO: change this as this is the fleet that can take the leases
                 final WorkerMetricStats workerToAssign = assignableWorkerSortedByAvailableCapacity.poll();
                 if (nonNull(workerToAssign)
                         && workerToAssign.willAnyMetricStatsGoAboveAverageUtilizationOrOperatingRange(
