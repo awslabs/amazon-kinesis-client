@@ -50,7 +50,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateTableConfig());
         dao.initialize();
         mockSegmentingHandler = mock(FleetSegmentingHandler.class);
-        Mockito.when(mockSegmentingHandler.getVersionHashDDBKey()).thenReturn("versionHash");
+        Mockito.when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
         Mockito.when(mockSegmentingHandler.getVersionHash())
                 .thenReturn(String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode()));
         Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);

@@ -77,8 +77,8 @@ public class WorkerMetricStats {
     @Getter(onMethod_ = {@DynamoDbAttribute("opr")})
     private Map<String, List<Long>> operatingRange;
 
-    @Getter(onMethod_ = {@DynamoDbAttribute("versionHash")})
-    private String versionHash;
+    @Getter(onMethod_ = {@DynamoDbAttribute("properties")})
+    private Map<String, String> properties;
 
     /**
      * This map contains the WorkerMetric to its metric stat value. Metric stat value stored in this is exponentially averaged over

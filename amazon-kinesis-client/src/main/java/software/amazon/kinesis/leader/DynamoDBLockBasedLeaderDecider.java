@@ -141,7 +141,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                                 .withTimeUnit(TimeUnit.MILLISECONDS)
                                 .withShouldSkipBlockingWait(true)
                                 .withAdditionalAttributes(Collections.singletonMap(
-                                        segmentingHandler.getVersionHashDDBKey(),
+                                        segmentingHandler.getVersionHashKey(),
                                         AttributeValue.fromS(segmentingHandler.getVersionHash())))
                                 .build());
                 leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));

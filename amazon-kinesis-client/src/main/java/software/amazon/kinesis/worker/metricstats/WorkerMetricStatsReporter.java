@@ -57,7 +57,7 @@ public class WorkerMetricStatsReporter implements Runnable {
                     .metricStats(workerMetricsManager.computeMetrics())
                     .operatingRange(workerMetricsManager.getOperatingRange())
                     .lastUpdateTime(lastUpdateTime)
-                    .versionHash(segmentingHandler.getVersionHash())
+                    .properties(segmentingHandler.getVersionHashAsMap())
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
             success = true;

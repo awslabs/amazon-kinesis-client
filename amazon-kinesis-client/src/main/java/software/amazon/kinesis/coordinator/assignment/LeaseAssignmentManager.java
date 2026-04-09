@@ -729,8 +729,10 @@ public final class LeaseAssignmentManager {
 
         public List<WorkerMetricStats> getWorkersOnVersionHash() {
             return activeWorkerMetrics.stream()
-                    .filter(workerMetricStats ->
-                            workerMetricStats.getVersionHash().equals(segmentingHandler.getVersionHash()))
+                    .filter(workerMetricStats -> workerMetricStats
+                            .getProperties()
+                            .get(segmentingHandler.getVersionHashKey())
+                            .equals(segmentingHandler.getVersionHash()))
                     .collect(Collectors.toList());
         }
 

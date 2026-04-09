@@ -1,6 +1,7 @@
 package software.amazon.kinesis.segmenting;
 
 import java.util.Collections;
+import java.util.Map;
 
 import lombok.Getter;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -18,7 +19,7 @@ public class FleetSegmentingHandler {
     private final String versionHash;
 
     @Getter
-    private final String versionHashDDBKey = "versionHash";
+    private final String versionHashKey = "versionHash";
 
     private final String leaderTableName;
 
@@ -28,7 +29,7 @@ public class FleetSegmentingHandler {
             final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
-        versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
+        this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
     }
 
     /**
@@ -41,6 +42,10 @@ public class FleetSegmentingHandler {
             return CoordinatorState.LEADER_HASH_KEY;
         }
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
+    }
+
+    public Map<String, String> getVersionHashAsMap() {
+        return Collections.singletonMap(versionHashKey, versionHash);
     }
 
     public boolean isWorkerOnDeployingVersion() {
@@ -59,9 +64,9 @@ public class FleetSegmentingHandler {
     }
 
     private boolean doesVersionHashMatchLeaderVersionHash(final GetItemResponse getLeaderItemResponse) {
-        if (getLeaderItemResponse.hasItem() && getLeaderItemResponse.item().containsKey(versionHashDDBKey)) {
+        if (getLeaderItemResponse.hasItem() && getLeaderItemResponse.item().containsKey(versionHashKey)) {
             return versionHash.equals(
-                    getLeaderItemResponse.item().get(versionHashDDBKey).s());
+                    getLeaderItemResponse.item().get(versionHashKey).s());
         }
         return false;
     }

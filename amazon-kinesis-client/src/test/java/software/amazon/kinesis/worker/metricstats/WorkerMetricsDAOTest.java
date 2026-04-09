@@ -319,7 +319,7 @@ class WorkerMetricsDAOTest {
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(10D, 12D)))
-                .versionHash(String.format("123:%s", currentTime))
+                .properties(Collections.singletonMap("versionHash", "123"))
                 .build();
     }
 
