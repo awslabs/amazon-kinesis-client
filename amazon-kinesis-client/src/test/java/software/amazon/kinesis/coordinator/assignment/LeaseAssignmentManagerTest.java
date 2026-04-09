@@ -1230,6 +1230,146 @@ class LeaseAssignmentManagerTest {
                         any(Runnable.class), eq(0L), eq(leaseAssignmentIntervalMillis), eq(TimeUnit.MILLISECONDS));
     }
 
+    @Test
+    void performAssignment_deployingLeader_assignsOnlyToWorkersOnSameVersion() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        // Worker on same version as deploying leader
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        // Worker on different version
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setVersionHash("differentHash");
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                2L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "oldWorker".equals(lease.leaseOwner()))
+                        .count());
+    }
+
+    @Test
+    void performAssignment_nonDeployingLeader_assignsToAllWorkers() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setVersionHash("differentHash");
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(leaseRefresher.listLeases().stream()
+                .anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream()
+                .anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
+    }
+
+    @Test
+    void performAssignment_deployingLeader_noMatchingWorkers_noAssignment() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setVersionHash("differentHash");
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertFalse(leaseRefresher.listLeases().stream()
+                .anyMatch(lease -> "oldWorker".equals(lease.leaseOwner())));
+    }
+
+    @Test
+    void performAssignment_deployingLeader_varianceBalancingRespectsVersionFilter() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        // Old version worker should not receive rebalanced leases
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setVersionHash("differentHash");
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "oldWorker".equals(lease.leaseOwner()))
+                        .count());
+        assertEquals(1, leaseRefresher.listLeases().stream()
+                .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                .count());
+    }
+
+    @Test
+    void performAssignment_allWorkersOnSameVersion_deployingLeaderAssignsToAll() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker1"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker2"));
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(leaseRefresher.listLeases().stream()
+                .anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream()
+                .anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
