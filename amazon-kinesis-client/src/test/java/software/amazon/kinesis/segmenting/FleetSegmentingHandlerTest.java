@@ -20,6 +20,8 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -95,5 +97,43 @@ public class FleetSegmentingHandlerTest {
                 .thenReturn(GetItemResponse.builder().build());
 
         assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void isWorkerOnDeployingVersion_returnsTrue_whenVersionHashMatches() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS(expectedVersionHash));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertTrue(handler.isWorkerOnDeployingVersion());
+    }
+
+    @Test
+    void isWorkerOnDeployingVersion_returnsFalse_whenVersionHashDoesNotMatch() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("differentHash"));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertFalse(handler.isWorkerOnDeployingVersion());
+    }
+
+    @Test
+    void isWorkerOnDeployingVersion_returnsFalse_whenItemNotPresent() {
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().build());
+
+        assertFalse(handler.isWorkerOnDeployingVersion());
+    }
+
+    @Test
+    void isWorkerOnDeployingVersion_returnsFalse_whenVersionHashKeyMissing() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("someOtherKey", AttributeValue.fromS("value"));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertFalse(handler.isWorkerOnDeployingVersion());
     }
 }
