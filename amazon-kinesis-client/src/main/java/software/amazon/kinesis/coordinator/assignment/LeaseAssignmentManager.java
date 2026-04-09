@@ -259,7 +259,7 @@ public final class LeaseAssignmentManager {
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
                 metricsScope.addData(
-                        "NumOfLeasesReassignment",
+                        "NumOfLeasesReassignment." + segmentingHandler.getVersionHash(),
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
                                 - totalNewAssignmentBeforeWorkerVarianceBalancing,
                         StandardUnit.COUNT,
