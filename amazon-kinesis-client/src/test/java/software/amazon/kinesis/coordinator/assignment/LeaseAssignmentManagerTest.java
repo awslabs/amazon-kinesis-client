@@ -39,6 +39,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
@@ -53,6 +54,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +67,7 @@ class LeaseAssignmentManagerTest {
     private static final String TEST_LEADER_WORKER_ID = "workerId";
     private static final String TEST_TAKE_WORKER_ID = "workerIdTake";
     private static final String TEST_YIELD_WORKER_ID = "workerIdYield";
+    private static final String TEST_VERSION_HASH = String.valueOf("CPU".hashCode());
 
     private static final String LEASE_TABLE_NAME = "leaseTable";
     private static final String WORKER_METRICS_TABLE_NAME = "workerMetrics";
@@ -91,6 +94,7 @@ class LeaseAssignmentManagerTest {
             LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
             DefaultSdkAutoConstructList.getInstance());
     private WorkerMetricStatsDAO workerMetricsDAO;
+    private FleetSegmentingHandler mockSegmentingHandler;
 
     @BeforeEach
     void setup() throws ProvisionedThroughputException, DependencyException {
@@ -110,6 +114,8 @@ class LeaseAssignmentManagerTest {
                     return scheduledFuture;
                 });
         when(scheduledFuture.cancel(anyBoolean())).thenReturn(true);
+        mockSegmentingHandler = mock((FleetSegmentingHandler.class));
+        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH);
         leaseRefresher.createLeaseTableIfNotExists();
     }
 
@@ -1182,7 +1188,8 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
                 2 * failoverTimeMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
 
         leaseAssignmentManager.start();
 
@@ -1213,7 +1220,8 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
                 leaseAssignmentIntervalMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
 
         leaseAssignmentManager.start();
 
@@ -1253,7 +1261,8 @@ class LeaseAssignmentManagerTest {
                 maxLeasesPerWorker,
                 gracefulLeaseHandoffConfig,
                 2 * leaseDurationMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }
@@ -1293,6 +1302,7 @@ class LeaseAssignmentManagerTest {
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of())
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1303,6 +1313,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1313,6 +1324,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, 50D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1324,6 +1336,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(value, value)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(operatingRangeMax)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1334,6 +1347,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, -1D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1344,6 +1358,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(-1D, 50D, 50D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1354,6 +1369,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(50L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1364,6 +1380,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(0L)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .versionHash(TEST_VERSION_HASH)
                 .build();
     }
 

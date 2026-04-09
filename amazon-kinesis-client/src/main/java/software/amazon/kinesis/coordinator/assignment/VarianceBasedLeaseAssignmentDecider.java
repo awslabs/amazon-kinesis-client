@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.coordinator.assignment;
 
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,7 +23,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -52,56 +50,31 @@ import static java.util.Objects.nonNull;
  */
 @Slf4j
 @KinesisClientInternalApi
-public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmentDecider {
+public final class VarianceBasedLeaseAssignmentDecider extends LeaseAssignmentDecider {
     private final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
     private final int dampeningPercentageValue;
     private final int reBalanceThreshold;
     private final boolean allowThroughputOvershoot;
-    private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
-    private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
-    private int targetLeasePerWorker;
+    private final int targetLeasePerWorker;
 
     public VarianceBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
             final int dampeningPercentageValue,
             final int reBalanceThreshold,
-            final boolean allowThroughputOvershoot) {
+            final boolean allowThroughputOvershoot,
+            final List<WorkerMetricStats> assignableWorkers) {
+        super(inMemoryStorageView, assignableWorkers);
         this.inMemoryStorageView = inMemoryStorageView;
         this.dampeningPercentageValue = dampeningPercentageValue;
         this.reBalanceThreshold = reBalanceThreshold;
         this.allowThroughputOvershoot = allowThroughputOvershoot;
-        initialize();
-        final Comparator<WorkerMetricStats> comparator = Comparator.comparingDouble(
-                workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
-        this.assignableWorkerSortedByAvailableCapacity = new PriorityQueue<>(comparator.reversed());
-        this.assignableWorkerSortedByAvailableCapacity.addAll(
-                getAvailableWorkersForAssignment(inMemoryStorageView.getActiveWorkerMetrics()));
+        this.targetLeasePerWorker = getTargetLeasePerWorker();
     }
 
-    private void initialize() {
-        final Map<String, Double> workerMetricsNameToAverage = inMemoryStorageView.getActiveWorkerMetrics().stream()
-                .flatMap(workerMetrics -> workerMetrics.getMetricStats().keySet().stream()
-                        .map(workerMetricsName ->
-                                new SimpleEntry<>(workerMetricsName, workerMetrics.getMetricStat(workerMetricsName))))
-                .collect(Collectors.groupingBy(
-                        SimpleEntry::getKey, HashMap::new, Collectors.averagingDouble(SimpleEntry::getValue)));
-
-        workerMetricsToFleetLevelAverageMap.putAll(workerMetricsNameToAverage);
-
+    private int getTargetLeasePerWorker() {
         final int totalWorkers =
-                Math.max(inMemoryStorageView.getActiveWorkerMetrics().size(), 1);
-        this.targetLeasePerWorker = Math.max(inMemoryStorageView.getLeaseList().size() / totalWorkers, 1);
-    }
-
-    private List<WorkerMetricStats> getAvailableWorkersForAssignment(final List<WorkerMetricStats> workerMetricsList) {
-        // Workers with WorkerMetricStats running hot are also available for assignment as the goal is to balance
-        // utilization
-        // always (e.g., if all workers have hot WorkerMetricStats, balance the variance between them too)
-        return workerMetricsList.stream()
-                .filter(workerMetrics -> inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(
-                                workerMetrics.getWorkerId())
-                        && inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
-                .collect(Collectors.toList());
+                Math.max(inMemoryStorageView.getAssignableWorkers().size(), 1);
+        return Math.max(inMemoryStorageView.getLeaseList().size() / totalWorkers, 1);
     }
 
     @Override
@@ -183,12 +156,11 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
      * across fleet and in case of multiple WorkerMetricStats, the one with maximum magnitude of throughput is considered.
      */
     @Override
-    public void balanceWorkerVariance() {
-        // TODO: change this to filter by version hash. This is the list of workers that the LAM is considering
-        final List<WorkerMetricStats> activeWorkerMetrics = inMemoryStorageView.getActiveWorkerMetrics();
+    public void balanceWorkerVariance(final List<WorkerMetricStats> workersFilteredByVersion) {
+        // final List<WorkerMetricStats> activeWorkerMetrics = inMemoryStorageView.getActiveWorkerMetrics();
 
         log.info("WorkerMetricStats to corresponding fleet level average : {}", workerMetricsToFleetLevelAverageMap);
-        log.info("Active WorkerMetricStats : {}", activeWorkerMetrics);
+        log.info("Active workers on version hash : {}", workersFilteredByVersion);
 
         final Map<String, Double> workerIdToThroughputToTakeMap = new HashMap<>();
         String largestOutlierWorkerMetricsName = "";
@@ -200,8 +172,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
             // new WorkerMetricStats and currently in phase of deployment.
-            // TODO: add filter by version hash. This is the list of workers that the LAM is considering
-            final List<WorkerMetricStats> currentWorkerMetrics = activeWorkerMetrics.stream()
+            final List<WorkerMetricStats> currentWorkerMetrics = workersFilteredByVersion.stream()
                     .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
                     .collect(Collectors.toList());
 
@@ -271,7 +242,6 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                     leasesToTake.stream().map(Lease::leaseKey).collect(Collectors.toSet()));
 
             for (final Lease lease : leasesToTake) {
-                // TODO: change this as this is the fleet that can take the leases
                 final WorkerMetricStats workerToAssign = assignableWorkerSortedByAvailableCapacity.poll();
                 if (nonNull(workerToAssign)
                         && workerToAssign.willAnyMetricStatsGoAboveAverageUtilizationOrOperatingRange(

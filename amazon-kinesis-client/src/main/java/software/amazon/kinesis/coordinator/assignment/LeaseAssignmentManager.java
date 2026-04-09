@@ -62,6 +62,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.NullMetricsScope;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
@@ -122,6 +123,7 @@ public final class LeaseAssignmentManager {
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
+    private final FleetSegmentingHandler segmentingHandler;
 
     private Future<?> managerFuture;
 
@@ -197,11 +199,18 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
+            // return workerMetricsList.stream()
+            //         .filter(workerMetrics -> inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(
+            //                 workerMetrics.getWorkerId())
+            //                 &&
+            // inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
+            //         .collect(Collectors.toList());
             final LeaseAssignmentDecider leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
                     inMemoryStorageView,
                     config.dampeningPercentage(),
                     config.reBalanceThresholdPercentage(),
-                    config.allowThroughputOvershoot());
+                    config.allowThroughputOvershoot(),
+                    inMemoryStorageView.getAssignableWorkers());
 
             updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
@@ -246,7 +255,7 @@ public final class LeaseAssignmentManager {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
-                leaseAssignmentDecider.balanceWorkerVariance();
+                leaseAssignmentDecider.balanceWorkerVariance(inMemoryStorageView.getWorkersOnVersionHash());
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
                 metricsScope.addData(
@@ -703,6 +712,26 @@ public final class LeaseAssignmentManager {
 
         public Double getTotalAssignedThroughput(final String workerId) {
             return workerToTotalAssignedThroughputMap.getOrDefault(workerId, 0D);
+        }
+
+        /**
+         * List of workers that the LeaseAssignmentDecider can assign leases to. This list will be used to calculate
+         * the fleet average for each metric.
+         * @return List of workers to assign leases to. If the version is the deploying version, return the workers
+         * on the same version. Otherwise, return all the workers.
+         */
+        public List<WorkerMetricStats> getAssignableWorkers() {
+            if (segmentingHandler.isWorkerOnDeployingVersion()) {
+                return getWorkersOnVersionHash();
+            }
+            return activeWorkerMetrics;
+        }
+
+        public List<WorkerMetricStats> getWorkersOnVersionHash() {
+            return activeWorkerMetrics.stream()
+                    .filter(workerMetricStats ->
+                            workerMetricStats.getVersionHash().equals(segmentingHandler.getVersionHash()))
+                    .collect(Collectors.toList());
         }
 
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
