@@ -1284,10 +1284,9 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        assertTrue(leaseRefresher.listLeases().stream()
-                .anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
-        assertTrue(leaseRefresher.listLeases().stream()
-                .anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
+        assertTrue(
+                leaseRefresher.listLeases().stream().anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
     }
 
     @Test
@@ -1308,8 +1307,7 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        assertFalse(leaseRefresher.listLeases().stream()
-                .anyMatch(lease -> "oldWorker".equals(lease.leaseOwner())));
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "oldWorker".equals(lease.leaseOwner())));
     }
 
     @Test
@@ -1341,9 +1339,11 @@ class LeaseAssignmentManagerTest {
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> "oldWorker".equals(lease.leaseOwner()))
                         .count());
-        assertEquals(1, leaseRefresher.listLeases().stream()
-                .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
-                .count());
+        assertEquals(
+                1,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
     }
 
     @Test
@@ -1364,10 +1364,8 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        assertTrue(leaseRefresher.listLeases().stream()
-                .anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
-        assertTrue(leaseRefresher.listLeases().stream()
-                .anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
     }
 
     private LeaseAssignmentManager createLeaseAssignmentManager(
