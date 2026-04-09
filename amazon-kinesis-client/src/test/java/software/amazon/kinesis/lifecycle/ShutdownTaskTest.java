@@ -348,6 +348,47 @@ public class ShutdownTaskTest {
         verify(shutdownNotification, never()).shutdownComplete();
     }
 
+    @Test
+    public void testLeaseLostWithShutdownRequestedTransfersAndDropsLease() throws Exception {
+        lease.checkpointOwner(LEASE_OWNER);
+        when(leaseCoordinator.workerIdentifier()).thenReturn(LEASE_OWNER);
+
+        final TaskResult result =
+                createShutdownTask(LEASE_LOST, Collections.emptyList()).call();
+
+        assertNull(result.getException());
+        verify(leaseRefresher).assignLease(lease, lease.leaseOwner());
+        verify(leaseCoordinator).dropLease(lease);
+        verify(recordsPublisher).shutdown();
+    }
+
+    @Test
+    public void testLeaseLostWithShutdownRequestedDropsLeaseEvenOnTransferFailure() throws Exception {
+        lease.checkpointOwner(LEASE_OWNER);
+        when(leaseCoordinator.workerIdentifier()).thenReturn(LEASE_OWNER);
+        when(leaseRefresher.assignLease(any(Lease.class), any(String.class)))
+                .thenThrow(new DependencyException(new RuntimeException()));
+
+        final TaskResult result =
+                createShutdownTask(LEASE_LOST, Collections.emptyList()).call();
+
+        assertNull(result.getException());
+        verify(leaseCoordinator).dropLease(lease);
+        verify(recordsPublisher).shutdown();
+    }
+
+    @Test
+    public void testLeaseLostWithoutShutdownRequestedDoesNotTransferOrDrop() throws Exception {
+        // lease exists but shutdownRequested is false (default)
+        final TaskResult result =
+                createShutdownTask(LEASE_LOST, Collections.emptyList()).call();
+
+        assertNull(result.getException());
+        verify(leaseRefresher, never()).assignLease(any(Lease.class), any(String.class));
+        verify(leaseCoordinator, never()).dropLease(any(Lease.class));
+        verify(recordsPublisher).shutdown();
+    }
+
     /**
      * Test method for {@link ShutdownTask#taskType()}.
      */

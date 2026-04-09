@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
@@ -74,6 +75,7 @@ import software.amazon.kinesis.coordinator.streamInfo.StreamInfoMode;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -91,6 +93,7 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -1319,6 +1322,59 @@ public class SchedulerTest {
 
         verify(mockInitializer, times(1)).shutdown();
         verify(mockMigrationStateMachine, times(1)).shutdown();
+    }
+
+    @Test
+    public void testRunProcessLoopDropsLeaseWhenShardConsumerIsShutdownButLeaseStillHeld() {
+        final String shardId = "shardId-000000000000";
+        final UUID concurrencyUUID = UUID.randomUUID();
+        final ShardInfo shardInfo =
+                new ShardInfo(shardId, concurrencyUUID.toString(), null, ExtendedSequenceNumber.TRIM_HORIZON);
+
+        // Create a mock ShardConsumer that is shutdown with SHARD_END reason
+        // (createOrGetShardConsumer only replaces LEASE_LOST shutdowns, so SHARD_END is returned as-is)
+        final ShardConsumer mockConsumer = mock(ShardConsumer.class);
+        when(mockConsumer.isShutdown()).thenReturn(true);
+        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.SHARD_END);
+        scheduler.shardInfoShardConsumerMap().put(shardInfo, mockConsumer);
+
+        // Set up lease with matching concurrency token
+        final Lease lease = new Lease();
+        lease.leaseKey(shardId);
+        lease.leaseOwner(workerIdentifier);
+        lease.concurrencyToken(concurrencyUUID);
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.singletonList(shardInfo));
+        when(leaseCoordinator.getCurrentlyHeldLease(shardId)).thenReturn(lease);
+
+        scheduler.runProcessLoop();
+
+        verify(leaseCoordinator).dropLease(lease);
+    }
+
+    @Test
+    public void testRunProcessLoopDoesNotDropLeaseWhenConcurrencyTokenMismatch() {
+        final String shardId = "shardId-000000000000";
+        final UUID consumerUUID = UUID.randomUUID();
+        final UUID leaseUUID = UUID.randomUUID();
+        final ShardInfo shardInfo =
+                new ShardInfo(shardId, consumerUUID.toString(), null, ExtendedSequenceNumber.TRIM_HORIZON);
+
+        final ShardConsumer mockConsumer = mock(ShardConsumer.class);
+        when(mockConsumer.isShutdown()).thenReturn(true);
+        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.SHARD_END);
+        scheduler.shardInfoShardConsumerMap().put(shardInfo, mockConsumer);
+
+        // Set up lease with DIFFERENT concurrency token
+        final Lease lease = new Lease();
+        lease.leaseKey(shardId);
+        lease.leaseOwner(workerIdentifier);
+        lease.concurrencyToken(leaseUUID);
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.singletonList(shardInfo));
+        when(leaseCoordinator.getCurrentlyHeldLease(shardId)).thenReturn(lease);
+
+        scheduler.runProcessLoop();
+
+        verify(leaseCoordinator, never()).dropLease(any(Lease.class));
     }
 
     @Test

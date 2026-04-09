@@ -21,9 +21,6 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -50,7 +47,7 @@ public class ShutdownNotificationTask implements ConsumerTask {
                 shardRecordProcessor.shutdownRequested(ShutdownRequestedInput.builder()
                         .checkpointer(recordProcessorCheckpointer)
                         .build());
-                attemptLeaseTransfer(currentShardLease);
+                LeaseGracefulShutdownHandler.attemptLeaseTransfer(currentShardLease, leaseCoordinator);
             } catch (Exception ex) {
                 return new TaskResult(ex);
             }
@@ -63,15 +60,6 @@ public class ShutdownNotificationTask implements ConsumerTask {
                 // one. We need to drop lease like what's done in the shutdownNotificationComplete so we can
                 // transition to next state.
                 leaseCoordinator.dropLease(currentShardLease);
-            }
-        }
-    }
-
-    private void attemptLeaseTransfer(Lease lease)
-            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        if (lease != null && lease.shutdownRequested()) {
-            if (leaseCoordinator.workerIdentifier().equals(lease.checkpointOwner())) {
-                leaseCoordinator.leaseRefresher().assignLease(lease, lease.leaseOwner());
             }
         }
     }
