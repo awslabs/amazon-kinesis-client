@@ -411,7 +411,8 @@ public class Scheduler implements Runnable {
                 metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
-                leaderSynced);
+                leaderSynced,
+                segmentingHandler);
         this.leaseCleanupManager = leaseManagementFactory.createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
