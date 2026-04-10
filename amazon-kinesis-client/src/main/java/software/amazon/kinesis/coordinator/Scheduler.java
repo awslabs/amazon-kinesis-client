@@ -228,6 +228,8 @@ public class Scheduler implements Runnable {
 
     private final FleetSegmentingHandler segmentingHandler;
 
+    private final WorkerMetricStatsDAO workerMetricsDAO;
+
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
 
@@ -325,10 +327,18 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
+
+        this.workerMetricsDAO = new WorkerMetricStatsDAO(
+                leaseManagementConfig.dynamoDBClient(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+
         this.segmentingHandler = new FleetSegmentingHandler(
                 leaseManagementConfig,
                 new DynamoDbAsyncToSyncClientAdapter(leaseManagementConfig.dynamoDBClient()),
-                coordinatorConfig.coordinatorStateTableConfig().tableName());
+                coordinatorConfig.coordinatorStateTableConfig().tableName(),
+                workerMetricsDAO);
+
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,
@@ -422,11 +432,6 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig
                         .workerUtilizationAwareAssignmentConfig()
                         .inMemoryWorkerMetricsCaptureFrequencyMillis());
-
-        final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
-                leaseManagementConfig.dynamoDBClient(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)

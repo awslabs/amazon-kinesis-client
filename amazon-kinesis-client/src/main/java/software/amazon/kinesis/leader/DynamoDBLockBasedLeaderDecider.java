@@ -31,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -125,7 +126,17 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
         boolean response;
 
-        final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+        // If this worker is the deploying leader and all workers are emitting the deploying version, try to acquire
+        // the current leader lock. The worker has to be the deploying leader so that it can release its lock.
+        // Otherwise, two leaders on the same version hash may be functioning at the same time
+        final String ddbLeaderKey;
+        boolean shouldReleaseDeployingLeaderLock = false;
+        if (segmentingHandler.areAllWorkersEmittingDeployingVersion()) {
+            ddbLeaderKey = CoordinatorState.LEADER_HASH_KEY;
+            shouldReleaseDeployingLeaderLock = true;
+        } else {
+            ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+        }
 
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
@@ -147,6 +158,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
+                shouldReleaseDeployingLeaderLock = shouldReleaseDeployingLeaderLock && response;
             } catch (final InterruptedException e) {
                 // Something bad happened, don't assume leadership and also release lock just in case the
                 // lock was granted and still interrupt happened.
@@ -165,7 +177,23 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
+
+        if (shouldReleaseDeployingLeaderLock) {
+            releaseDeployingLeaderLock();
+        }
+
         return response;
+    }
+
+    private void releaseDeployingLeaderLock() {
+        final Optional<LockItem> lockItem =
+                dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
+        if (lockItem.isPresent()
+                && !lockItem.get().isExpired()
+                && lockItem.get().getOwnerName().equals(workerId)) {
+            log.info("Releasing deploying leader lock since all workers are emitting the deploying version.");
+            lockItem.get().close();
+        }
     }
 
     private void publishIsLeaderMetrics(final boolean response) {

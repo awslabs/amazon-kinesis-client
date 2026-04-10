@@ -11,6 +11,8 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
@@ -25,11 +27,17 @@ public class FleetSegmentingHandler {
 
     private final DynamoDbClient ddbClient;
 
+    private final WorkerMetricStatsDAO workerMetricStatsDAO;
+
     public FleetSegmentingHandler(
-            final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
+            final LeaseManagementConfig config,
+            final DynamoDbClient ddbClient,
+            final String leaderTableName,
+            final WorkerMetricStatsDAO workerMetricStatsDAO) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
         this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
+        this.workerMetricStatsDAO = workerMetricStatsDAO;
     }
 
     /**
@@ -48,9 +56,32 @@ public class FleetSegmentingHandler {
         return Collections.singletonMap(versionHashKey, versionHash);
     }
 
-    public boolean isWorkerOnCurrentVersion() {
+    public boolean isOnCurrentVersion() {
         final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.LEADER_HASH_KEY);
         return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
+    }
+
+    public boolean isOnDeployingVersion() {
+        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
+    }
+
+    /**
+     * Check that if all workers are emitting the deploying version. If this is true, the deploying leader becomes
+     * the new leader. This operation is only performed by deploying leader.
+     * @return
+     */
+    // TODO: make sure scans not performed very often as this will increase DDB costs.
+    public boolean areAllWorkersEmittingDeployingVersion() {
+        if (!isOnDeployingVersion()) {
+            return false;
+        }
+        for (WorkerMetricStats worker : workerMetricStatsDAO.getAllWorkerMetricStats()) {
+            if (!versionHash.equals(getVersionHashOfWorker(worker))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private GetItemResponse getLeaderForHashKey(final String leaderHashKey) {
@@ -69,5 +100,12 @@ public class FleetSegmentingHandler {
                     getLeaderItemResponse.item().get(versionHashKey).s());
         }
         return false;
+    }
+
+    private String getVersionHashOfWorker(WorkerMetricStats worker) {
+        if (worker.getProperties().containsKey(versionHashKey)) {
+            return worker.getProperties().get(versionHashKey);
+        }
+        return null;
     }
 }
