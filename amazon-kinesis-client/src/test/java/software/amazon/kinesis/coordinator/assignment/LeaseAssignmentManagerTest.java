@@ -120,6 +120,7 @@ class LeaseAssignmentManagerTest {
         mockSegmentingHandler = mock((FleetSegmentingHandler.class));
         when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
         when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(true);
         leaseRefresher.createLeaseTableIfNotExists();
     }
 
@@ -1234,8 +1235,12 @@ class LeaseAssignmentManagerTest {
                         any(Runnable.class), eq(0L), eq(leaseAssignmentIntervalMillis), eq(TimeUnit.MILLISECONDS));
     }
 
+    /**
+     * The deploying leader should not assign expired or unassigned leases. This is handled by the current leader.
+     * @throws Exception
+     */
     @Test
-    void performAssignment_deployingLeader_assignsOnlyToWorkersOnSameVersion() throws Exception {
+    void performAssignment_deployingLeader_doesNotAssignUnassignedLeases() throws Exception {
         when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
@@ -1244,9 +1249,7 @@ class LeaseAssignmentManagerTest {
                 System::nanoTime,
                 Integer.MAX_VALUE);
 
-        // Worker on same version as deploying leader
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
-        // Worker on different version
         final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
         oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(oldWorker);
@@ -1257,7 +1260,7 @@ class LeaseAssignmentManagerTest {
         leaseAssignmentManagerRunnable.run();
 
         assertEquals(
-                2L,
+                0L,
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
                         .count());
@@ -1351,7 +1354,8 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
-    void performAssignment_allWorkersOnSameVersion_deployingLeaderAssignsToAll() throws Exception {
+    void performAssignment_deployingLeader_doesNotAssignUnassignedLeasesEvenWhenAllWorkersOnSameVersion()
+            throws Exception {
         when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
@@ -1368,8 +1372,8 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
-        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
     }
 
     private LeaseAssignmentManager createLeaseAssignmentManager(

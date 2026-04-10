@@ -234,21 +234,27 @@ public final class LeaseAssignmentManager {
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
 
-            // TODO: if using old VH, then assign expired or unassigned leases. otherwise, no-op
-            leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
-            MetricsUtil.addLatency(
-                    metricsScope,
-                    "AssignExpiredOrUnassignedLeases",
-                    expiredAndUnassignedLeaseAssignmentStartTime,
-                    MetricsLevel.DETAILED);
+            if (segmentingHandler.isWorkerOnCurrentVersion()) {
+                leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
+                MetricsUtil.addLatency(
+                        metricsScope,
+                        "AssignExpiredOrUnassignedLeases",
+                        expiredAndUnassignedLeaseAssignmentStartTime,
+                        MetricsLevel.DETAILED);
 
-            if (!expiredOrUnAssignedLeases.isEmpty()) {
-                // When expiredOrUnAssignedLeases is not empty, that means
-                // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
-                // per worker for all workers.
-                log.warn("Not able to assign all expiredOrUnAssignedLeases");
-                metricsScope.addData(
-                        "LeaseSpillover", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                if (!expiredOrUnAssignedLeases.isEmpty()) {
+                    // When expiredOrUnAssignedLeases is not empty, that means
+                    // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
+                    // per worker for all workers.
+                    log.warn("Not able to assign all expiredOrUnAssignedLeases");
+                    metricsScope.addData(
+                            "LeaseSpillover",
+                            expiredOrUnAssignedLeases.size(),
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
+            } else {
+                log.info("Leader {} is on deploying version. Ignoring unassigned/expired leases", currentWorkerId);
             }
 
             if (shouldRunVarianceBalancing()) {
