@@ -48,8 +48,8 @@ public class FleetSegmentingHandler {
         return Collections.singletonMap(versionHashKey, versionHash);
     }
 
-    public boolean isWorkerOnDeployingVersion() {
-        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+    public boolean isWorkerOnCurrentVersion() {
+        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.LEADER_HASH_KEY);
         return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
     }
 

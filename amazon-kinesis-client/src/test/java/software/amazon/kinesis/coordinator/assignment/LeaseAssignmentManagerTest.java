@@ -1236,7 +1236,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_deployingLeader_assignsOnlyToWorkersOnSameVersion() throws Exception {
-        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1269,8 +1269,8 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
-    void performAssignment_nonDeployingLeader_assignsToAllWorkers() throws Exception {
-        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(false);
+    void performAssignment_currentLeader_assignsToAllWorkers() throws Exception {
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(true);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1295,7 +1295,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_deployingLeader_noMatchingWorkers_noAssignment() throws Exception {
-        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1316,7 +1316,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_deployingLeader_varianceBalancingRespectsVersionFilter() throws Exception {
-        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
@@ -1352,7 +1352,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_allWorkersOnSameVersion_deployingLeaderAssignsToAll() throws Exception {
-        when(mockSegmentingHandler.isWorkerOnDeployingVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerOnCurrentVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),

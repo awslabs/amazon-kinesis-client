@@ -720,11 +720,12 @@ public final class LeaseAssignmentManager {
          * @return List of workers to assign leases to. If the version is the deploying version, return the workers
          * on the same version. Otherwise, return all the workers.
          */
+        // TODO: check unit test
         public List<WorkerMetricStats> getAssignableWorkers() {
-            if (segmentingHandler.isWorkerOnDeployingVersion()) {
-                return getWorkersOnVersionHash();
+            if (segmentingHandler.isWorkerOnCurrentVersion()) {
+                return activeWorkerMetrics;
             }
-            return activeWorkerMetrics;
+            return getWorkersOnVersionHash();
         }
 
         public List<WorkerMetricStats> getWorkersOnVersionHash() {
