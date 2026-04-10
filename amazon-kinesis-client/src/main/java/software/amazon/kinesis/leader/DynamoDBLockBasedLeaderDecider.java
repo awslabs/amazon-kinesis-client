@@ -130,10 +130,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // the current leader lock. The worker has to be the deploying leader so that it can release its lock.
         // Otherwise, two leaders on the same version hash may be functioning at the same time
         final String ddbLeaderKey;
-        boolean shouldReleaseDeployingLeaderLock = false;
         if (segmentingHandler.areAllWorkersEmittingDeployingVersion()) {
             ddbLeaderKey = CoordinatorState.LEADER_HASH_KEY;
-            shouldReleaseDeployingLeaderLock = true;
         } else {
             ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
         }
@@ -158,7 +156,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
-                shouldReleaseDeployingLeaderLock = shouldReleaseDeployingLeaderLock && response;
             } catch (final InterruptedException e) {
                 // Something bad happened, don't assume leadership and also release lock just in case the
                 // lock was granted and still interrupt happened.
@@ -178,11 +175,23 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
 
-        if (shouldReleaseDeployingLeaderLock) {
+        // only release the deploying leader lock if this worker also acquired the current leader lock
+        if (isWorkerDeployingLeader() && isWorkerCurrentLeader()) {
             releaseDeployingLeaderLock();
         }
 
         return response;
+    }
+
+    private boolean isWorkerDeployingLeader() {
+        Optional<LockItem> lockItem =
+                dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
+        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
+    }
+
+    private boolean isWorkerCurrentLeader() {
+        Optional<LockItem> lockItem = dynamoDBLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty());
+        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
     }
 
     private void releaseDeployingLeaderLock() {

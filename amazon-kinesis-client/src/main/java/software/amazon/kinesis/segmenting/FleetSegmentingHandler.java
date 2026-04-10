@@ -103,7 +103,7 @@ public class FleetSegmentingHandler {
     }
 
     private String getVersionHashOfWorker(WorkerMetricStats worker) {
-        if (worker.getProperties().containsKey(versionHashKey)) {
+        if (worker.getProperties() != null && worker.getProperties().containsKey(versionHashKey)) {
             return worker.getProperties().get(versionHashKey);
         }
         return null;
