@@ -592,7 +592,18 @@ public class Scheduler implements Runnable {
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                 ShardConsumer shardConsumer = createOrGetShardConsumer(
                         shardInfo, processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
-
+                if (shardConsumer.isShutdown()) {
+                    final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
+                    if (currentLease != null
+                            && currentLease.concurrencyToken() != null
+                            && shardInfo
+                                    .concurrencyToken()
+                                    .equals(currentLease.concurrencyToken().toString())) {
+                        // dropping the lease to stop heartbeat so it gets cleaned up in the next round
+                        log.warn("Unexpected that lease is shutdown but still held. Stop heartbeat {}", currentLease);
+                        leaseCoordinator.dropLease(currentLease);
+                    }
+                }
                 shardConsumer.executeLifecycle();
                 assignedShards.add(shardInfo);
             }
