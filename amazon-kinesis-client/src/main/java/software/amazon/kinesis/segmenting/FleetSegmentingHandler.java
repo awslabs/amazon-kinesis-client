@@ -93,6 +93,9 @@ public class FleetSegmentingHandler {
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
+        if (worker.getProperties() == null) {
+            return true;
+        }
         String lutStr = worker.getProperties().get(versionHashLutKey);
         if (lutStr == null) {
             return true;

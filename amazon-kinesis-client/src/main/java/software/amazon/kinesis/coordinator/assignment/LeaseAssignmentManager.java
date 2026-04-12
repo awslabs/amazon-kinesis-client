@@ -736,11 +736,12 @@ public final class LeaseAssignmentManager {
 
         public List<WorkerMetricStats> getWorkersOnVersionHash() {
             return activeWorkerMetrics.stream()
-                    .filter(workerMetricStats -> workerMetricStats
+                    .filter(workerMetricStats -> workerMetricStats.getProperties() != null
+                            && workerMetricStats
                                     .getProperties()
                                     .get(segmentingHandler.getVersionHashKey())
                                     .equals(segmentingHandler.getVersionHash())
-                            && !segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
+                            && segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
                     .collect(Collectors.toList());
         }
 
