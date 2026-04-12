@@ -1,7 +1,11 @@
 package software.amazon.kinesis.segmenting;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -23,10 +27,10 @@ public class FleetSegmentingHandler {
     @Getter
     private final String versionHashKey = "versionHash";
 
+    private final long versionHashExpiryMillis;
+    private final String versionHashLutKey = "versionHashLut";
     private final String leaderTableName;
-
     private final DynamoDbClient ddbClient;
-
     private final WorkerMetricStatsDAO workerMetricStatsDAO;
 
     public FleetSegmentingHandler(
@@ -38,6 +42,7 @@ public class FleetSegmentingHandler {
         this.ddbClient = ddbClient;
         this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
         this.workerMetricStatsDAO = workerMetricStatsDAO;
+        this.versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
     }
 
     /**
@@ -52,8 +57,11 @@ public class FleetSegmentingHandler {
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
     }
 
-    public Map<String, String> getVersionHashAsMap() {
-        return Collections.singletonMap(versionHashKey, versionHash);
+    public Map<String, String> getVersionHashWithLastUpdatedTime() {
+        final Map<String, String> workerProperties = new HashMap<>();
+        workerProperties.put(versionHashKey, versionHash);
+        workerProperties.put(versionHashLutKey, String.valueOf(Instant.now().getEpochSecond()));
+        return workerProperties;
     }
 
     public boolean isOnCurrentVersion() {
@@ -82,6 +90,15 @@ public class FleetSegmentingHandler {
             }
         }
         return true;
+    }
+
+    public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
+        String lutStr = worker.getProperties().get(versionHashLutKey);
+        if (lutStr == null) {
+            return true;
+        }
+        final long lut = Long.parseLong(lutStr);
+        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
     }
 
     private GetItemResponse getLeaderForHashKey(final String leaderHashKey) {

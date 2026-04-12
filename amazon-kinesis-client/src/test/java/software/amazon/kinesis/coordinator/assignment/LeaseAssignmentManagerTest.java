@@ -117,10 +117,8 @@ class LeaseAssignmentManagerTest {
                     return scheduledFuture;
                 });
         when(scheduledFuture.cancel(anyBoolean())).thenReturn(true);
-        mockSegmentingHandler = mock((FleetSegmentingHandler.class));
-        when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
-        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
-        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+
+        initializeFleetSegmentingHandlerMocks();
         leaseRefresher.createLeaseTableIfNotExists();
     }
 
@@ -1376,6 +1374,34 @@ class LeaseAssignmentManagerTest {
         assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
     }
 
+    @Test
+    void performAssignment_deployingLeader_staleWorkerExcludedFromVarianceBalancing() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        populateLeasesInLeaseTable(lease1);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // Stale workers should not receive rebalanced leases
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
@@ -1537,5 +1563,13 @@ class LeaseAssignmentManagerTest {
                         .item(TableSchema.fromBean(WorkerMetricStats.class).itemToMap(workerMetrics, false))
                         .build())
                 .join();
+    }
+
+    private void initializeFleetSegmentingHandlerMocks() {
+        mockSegmentingHandler = mock((FleetSegmentingHandler.class));
+        when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
+        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
     }
 }

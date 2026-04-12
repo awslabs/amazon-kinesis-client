@@ -1,5 +1,6 @@
 package software.amazon.kinesis.segmenting;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -215,8 +216,42 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getVersionHashAsMap_returnsCorrectMap() {
-        assertEquals(Collections.singletonMap("versionHash", sampleVersionHash), handler.getVersionHashAsMap());
+    void getVersionHashWithLastUpdatedTime_returnsCorrectMap() {
+        final long before = Instant.now().getEpochSecond();
+        final Map<String, String> result = handler.getVersionHashWithLastUpdatedTime();
+        final long after = Instant.now().getEpochSecond();
+
+        assertTrue(result.containsKey("versionHash"));
+        assertTrue(result.containsKey("versionHashLut"));
+        assertEquals(sampleVersionHash, result.get("versionHash"));
+        final long lut = Long.parseLong(result.get("versionHashLut"));
+        assertTrue(lut >= before && lut <= after);
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void isWorkerVersionHashStale_returnsTrue_whenLutKeyMissing() {
+        WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
+        when(mockWorker.getProperties()).thenReturn(Collections.singletonMap("versionHash", "123"));
+        assertTrue(handler.isWorkerVersionHashStale(mockWorker));
+    }
+
+    @Test
+    void isWorkerVersionHashStale_returnsFalse_whenLutIsRecent() {
+        WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
+        Map<String, String> props = new HashMap<>();
+        props.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond()));
+        when(mockWorker.getProperties()).thenReturn(props);
+        assertFalse(handler.isWorkerVersionHashStale(mockWorker));
+    }
+
+    @Test
+    void isWorkerVersionHashStale_returnsTrue_whenLutIsOlderThanOneHour() {
+        WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
+        Map<String, String> props = new HashMap<>();
+        props.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond() - 3601));
+        when(mockWorker.getProperties()).thenReturn(props);
+        assertTrue(handler.isWorkerVersionHashStale(mockWorker));
     }
 
     private GetItemRequest createGetItemRequestForDeployingLeader() {
