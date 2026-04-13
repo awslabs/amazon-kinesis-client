@@ -741,7 +741,7 @@ public final class LeaseAssignmentManager {
                                     .getProperties()
                                     .get(segmentingHandler.getVersionHashKey())
                                     .equals(segmentingHandler.getVersionHash())
-                            && segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
+                            && !segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
                     .collect(Collectors.toList());
         }
 
