@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +20,6 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseAssignmentMetric;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
-import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,7 +32,6 @@ import static org.mockito.Mockito.when;
 public class FleetSegmentingHandlerTest {
 
     private DynamoDbClient mockDdbClient;
-    private WorkerMetricStatsDAO mockWorkerMetricStatsDAO;
     private FleetSegmentingHandler handler;
     private String sampleVersionHash;
     private LeaseManagementConfig config;
@@ -42,7 +41,6 @@ public class FleetSegmentingHandlerTest {
     void setup() {
         clearInvocations();
         mockDdbClient = mock(DynamoDbClient.class);
-        mockWorkerMetricStatsDAO = mock(WorkerMetricStatsDAO.class);
         sampleVersionHash = String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode());
         config = new LeaseManagementConfig(
                 tableName,
@@ -51,7 +49,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId",
                 LeaseAssignmentMetric.CPU);
-        handler = new FleetSegmentingHandler(config, mockDdbClient, tableName, mockWorkerMetricStatsDAO);
+        handler = new FleetSegmentingHandler(config, mockDdbClient, tableName);
     }
 
     @Test
@@ -62,8 +60,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getVersionHash_isSameAcrossInstancesForSameConfig() {
-        FleetSegmentingHandler handler2 =
-                new FleetSegmentingHandler(config, mockDdbClient, tableName, mockWorkerMetricStatsDAO);
+        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, mockDdbClient, tableName);
         assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
@@ -160,59 +157,46 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void areAllWorkersEmittingDeployingVersion_returnsFalse_whenNotOnDeployingVersion() {
+    void isVersionEmittedByAllActiveWorkers_returnsFalse_whenNotOnDeployingVersion() {
         when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
                 .thenReturn(GetItemResponse.builder().build());
-        assertFalse(handler.areAllWorkersEmittingDeployingVersion());
+        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
     }
 
     @Test
-    void areAllWorkersEmittingDeployingVersion_returnsTrue_whenAllWorkersMatch() {
+    void setIsDeployingVersionEmittedByAllActiveWorkers_true_whenDeployingAndAllWorkersMatch() {
         when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
                 .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
 
-        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
-        WorkerMetricStats w2 = mock(WorkerMetricStats.class);
-        when(w1.getProperties()).thenReturn(Collections.singletonMap("versionHash", sampleVersionHash));
-        when(w2.getProperties()).thenReturn(Collections.singletonMap("versionHash", sampleVersionHash));
-        when(mockWorkerMetricStatsDAO.getAllWorkerMetricStats()).thenReturn(Arrays.asList(w1, w2));
+        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
 
-        assertTrue(handler.areAllWorkersEmittingDeployingVersion());
+        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
+        assertTrue(handler.isDeployingVersionEmittedByAllActiveWorkers());
     }
 
     @Test
-    void areAllWorkersEmittingDeployingVersion_returnsFalse_whenOneWorkerDiffers() {
+    void setIsDeployingVersionEmittedByAllActiveWorkers_false_whenDeployingButSizesDiffer() {
         when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
                 .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
 
-        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
-        WorkerMetricStats w2 = mock(WorkerMetricStats.class);
-        when(w1.getProperties()).thenReturn(Collections.singletonMap("versionHash", sampleVersionHash));
-        when(w2.getProperties()).thenReturn(Collections.singletonMap("versionHash", "oldVersion"));
-        when(mockWorkerMetricStatsDAO.getAllWorkerMetricStats()).thenReturn(Arrays.asList(w1, w2));
+        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+        List<WorkerMetricStats> onVersion = Collections.singletonList(mock(WorkerMetricStats.class));
 
-        assertFalse(handler.areAllWorkersEmittingDeployingVersion());
+        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
+        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
     }
 
     @Test
-    void areAllWorkersEmittingDeployingVersion_returnsTrue_whenNoWorkers() {
+    void setIsVersionEmittedByAllActiveWorkers_false_whenNotOnDeployingDeployingVersion() {
         when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
-        when(mockWorkerMetricStatsDAO.getAllWorkerMetricStats()).thenReturn(Collections.emptyList());
+                .thenReturn(GetItemResponse.builder().build());
 
-        assertTrue(handler.areAllWorkersEmittingDeployingVersion());
-    }
+        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class));
+        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class));
 
-    @Test
-    void areAllWorkersEmittingDeployingVersion_returnsFalse_whenWorkerMissingVersionHashKey() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
-
-        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
-        when(w1.getProperties()).thenReturn(Collections.singletonMap("someOtherKey", "value"));
-        when(mockWorkerMetricStatsDAO.getAllWorkerMetricStats()).thenReturn(Collections.singletonList(w1));
-
-        assertFalse(handler.areAllWorkersEmittingDeployingVersion());
+        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
+        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
     }
 
     @Test
@@ -252,6 +236,13 @@ public class FleetSegmentingHandlerTest {
         props.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond() - 3601));
         when(mockWorker.getProperties()).thenReturn(props);
         assertTrue(handler.isWorkerVersionHashStale(mockWorker));
+    }
+
+    @Test
+    void isWorkerVersionHashStale_returnsTrue_whenPropertiesNull() {
+        WorkerMetricStats worker = mock(WorkerMetricStats.class);
+        when(worker.getProperties()).thenReturn(null);
+        assertTrue(handler.isWorkerVersionHashStale(worker));
     }
 
     private GetItemRequest createGetItemRequestForDeployingLeader() {

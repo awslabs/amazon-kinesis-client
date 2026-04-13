@@ -196,15 +196,11 @@ public final class LeaseAssignmentManager {
 
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
+            segmentingHandler.setIsDeployingVersionEmittedByAllActiveWorkers(
+                    inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
-            // return workerMetricsList.stream()
-            //         .filter(workerMetrics -> inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(
-            //                 workerMetrics.getWorkerId())
-            //                 &&
-            // inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
-            //         .collect(Collectors.toList());
             final LeaseAssignmentDecider leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
                     inMemoryStorageView,
                     config.dampeningPercentage(),

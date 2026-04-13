@@ -336,8 +336,7 @@ public class Scheduler implements Runnable {
         this.segmentingHandler = new FleetSegmentingHandler(
                 leaseManagementConfig,
                 new DynamoDbAsyncToSyncClientAdapter(leaseManagementConfig.dynamoDBClient()),
-                coordinatorConfig.coordinatorStateTableConfig().tableName(),
-                workerMetricsDAO);
+                coordinatorConfig.coordinatorStateTableConfig().tableName());
 
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(

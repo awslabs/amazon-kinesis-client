@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -16,7 +17,6 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
-import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
@@ -27,21 +27,19 @@ public class FleetSegmentingHandler {
     @Getter
     private final String versionHashKey = "versionHash";
 
+    @Getter
+    private boolean isDeployingVersionEmittedByAllActiveWorkers = false;
+
     private final long versionHashExpiryMillis;
     private final String versionHashLutKey = "versionHashLut";
     private final String leaderTableName;
     private final DynamoDbClient ddbClient;
-    private final WorkerMetricStatsDAO workerMetricStatsDAO;
 
     public FleetSegmentingHandler(
-            final LeaseManagementConfig config,
-            final DynamoDbClient ddbClient,
-            final String leaderTableName,
-            final WorkerMetricStatsDAO workerMetricStatsDAO) {
+            final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
         this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
-        this.workerMetricStatsDAO = workerMetricStatsDAO;
         this.versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
     }
 
@@ -74,24 +72,6 @@ public class FleetSegmentingHandler {
         return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
     }
 
-    /**
-     * Check that if all workers are emitting the deploying version. If this is true, the deploying leader becomes
-     * the new leader. This operation is only performed by deploying leader.
-     * @return
-     */
-    // TODO: make sure scans not performed very often as this will increase DDB costs.
-    public boolean areAllWorkersEmittingDeployingVersion() {
-        if (!isOnDeployingVersion()) {
-            return false;
-        }
-        for (WorkerMetricStats worker : workerMetricStatsDAO.getAllWorkerMetricStats()) {
-            if (!versionHash.equals(getVersionHashOfWorker(worker))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
         if (worker.getProperties() == null) {
             return true;
@@ -102,6 +82,12 @@ public class FleetSegmentingHandler {
         }
         final long lut = Long.parseLong(lutStr);
         return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
+    }
+
+    public void setIsDeployingVersionEmittedByAllActiveWorkers(
+            final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
+        isDeployingVersionEmittedByAllActiveWorkers =
+                isOnDeployingVersion() && activeWorkerMetrics.size() == workersOnVersionHash.size();
     }
 
     private GetItemResponse getLeaderForHashKey(final String leaderHashKey) {
@@ -120,12 +106,5 @@ public class FleetSegmentingHandler {
                     getLeaderItemResponse.item().get(versionHashKey).s());
         }
         return false;
-    }
-
-    private String getVersionHashOfWorker(WorkerMetricStats worker) {
-        if (worker.getProperties() != null && worker.getProperties().containsKey(versionHashKey)) {
-            return worker.getProperties().get(versionHashKey);
-        }
-        return null;
     }
 }
