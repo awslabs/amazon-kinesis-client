@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
@@ -18,6 +19,7 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
+@Slf4j
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
 
@@ -37,8 +39,8 @@ public class FleetSegmentingHandler {
             final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
-        this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
         this.versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
+        this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
     }
 
     /**
@@ -59,6 +61,15 @@ public class FleetSegmentingHandler {
         final Map<String, String> workerProperties = new HashMap<>();
         workerProperties.put(versionHashKey, versionHash);
         workerProperties.put(versionHashLutKey, String.valueOf(Instant.now().getEpochSecond()));
+        return workerProperties;
+    }
+
+    public Map<String, AttributeValue> getVersionHashWithLastUpdatedTimeForLockTable() {
+        final Map<String, AttributeValue> workerProperties = new HashMap<>();
+        workerProperties.put(versionHashKey, AttributeValue.fromS(versionHash));
+        workerProperties.put(
+                versionHashLutKey,
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
         return workerProperties;
     }
 

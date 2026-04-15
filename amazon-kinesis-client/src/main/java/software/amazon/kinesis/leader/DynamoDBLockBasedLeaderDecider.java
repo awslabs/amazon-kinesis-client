@@ -16,7 +16,6 @@
 package software.amazon.kinesis.leader;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,7 +28,6 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
@@ -140,15 +138,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         if (!lockItem.isPresent() || lockItem.get().isExpired()) {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
-                final Optional<LockItem> leaderLockItem =
-                        dynamoDBLockClient.tryAcquireLock(AcquireLockOptions.builder(ddbLeaderKey)
-                                .withRefreshPeriod(heartbeatPeriodMillis)
-                                .withTimeUnit(TimeUnit.MILLISECONDS)
-                                .withShouldSkipBlockingWait(true)
-                                .withAdditionalAttributes(Collections.singletonMap(
-                                        segmentingHandler.getVersionHashKey(),
-                                        AttributeValue.fromS(segmentingHandler.getVersionHash())))
-                                .build());
+                final Optional<LockItem> leaderLockItem = dynamoDBLockClient.tryAcquireLock(AcquireLockOptions.builder(
+                                ddbLeaderKey)
+                        .withRefreshPeriod(heartbeatPeriodMillis)
+                        .withTimeUnit(TimeUnit.MILLISECONDS)
+                        .withShouldSkipBlockingWait(true)
+                        .withAdditionalAttributes(segmentingHandler.getVersionHashWithLastUpdatedTimeForLockTable())
+                        .build());
                 leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
