@@ -196,7 +196,7 @@ public final class LeaseAssignmentManager {
 
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
-            segmentingHandler.setIsDeployingVersionEmittedByAllActiveWorkers(
+            segmentingHandler.setIsVersionEmittedByAllActiveWorkers(
                     inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 

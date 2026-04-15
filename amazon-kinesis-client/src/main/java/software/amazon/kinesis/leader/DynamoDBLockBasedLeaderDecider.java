@@ -130,11 +130,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // the current leader lock. The worker has to be the deploying leader so that it can release its lock.
         // Otherwise, two leaders on the same version hash may be functioning at the same time
         final String ddbLeaderKey;
-        if (segmentingHandler.isDeployingVersionEmittedByAllActiveWorkers()) {
-            ddbLeaderKey = CoordinatorState.LEADER_HASH_KEY;
-        } else {
-            ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
-        }
+        ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());

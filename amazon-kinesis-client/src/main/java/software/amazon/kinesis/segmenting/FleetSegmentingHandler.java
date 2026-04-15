@@ -27,9 +27,7 @@ public class FleetSegmentingHandler {
     @Getter
     private final String versionHashKey = "versionHash";
 
-    @Getter
-    private boolean isDeployingVersionEmittedByAllActiveWorkers = false;
-
+    private boolean isVersionEmittedByAllActiveWorkers = false;
     private final long versionHashExpiryMillis;
     private final String versionHashLutKey = "versionHashLut";
     private final String leaderTableName;
@@ -49,7 +47,9 @@ public class FleetSegmentingHandler {
      */
     public String getHashKeyForLeaderLock() {
         final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.LEADER_HASH_KEY);
-        if (!getLeaderItemResponse.hasItem() || doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse)) {
+        if (!doesLeaderHaveValidVersion(getLeaderItemResponse)
+                || doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse)
+                || isVersionEmittedByAllActiveWorkers) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
@@ -80,14 +80,27 @@ public class FleetSegmentingHandler {
         if (lutStr == null) {
             return true;
         }
-        final long lut = Long.parseLong(lutStr);
-        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
+        return isVersionHashExpired(Long.parseLong(lutStr));
     }
 
-    public void setIsDeployingVersionEmittedByAllActiveWorkers(
+    public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isDeployingVersionEmittedByAllActiveWorkers =
-                isOnDeployingVersion() && activeWorkerMetrics.size() == workersOnVersionHash.size();
+        isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.size() == workersOnVersionHash.size();
+    }
+
+    private boolean doesLeaderHaveValidVersion(final GetItemResponse getLeaderItemResponse) {
+        if (!getLeaderItemResponse.hasItem()) {
+            return false;
+        }
+        final Map<String, AttributeValue> item = getLeaderItemResponse.item();
+        return item.containsKey(versionHashKey)
+                && item.containsKey(versionHashLutKey)
+                && !isVersionHashExpired(
+                        Long.parseLong(item.get(versionHashLutKey).s()));
+    }
+
+    private boolean isVersionHashExpired(final long lut) {
+        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
     }
 
     private GetItemResponse getLeaderForHashKey(final String leaderHashKey) {

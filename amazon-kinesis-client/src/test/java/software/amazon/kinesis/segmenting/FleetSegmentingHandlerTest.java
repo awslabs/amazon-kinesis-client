@@ -68,6 +68,9 @@ public class FleetSegmentingHandlerTest {
     void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashMatches() {
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("versionHash", AttributeValue.fromS(sampleVersionHash));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
         when(mockDdbClient.getItem(any(GetItemRequest.class)))
                 .thenReturn(GetItemResponse.builder().item(item).build());
 
@@ -76,10 +79,14 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashKeyMissing() {
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("someOtherKey", AttributeValue.fromS("value"));
+        Map<String, AttributeValue> leaderItem = new HashMap<>();
+        leaderItem.put("someOtherKey", AttributeValue.fromS("value"));
+        leaderItem.put("versionHash", AttributeValue.fromS("differentHash"));
+        leaderItem.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
         when(mockDdbClient.getItem(createGetItemRequestForCurrentLeader()))
-                .thenReturn(GetItemResponse.builder().item(item).build());
+                .thenReturn(GetItemResponse.builder().item(leaderItem).build());
 
         assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
@@ -88,6 +95,9 @@ public class FleetSegmentingHandlerTest {
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() {
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("versionHash", AttributeValue.fromS("differentHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
         when(mockDdbClient.getItem(any(GetItemRequest.class)))
                 .thenReturn(GetItemResponse.builder().item(item).build());
 
@@ -157,49 +167,6 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void isVersionEmittedByAllActiveWorkers_returnsFalse_whenNotOnDeployingVersion() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().build());
-        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
-    }
-
-    @Test
-    void setIsDeployingVersionEmittedByAllActiveWorkers_true_whenDeployingAndAllWorkersMatch() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
-
-        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
-        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
-
-        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
-        assertTrue(handler.isDeployingVersionEmittedByAllActiveWorkers());
-    }
-
-    @Test
-    void setIsDeployingVersionEmittedByAllActiveWorkers_false_whenDeployingButSizesDiffer() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
-
-        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
-        List<WorkerMetricStats> onVersion = Collections.singletonList(mock(WorkerMetricStats.class));
-
-        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
-        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
-    }
-
-    @Test
-    void setIsVersionEmittedByAllActiveWorkers_false_whenNotOnDeployingDeployingVersion() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().build());
-
-        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class));
-        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class));
-
-        handler.setIsDeployingVersionEmittedByAllActiveWorkers(active, onVersion);
-        assertFalse(handler.isDeployingVersionEmittedByAllActiveWorkers());
-    }
-
-    @Test
     void getVersionHashWithLastUpdatedTime_returnsCorrectMap() {
         final long before = Instant.now().getEpochSecond();
         final Map<String, String> result = handler.getVersionHashWithLastUpdatedTime();
@@ -243,6 +210,41 @@ public class FleetSegmentingHandlerTest {
         WorkerMetricStats worker = mock(WorkerMetricStats.class);
         when(worker.getProperties()).thenReturn(null);
         assertTrue(handler.isWorkerVersionHashStale(worker));
+    }
+
+    @Test
+    void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSizesEqual() {
+        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+        handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
+
+        // When all workers emitting, getHashKeyForLeaderLock returns LEADER even with different version
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("differentHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void setIsVersionEmittedByAllActiveWorkers_setsFalse_whenSizesUnequal() {
+        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+        List<WorkerMetricStats> onVersion = Collections.singletonList(mock(WorkerMetricStats.class));
+        handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
+
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("differentHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        when(mockDdbClient.getItem(any(GetItemRequest.class)))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     private GetItemRequest createGetItemRequestForDeployingLeader() {
