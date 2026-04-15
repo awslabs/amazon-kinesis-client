@@ -213,6 +213,52 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
+    void doesDeployingLeaderHaveValidVersion_returnsTrue_whenDeployingLeaderHasValidVersionAndLut() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("someHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertTrue(handler.doesDeployingLeaderHaveValidVersion());
+    }
+
+    @Test
+    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenNoDeployingLeaderItem() {
+        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
+                .thenReturn(GetItemResponse.builder().build());
+
+        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
+    }
+
+    @Test
+    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenLutExpired() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("someHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond() - 3601)));
+        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
+    }
+
+    @Test
+    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenVersionHashMissing() {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
+    }
+
+    @Test
     void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSizesEqual() {
         List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
         List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));

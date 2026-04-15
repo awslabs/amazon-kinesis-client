@@ -88,6 +88,10 @@ public class FleetSegmentingHandler {
         isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.size() == workersOnVersionHash.size();
     }
 
+    public boolean doesDeployingLeaderHaveValidVersion() {
+        return doesLeaderHaveValidVersion(getLeaderForHashKey(CoordinatorState.DEPLOYING_LEADER_HASH_KEY));
+    }
+
     private boolean doesLeaderHaveValidVersion(final GetItemResponse getLeaderItemResponse) {
         if (!getLeaderItemResponse.hasItem()) {
             return false;

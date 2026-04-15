@@ -156,11 +156,11 @@ public final class VarianceBasedLeaseAssignmentDecider extends LeaseAssignmentDe
      * across fleet and in case of multiple WorkerMetricStats, the one with maximum magnitude of throughput is considered.
      */
     @Override
-    public void balanceWorkerVariance(final List<WorkerMetricStats> workersFilteredByVersion) {
+    public void balanceWorkerVariance(final List<WorkerMetricStats> workersToBalance) {
         // final List<WorkerMetricStats> activeWorkerMetrics = inMemoryStorageView.getActiveWorkerMetrics();
 
         log.info("WorkerMetricStats to corresponding fleet level average : {}", workerMetricsToFleetLevelAverageMap);
-        log.info("Active workers on version hash : {}", workersFilteredByVersion);
+        log.info("Workers to balance : {}", workersToBalance);
 
         final Map<String, Double> workerIdToThroughputToTakeMap = new HashMap<>();
         String largestOutlierWorkerMetricsName = "";
@@ -172,7 +172,7 @@ public final class VarianceBasedLeaseAssignmentDecider extends LeaseAssignmentDe
 
             // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
             // new WorkerMetricStats and currently in phase of deployment.
-            final List<WorkerMetricStats> currentWorkerMetrics = workersFilteredByVersion.stream()
+            final List<WorkerMetricStats> currentWorkerMetrics = workersToBalance.stream()
                     .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
                     .collect(Collectors.toList());
 

@@ -257,7 +257,13 @@ public final class LeaseAssignmentManager {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
-                leaseAssignmentDecider.balanceWorkerVariance(inMemoryStorageView.getWorkersOnVersionHash());
+                final List<WorkerMetricStats> workersToBalance;
+                if (segmentingHandler.doesDeployingLeaderHaveValidVersion()) {
+                    workersToBalance = inMemoryStorageView.getWorkersOnVersionHash();
+                } else {
+                    workersToBalance = inMemoryStorageView.getActiveWorkerMetrics();
+                }
+                leaseAssignmentDecider.balanceWorkerVariance(workersToBalance);
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
                 metricsScope.addData(

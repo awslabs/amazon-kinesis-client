@@ -1402,6 +1402,71 @@ class LeaseAssignmentManagerTest {
                         .count());
     }
 
+    @Test
+    void performAssignment_noDeployingLeader_varianceBalancingUsesAllActiveWorkers() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        // Worker with different version hash should still participate in balancing
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // With no deploying leader, all active workers participate in variance balancing
+        final long totalRebalanced = leaseRefresher.listLeases().stream()
+                .filter(lease ->
+                        TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()) || "otherWorker".equals(lease.leaseOwner()))
+                .count();
+        assertTrue(totalRebalanced > 0, "Expected rebalancing to include workers regardless of version hash");
+    }
+
+    @Test
+    void performAssignment_withDeployingLeader_varianceBalancingUsesOnlyVersionFilteredWorkers() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // With deploying leader, only version-filtered workers participate
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "otherWorker".equals(lease.leaseOwner()))
+                        .count());
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
@@ -1571,5 +1636,6 @@ class LeaseAssignmentManagerTest {
         when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
     }
 }
