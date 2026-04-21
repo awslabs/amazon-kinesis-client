@@ -1335,7 +1335,7 @@ public class SchedulerTest {
         // (createOrGetShardConsumer only replaces LEASE_LOST shutdowns, so SHARD_END is returned as-is)
         final ShardConsumer mockConsumer = mock(ShardConsumer.class);
         when(mockConsumer.isShutdown()).thenReturn(true);
-        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.SHARD_END);
+        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.REQUESTED);
         scheduler.shardInfoShardConsumerMap().put(shardInfo, mockConsumer);
 
         // Set up lease with matching concurrency token
@@ -1352,6 +1352,29 @@ public class SchedulerTest {
     }
 
     @Test
+    public void testRunProcessLoopDoesNotDropLeaseWhenShutdownWithShardEndReason() {
+        final String shardId = "shardId-000000000000";
+        final UUID concurrencyUUID = UUID.randomUUID();
+        final ShardInfo shardInfo =
+                new ShardInfo(shardId, concurrencyUUID.toString(), null, ExtendedSequenceNumber.TRIM_HORIZON);
+
+        final ShardConsumer mockConsumer = mock(ShardConsumer.class);
+        when(mockConsumer.isShutdown()).thenReturn(true);
+        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.SHARD_END);
+        scheduler.shardInfoShardConsumerMap().put(shardInfo, mockConsumer);
+
+        final Lease lease = new Lease();
+        lease.leaseKey(shardId);
+        lease.leaseOwner(workerIdentifier);
+        lease.concurrencyToken(concurrencyUUID);
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.singletonList(shardInfo));
+
+        scheduler.runProcessLoop();
+
+        verify(leaseCoordinator, never()).dropLease(any(Lease.class));
+    }
+
+    @Test
     public void testRunProcessLoopDoesNotDropLeaseWhenConcurrencyTokenMismatch() {
         final String shardId = "shardId-000000000000";
         final UUID consumerUUID = UUID.randomUUID();
@@ -1361,10 +1384,9 @@ public class SchedulerTest {
 
         final ShardConsumer mockConsumer = mock(ShardConsumer.class);
         when(mockConsumer.isShutdown()).thenReturn(true);
-        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.SHARD_END);
+        when(mockConsumer.shutdownReason()).thenReturn(ShutdownReason.REQUESTED);
         scheduler.shardInfoShardConsumerMap().put(shardInfo, mockConsumer);
 
-        // Set up lease with DIFFERENT concurrency token
         final Lease lease = new Lease();
         lease.leaseKey(shardId);
         lease.leaseOwner(workerIdentifier);

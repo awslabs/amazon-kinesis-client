@@ -592,7 +592,7 @@ public class Scheduler implements Runnable {
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                 ShardConsumer shardConsumer = createOrGetShardConsumer(
                         shardInfo, processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
-                if (shardConsumer.isShutdown()) {
+                if (shardConsumer.isShutdown() && !ShutdownReason.SHARD_END.equals(shardConsumer.shutdownReason())) {
                     final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
                     if (currentLease != null
                             && currentLease.concurrencyToken() != null
