@@ -162,7 +162,6 @@ public class ShutdownTask implements ConsumerTask {
                         throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                     }
                 } else {
-                    throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                     // When shutdown reason is not SHARD_END (i.e., LEASE_LOST), the lease is typically
                     // already lost and currentShardLease would be null. However, if a graceful lease
                     // shutdown was requested but the ShardConsumer transitioned directly to ShutdownTask
@@ -178,6 +177,7 @@ public class ShutdownTask implements ConsumerTask {
                         }
                         dropLease(currentShardLease, leaseKey);
                     }
+                    throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                 }
 
                 log.debug("Shutting down retrieval strategy for shard {}.", leaseKey);
