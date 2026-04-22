@@ -79,14 +79,13 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashKeyMissing() {
-        Map<String, AttributeValue> leaderItem = new HashMap<>();
-        leaderItem.put("someOtherKey", AttributeValue.fromS("value"));
-        leaderItem.put("versionHash", AttributeValue.fromS("differentHash"));
-        leaderItem.put(
+        Map<String, AttributeValue> currentVersionItem = new HashMap<>();
+        currentVersionItem.put("versionHash", AttributeValue.fromS("differentHash"));
+        currentVersionItem.put(
                 "versionHashLut",
                 AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
-        when(mockDdbClient.getItem(createGetItemRequestForCurrentLeader()))
-                .thenReturn(GetItemResponse.builder().item(leaderItem).build());
+        when(mockDdbClient.getItem(createGetItemRequestForCurrentVersion()))
+                .thenReturn(GetItemResponse.builder().item(currentVersionItem).build());
 
         assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
@@ -259,38 +258,31 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSizesEqual() {
-        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
-        List<WorkerMetricStats> onVersion = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
+    void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSameWorkerIds() {
+        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
+        WorkerMetricStats w2 = mock(WorkerMetricStats.class);
+        when(w1.getWorkerId()).thenReturn("worker1");
+        when(w2.getWorkerId()).thenReturn("worker2");
+        List<WorkerMetricStats> active = Arrays.asList(w1, w2);
+        List<WorkerMetricStats> onVersion = Arrays.asList(w1, w2);
         handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
 
-        // When all workers emitting, getHashKeyForLeaderLock returns LEADER even with different version
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("versionHash", AttributeValue.fromS("differentHash"));
-        item.put(
-                "versionHashLut",
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
-        when(mockDdbClient.getItem(any(GetItemRequest.class)))
-                .thenReturn(GetItemResponse.builder().item(item).build());
-
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertTrue(handler.isVersionEmittedByAllActiveWorkers());
     }
 
     @Test
-    void setIsVersionEmittedByAllActiveWorkers_setsFalse_whenSizesUnequal() {
-        List<WorkerMetricStats> active = Arrays.asList(mock(WorkerMetricStats.class), mock(WorkerMetricStats.class));
-        List<WorkerMetricStats> onVersion = Collections.singletonList(mock(WorkerMetricStats.class));
+    void setIsVersionEmittedByAllActiveWorkers_setsFalse_whenDifferentWorkerIds() {
+        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
+        WorkerMetricStats w2 = mock(WorkerMetricStats.class);
+        WorkerMetricStats w3 = mock(WorkerMetricStats.class);
+        when(w1.getWorkerId()).thenReturn("worker1");
+        when(w2.getWorkerId()).thenReturn("worker2");
+        when(w3.getWorkerId()).thenReturn("worker1");
+        List<WorkerMetricStats> active = Arrays.asList(w1, w2);
+        List<WorkerMetricStats> onVersion = Collections.singletonList(w3);
         handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
 
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("versionHash", AttributeValue.fromS("differentHash"));
-        item.put(
-                "versionHashLut",
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
-        when(mockDdbClient.getItem(any(GetItemRequest.class)))
-                .thenReturn(GetItemResponse.builder().item(item).build());
-
-        assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
     }
 
     private GetItemRequest createGetItemRequestForDeployingLeader() {
@@ -319,5 +311,12 @@ public class FleetSegmentingHandlerTest {
         item.put("key", AttributeValue.fromS(CoordinatorState.LEADER_HASH_KEY));
         item.put("versionHash", AttributeValue.fromS(versionHash));
         return GetItemResponse.builder().item(item).build();
+    }
+
+    private GetItemRequest createGetItemRequestForCurrentVersion() {
+        return GetItemRequest.builder()
+                .tableName(tableName)
+                .key(Collections.singletonMap("key", AttributeValue.fromS("CurrentVersion")))
+                .build();
     }
 }

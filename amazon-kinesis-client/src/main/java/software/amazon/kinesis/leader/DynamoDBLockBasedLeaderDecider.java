@@ -168,7 +168,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         publishIsLeaderMetrics(response);
 
         // only release the deploying leader lock if this worker also acquired the current leader lock
-        if (isWorkerDeployingLeader() && isWorkerCurrentLeader()) {
+        if (isWorkerDeployingLeader()
+                && isWorkerCurrentLeader()
+                && segmentingHandler.isVersionEmittedByAllActiveWorkers()) {
             releaseDeployingLeaderLock();
         }
 

@@ -620,6 +620,7 @@ public class Scheduler implements Runnable {
                 checkAndSyncStreamShardsAndLeases();
                 leaderSynced.set(true);
                 streamInfoManager.start();
+                segmentingHandler.updateCurrentVersion();
             } else {
                 leaderSynced.set(false);
                 streamInfoManager.stop(false);

@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -23,14 +24,18 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
 
+    private static final String CURRENT_VERSION_KEY = "CurrentVersion";
+
     @Getter
     private final String versionHash;
 
     @Getter
     private final String versionHashKey = "versionHash";
 
+    @Getter
     private boolean isVersionEmittedByAllActiveWorkers = false;
-    private final long versionHashExpiryMillis;
+
+    private final long versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
     private final String versionHashLutKey = "versionHashLut";
     private final String leaderTableName;
     private final DynamoDbClient ddbClient;
@@ -39,7 +44,6 @@ public class FleetSegmentingHandler {
             final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
-        this.versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
         this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
     }
 
@@ -47,11 +51,11 @@ public class FleetSegmentingHandler {
      * Returns the key of the leader lock to take depending on the worker's own version hash.
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      */
+    // TODO: test this
     public String getHashKeyForLeaderLock() {
-        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.LEADER_HASH_KEY);
-        if (!doesLeaderHaveValidVersion(getLeaderItemResponse)
-                || doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse)
-                || isVersionEmittedByAllActiveWorkers) {
+        final GetItemResponse currentVersionResponse = getItemFromCoordinatorTable(CURRENT_VERSION_KEY);
+        if (!currentVersionResponse.hasItem()
+                || (isVersionHashValid(currentVersionResponse) && doesVersionHashMatch(currentVersionResponse))) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
@@ -74,13 +78,14 @@ public class FleetSegmentingHandler {
     }
 
     public boolean isOnCurrentVersion() {
-        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.LEADER_HASH_KEY);
-        return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
+        final GetItemResponse getLeaderItemResponse = getItemFromCoordinatorTable(CoordinatorState.LEADER_HASH_KEY);
+        return doesVersionHashMatch(getLeaderItemResponse);
     }
 
     public boolean isOnDeployingVersion() {
-        final GetItemResponse getLeaderItemResponse = getLeaderForHashKey(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
-        return doesVersionHashMatchLeaderVersionHash(getLeaderItemResponse);
+        final GetItemResponse getLeaderItemResponse =
+                getItemFromCoordinatorTable(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        return doesVersionHashMatch(getLeaderItemResponse);
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
@@ -100,10 +105,10 @@ public class FleetSegmentingHandler {
     }
 
     public boolean doesDeployingLeaderHaveValidVersion() {
-        return doesLeaderHaveValidVersion(getLeaderForHashKey(CoordinatorState.DEPLOYING_LEADER_HASH_KEY));
+        return isVersionHashValid(getItemFromCoordinatorTable(CoordinatorState.DEPLOYING_LEADER_HASH_KEY));
     }
 
-    private boolean doesLeaderHaveValidVersion(final GetItemResponse getLeaderItemResponse) {
+    private boolean isVersionHashValid(final GetItemResponse getLeaderItemResponse) {
         if (!getLeaderItemResponse.hasItem()) {
             return false;
         }
@@ -118,21 +123,30 @@ public class FleetSegmentingHandler {
         return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
     }
 
-    private GetItemResponse getLeaderForHashKey(final String leaderHashKey) {
+    private GetItemResponse getItemFromCoordinatorTable(final String key) {
         final GetItemRequest getLeaderItemRequest = GetItemRequest.builder()
                 .tableName(leaderTableName)
                 .key(Collections.singletonMap(
-                        CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
-                        AttributeValue.fromS(leaderHashKey)))
+                        CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, AttributeValue.fromS(key)))
                 .build();
         return ddbClient.getItem(getLeaderItemRequest);
     }
 
-    private boolean doesVersionHashMatchLeaderVersionHash(final GetItemResponse getLeaderItemResponse) {
-        if (getLeaderItemResponse.hasItem() && getLeaderItemResponse.item().containsKey(versionHashKey)) {
-            return versionHash.equals(
-                    getLeaderItemResponse.item().get(versionHashKey).s());
+    private boolean doesVersionHashMatch(final GetItemResponse getItemResponse) {
+        return getItemResponse.hasItem()
+                && getItemResponse.item().containsKey(versionHashKey)
+                && versionHash.equals(getItemResponse.item().get(versionHashKey).s());
+    }
+
+    public void updateCurrentVersion() {
+        if (isVersionEmittedByAllActiveWorkers) {
+            Map<String, AttributeValue> currentVersionMap = getVersionHashWithLastUpdatedTimeForLockTable();
+            currentVersionMap.put("key", AttributeValue.fromS(CURRENT_VERSION_KEY));
+            final PutItemRequest putItemRequest = PutItemRequest.builder()
+                    .item(currentVersionMap)
+                    .tableName(leaderTableName)
+                    .build();
+            ddbClient.putItem(putItemRequest);
         }
-        return false;
     }
 }
