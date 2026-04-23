@@ -22,7 +22,7 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
-import software.amazon.kinesis.leases.LeaseAssignmentMetric;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
@@ -52,7 +52,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
         mockSegmentingHandler = mock(FleetSegmentingHandler.class);
         Mockito.when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
         Mockito.when(mockSegmentingHandler.getVersionHash())
-                .thenReturn(String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode()));
+                .thenReturn(String.valueOf(
+                        LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode()));
         Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);

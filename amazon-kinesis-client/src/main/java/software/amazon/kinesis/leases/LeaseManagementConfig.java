@@ -325,8 +325,6 @@ public class LeaseManagementConfig {
 
     private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
-    private final LeaseAssignmentMetric leaseAssignmentMetric;
-
     @Deprecated
     public LeaseManagementConfig(
             String tableName,
@@ -339,7 +337,6 @@ public class LeaseManagementConfig {
         this.kinesisClient = kinesisClient;
         this.streamName = streamName;
         this.workerIdentifier = workerIdentifier;
-        this.leaseAssignmentMetric = LeaseAssignmentMetric.CPU;
     }
 
     public LeaseManagementConfig(
@@ -354,23 +351,6 @@ public class LeaseManagementConfig {
         this.workerIdentifier = workerIdentifier;
         this.workerUtilizationAwareAssignmentConfig.workerMetricsTableConfig =
                 new WorkerMetricsTableConfig(applicationName);
-        this.leaseAssignmentMetric = LeaseAssignmentMetric.CPU;
-    }
-
-    public LeaseManagementConfig(
-            final String tableName,
-            final String applicationName,
-            final DynamoDbAsyncClient dynamoDBClient,
-            final KinesisAsyncClient kinesisClient,
-            final String workerIdentifier,
-            final LeaseAssignmentMetric leaseAssignmentMetric) {
-        this.tableName = tableName;
-        this.dynamoDBClient = dynamoDBClient;
-        this.kinesisClient = kinesisClient;
-        this.workerIdentifier = workerIdentifier;
-        this.workerUtilizationAwareAssignmentConfig.workerMetricsTableConfig =
-                new WorkerMetricsTableConfig(applicationName);
-        this.leaseAssignmentMetric = leaseAssignmentMetric;
     }
 
     /**

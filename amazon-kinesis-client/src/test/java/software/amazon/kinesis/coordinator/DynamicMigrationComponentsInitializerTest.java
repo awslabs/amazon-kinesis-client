@@ -37,7 +37,7 @@ import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leader.MigrationAdaptiveLeaderDecider;
-import software.amazon.kinesis.leases.LeaseAssignmentMetric;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -109,7 +109,8 @@ public class DynamicMigrationComponentsInitializerTest {
         when(mockDdbLockBasedLeaderDeciderCreator.get()).thenReturn(mockDdbLockLeaderDecider);
         when(mockDeterministicLeaderDeciderCreator.get()).thenReturn(mockDeterministicLeaderDecider);
         when(mockSegmentingHandler.getVersionHash())
-                .thenReturn(String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode()));
+                .thenReturn(String.valueOf(
+                        LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode()));
 
         migrationInitializer = new DynamicMigrationComponentsInitializer(
                 mockMetricsFactory,

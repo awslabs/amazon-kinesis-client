@@ -44,7 +44,8 @@ public class FleetSegmentingHandler {
             final LeaseManagementConfig config, final DynamoDbClient ddbClient, final String leaderTableName) {
         this.leaderTableName = leaderTableName;
         this.ddbClient = ddbClient;
-        this.versionHash = String.valueOf(config.leaseAssignmentMetric().name().hashCode());
+        this.versionHash =
+                String.valueOf(config.leaseAssignmentStrategy().name().hashCode());
     }
 
     /**

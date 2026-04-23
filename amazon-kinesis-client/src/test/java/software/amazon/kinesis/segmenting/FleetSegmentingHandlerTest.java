@@ -17,7 +17,7 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.coordinator.CoordinatorState;
-import software.amazon.kinesis.leases.LeaseAssignmentMetric;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
@@ -41,20 +41,20 @@ public class FleetSegmentingHandlerTest {
     void setup() {
         clearInvocations();
         mockDdbClient = mock(DynamoDbClient.class);
-        sampleVersionHash = String.valueOf(LeaseAssignmentMetric.CPU.name().hashCode());
+        sampleVersionHash = String.valueOf(
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode());
         config = new LeaseManagementConfig(
                 tableName,
                 "dummyApplicationName",
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
-                "dummyWorkerId",
-                LeaseAssignmentMetric.CPU);
+                "dummyWorkerId");
         handler = new FleetSegmentingHandler(config, mockDdbClient, tableName);
     }
 
     @Test
     void getVersionHash_returnsDeterministicValue() {
-        String expected = String.valueOf("CPU".hashCode());
+        String expected = String.valueOf("WORKER_UTILIZATION_AWARE".hashCode());
         assertEquals(expected, handler.getVersionHash());
     }
 
