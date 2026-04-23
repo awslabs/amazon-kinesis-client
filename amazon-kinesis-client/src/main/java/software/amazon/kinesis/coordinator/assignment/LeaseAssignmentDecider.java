@@ -32,16 +32,15 @@ public abstract class LeaseAssignmentDecider {
     protected final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
     protected final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
 
-    protected LeaseAssignmentDecider(
-            LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView, List<WorkerMetricStats> assignableWorkers) {
-        initializeWorkerMetricsToFleetLevelAverageMap(assignableWorkers);
+    protected LeaseAssignmentDecider(LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView) {
+        initializeWorkerMetricsToFleetLevelAverageMap(inMemoryStorageView.getAssignableWorkers());
         final Comparator<WorkerMetricStats> comparator = Comparator.comparingDouble(
                 workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
         this.assignableWorkerSortedByAvailableCapacity = new PriorityQueue<>(comparator.reversed());
 
         // Workers with WorkerMetricStats running hot are also available for assignment as the goal is to balance
         // utilization always (e.g., if all workers have hot WorkerMetricStats, balance the variance between them too)
-        this.assignableWorkerSortedByAvailableCapacity.addAll(assignableWorkers.stream()
+        this.assignableWorkerSortedByAvailableCapacity.addAll(inMemoryStorageView.getAssignableWorkers().stream()
                 .filter(workerMetrics -> inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(
                                 workerMetrics.getWorkerId())
                         && inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
@@ -58,7 +57,7 @@ public abstract class LeaseAssignmentDecider {
      * resource utilization to a minimum.
      * Check documentation on implementation class to see how it balances the leases.
      */
-    public abstract void balanceWorkerVariance(final List<WorkerMetricStats> workersFilteredByVersion);
+    public abstract void balanceWorkerVariance();
 
     private void initializeWorkerMetricsToFleetLevelAverageMap(final List<WorkerMetricStats> assignableWorkers) {
         final Map<String, Double> workerMetricsNameToAverage = assignableWorkers.stream()

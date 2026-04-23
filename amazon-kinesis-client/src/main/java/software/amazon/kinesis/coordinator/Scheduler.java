@@ -459,6 +459,7 @@ public class Scheduler implements Runnable {
                         System::nanoTime,
                         leaseManagementConfig.maxLeasesForWorker(),
                         leaseManagementConfig.gracefulLeaseHandoffConfig(),
+                        leaseManagementConfig.leaseAssignmentStrategy(),
                         leaseManagementConfig.leaseAssignmentIntervalMillis(),
                         streamIdCacheManager,
                         segmentingHandler))

@@ -51,6 +51,7 @@ import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
@@ -119,6 +120,7 @@ public final class LeaseAssignmentManager {
     private final Supplier<Long> nanoTimeProvider;
     private final int maxLeasesForWorker;
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
+    private final LeaseAssignmentStrategy leaseAssignmentStrategy;
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
@@ -137,7 +139,7 @@ public final class LeaseAssignmentManager {
             tookOverLeadershipInThisRun = false;
             managerFuture = executorService.scheduleWithFixedDelay(
                     this::performAssignment, 0L, (int) (leaseAssignmentIntervalMillis), TimeUnit.MILLISECONDS);
-            log.info("Started LeaseAssignmentManager");
+            log.info("Started LeaseAssignmentManager using {}", leaseAssignmentStrategy);
             return;
         }
         log.info("LeaseAssignmentManager already running...");
@@ -201,12 +203,8 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
-            final LeaseAssignmentDecider leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
-                    inMemoryStorageView,
-                    config.dampeningPercentage(),
-                    config.reBalanceThresholdPercentage(),
-                    config.allowThroughputOvershoot(),
-                    inMemoryStorageView.getAssignableWorkers());
+
+            final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
 
             updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
@@ -257,13 +255,7 @@ public final class LeaseAssignmentManager {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
-                final List<WorkerMetricStats> workersToBalance;
-                if (segmentingHandler.doesDeployingLeaderHaveValidVersion()) {
-                    workersToBalance = inMemoryStorageView.getWorkersOnVersionHash();
-                } else {
-                    workersToBalance = inMemoryStorageView.getActiveWorkerMetrics();
-                }
-                leaseAssignmentDecider.balanceWorkerVariance(workersToBalance);
+                leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
                 metricsScope.addData(
@@ -303,6 +295,21 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addSuccessAndLatency(metricsScope, success, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(metricsScope);
         }
+    }
+
+    private LeaseAssignmentDecider getLeaseAssignmentDecider(InMemoryStorageView inMemoryStorageView) {
+        final LeaseAssignmentDecider leaseAssignmentDecider;
+        if (leaseAssignmentStrategy == LeaseAssignmentStrategy.LEASE_COUNT_BASED) {
+            leaseAssignmentDecider = new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, maxLeasesForWorker);
+        } else {
+            leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
+                    inMemoryStorageView,
+                    config.dampeningPercentage(),
+                    config.reBalanceThresholdPercentage(),
+                    config.allowThroughputOvershoot(),
+                    inMemoryStorageView.getAssignableWorkers());
+        }
+        return leaseAssignmentDecider;
     }
 
     private boolean shouldRunVarianceBalancing() {
