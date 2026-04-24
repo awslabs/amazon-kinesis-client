@@ -40,14 +40,13 @@ import static java.util.Objects.nonNull;
  */
 @Slf4j
 @KinesisClientInternalApi
-public final class LeaseCountBasedLeaseAssignmentDecider extends LeaseAssignmentDecider {
+public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignmentDecider {
 
     private final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
     private final int maxLeasesForWorker;
 
     public LeaseCountBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView, final int maxLeasesForWorker) {
-        super(inMemoryStorageView);
         this.inMemoryStorageView = inMemoryStorageView;
         this.maxLeasesForWorker = maxLeasesForWorker;
     }
@@ -113,7 +112,11 @@ public final class LeaseCountBasedLeaseAssignmentDecider extends LeaseAssignment
         if (inMemoryStorageView.getAssignableWorkers().isEmpty()) {
             return;
         }
+
+        // estimated lease counts should consider all leases when getting lease count
         final Map<String, Integer> estimatedLeaseCounts = computeEstimatedLeaseCounts();
+
+        // available leases should only be from versioned workers
         final Map<String, List<Lease>> availableLeasesByWorker = computeAvailableLeases();
         final int target = calculateTargetLeaseCount();
 

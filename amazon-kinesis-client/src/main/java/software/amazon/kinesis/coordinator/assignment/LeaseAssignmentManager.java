@@ -306,8 +306,7 @@ public final class LeaseAssignmentManager {
                     inMemoryStorageView,
                     config.dampeningPercentage(),
                     config.reBalanceThresholdPercentage(),
-                    config.allowThroughputOvershoot(),
-                    inMemoryStorageView.getAssignableWorkers());
+                    config.allowThroughputOvershoot());
         }
         return leaseAssignmentDecider;
     }

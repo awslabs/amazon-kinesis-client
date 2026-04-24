@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.coordinator.assignment;
 
+import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -50,25 +52,50 @@ import static java.util.Objects.nonNull;
  */
 @Slf4j
 @KinesisClientInternalApi
-public final class VarianceBasedLeaseAssignmentDecider extends LeaseAssignmentDecider {
+public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmentDecider {
     private final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
     private final int dampeningPercentageValue;
     private final int reBalanceThreshold;
     private final boolean allowThroughputOvershoot;
     private final int targetLeasePerWorker;
+    private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
+    private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
 
     public VarianceBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
             final int dampeningPercentageValue,
             final int reBalanceThreshold,
-            final boolean allowThroughputOvershoot,
-            final List<WorkerMetricStats> assignableWorkers) {
-        super(inMemoryStorageView);
+            final boolean allowThroughputOvershoot) {
+        initializeWorkerMetricsToFleetLevelAverageMap(inMemoryStorageView.getAssignableWorkers());
+        final Comparator<WorkerMetricStats> comparator = Comparator.comparingDouble(
+                workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
+        this.assignableWorkerSortedByAvailableCapacity = new PriorityQueue<>(comparator.reversed());
+
+        // Workers with WorkerMetricStats running hot are also available for assignment as the goal is to balance
+        // utilization always (e.g., if all workers have hot WorkerMetricStats, balance the variance between them too)
+        this.assignableWorkerSortedByAvailableCapacity.addAll(inMemoryStorageView.getAssignableWorkers().stream()
+                .filter(workerMetrics -> inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(
+                                workerMetrics.getWorkerId())
+                        && inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
+                .collect(Collectors.toList()));
         this.inMemoryStorageView = inMemoryStorageView;
         this.dampeningPercentageValue = dampeningPercentageValue;
         this.reBalanceThreshold = reBalanceThreshold;
         this.allowThroughputOvershoot = allowThroughputOvershoot;
         this.targetLeasePerWorker = getTargetLeasePerWorker();
+    }
+
+    private void initializeWorkerMetricsToFleetLevelAverageMap(final List<WorkerMetricStats> assignableWorkers) {
+        final Map<String, Double> workerMetricsNameToAverage = assignableWorkers.stream()
+                .flatMap(workerMetrics -> workerMetrics.getMetricStats().keySet().stream()
+                        .map(workerMetricsName -> new AbstractMap.SimpleEntry<>(
+                                workerMetricsName, workerMetrics.getMetricStat(workerMetricsName))))
+                .collect(Collectors.groupingBy(
+                        AbstractMap.SimpleEntry::getKey,
+                        HashMap::new,
+                        Collectors.averagingDouble(AbstractMap.SimpleEntry::getValue)));
+
+        workerMetricsToFleetLevelAverageMap.putAll(workerMetricsNameToAverage);
     }
 
     private int getTargetLeasePerWorker() {
