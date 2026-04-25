@@ -62,6 +62,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
                 })
                 .collect(Collectors.toList());
         when(inMemoryStorageView.getAssignableWorkers()).thenReturn(workerMetrics);
+        when(inMemoryStorageView.getWorkersOnVersionHash()).thenReturn(workerMetrics);
         when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
                 .thenReturn(true);
         when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))

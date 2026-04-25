@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static java.util.Objects.nonNull;
 
@@ -67,7 +68,9 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
         expiredOrUnAssignedLeases.sort(Comparator.comparingLong(Lease::lastCounterIncrementNanos));
 
         final Map<String, Integer> leaseCounts = computeEstimatedLeaseCounts();
-        final int target = calculateTargetLeaseCount();
+        final int totalLeases =
+                leaseCounts.values().stream().mapToInt(Integer::intValue).sum() + expiredOrUnAssignedLeases.size();
+        final int target = calculateTargetLeaseCount(totalLeases);
 
         log.info(
                 "Lease count balancing: {} total leases, {} workers, target {} leases per worker",
@@ -118,7 +121,11 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
 
         // available leases should only be from versioned workers
         final Map<String, List<Lease>> availableLeasesByWorker = computeAvailableLeases();
-        final int target = calculateTargetLeaseCount();
+        final int totalLeases = estimatedLeaseCounts.values().stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+        final int target = calculateTargetLeaseCount(totalLeases);
+        log.info("Target lease count: {}", target);
 
         final List<Map.Entry<String, Integer>> sortedWorkers = estimatedLeaseCounts.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
@@ -164,8 +171,7 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
      *
      * @return target lease count per worker, capped by maxLeasesForWorker
      */
-    private int calculateTargetLeaseCount() {
-        final int totalLeases = inMemoryStorageView.getLeaseList().size();
+    private int calculateTargetLeaseCount(final int totalLeases) {
         final int totalWorkers = inMemoryStorageView.getAssignableWorkers().size();
         int target;
         int leaseSpillover = 0;
@@ -203,19 +209,22 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
      */
     private Map<String, Integer> computeEstimatedLeaseCounts() {
         final Map<String, Integer> estimatedCounts = new HashMap<>();
+        final Set<String> assignableWorkerIds = inMemoryStorageView.getAssignableWorkers().stream()
+                .map(WorkerMetricStats::getWorkerId)
+                .collect(Collectors.toSet());
 
         // Count leases by actual owner using workerToLeasesMap (reflects current assignments)
         for (final Map.Entry<String, Set<Lease>> entry :
                 inMemoryStorageView.getWorkerToLeasesMap().entrySet()) {
             final String workerId = entry.getKey();
             final int leaseCount = entry.getValue().size();
-            if (nonNull(workerId)) {
+            if (nonNull(workerId) && assignableWorkerIds.contains(workerId)) {
                 estimatedCounts.put(workerId, leaseCount);
             }
         }
 
         // Ensure all active workers are represented
-        for (final String workerId : inMemoryStorageView.getActiveWorkerIdSet()) {
+        for (final String workerId : assignableWorkerIds) {
             estimatedCounts.putIfAbsent(workerId, 0);
         }
 
@@ -230,10 +239,16 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
      */
     private Map<String, List<Lease>> computeAvailableLeases() {
         final Map<String, List<Lease>> availableLeases = new HashMap<>();
+        final Set<String> assignableWorkerIds = inMemoryStorageView.getWorkersOnVersionHash().stream()
+                .map(WorkerMetricStats::getWorkerId)
+                .collect(Collectors.toSet());
 
         for (final Map.Entry<String, Set<Lease>> entry :
                 inMemoryStorageView.getWorkerToLeasesMap().entrySet()) {
             final String workerId = entry.getKey();
+            if (!assignableWorkerIds.contains(workerId)) {
+                continue;
+            }
             final List<Lease> workerAvailableLeases = entry.getValue().stream()
                     .filter(lease -> !lease.shutdownRequested()) // Avoid leases pending handoff
                     .collect(Collectors.toList());

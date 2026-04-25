@@ -199,14 +199,14 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
             // new WorkerMetricStats and currently in phase of deployment.
-            final List<WorkerMetricStats> currentWorkerMetrics = inMemoryStorageView.getAssignableWorkers().stream()
+            final List<WorkerMetricStats> workersOnVersion = inMemoryStorageView.getWorkersOnVersionHash().stream()
                     .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
                     .collect(Collectors.toList());
 
             final double fleetAverageForWorkerMetrics = workerMetricsToFleetLevelAverageEntry.getValue();
 
             final List<WorkerMetricStats> workerToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
-                    currentWorkerMetrics, workerMetricsName, fleetAverageForWorkerMetrics);
+                    workersOnVersion, workerMetricsName, fleetAverageForWorkerMetrics);
 
             final Map<String, Double> workerIdToThroughputToTakeForCurrentWorkerMetrics = new HashMap<>();
             double totalThroughputToTakeForCurrentWorkerMetrics = 0D;
