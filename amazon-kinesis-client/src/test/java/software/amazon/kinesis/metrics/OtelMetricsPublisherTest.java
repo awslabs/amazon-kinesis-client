@@ -132,7 +132,7 @@ public class OtelMetricsPublisherTest {
         Assert.assertEquals("shardId-000000000001", attributes.get(AttributeKey.stringKey("aws.kinesis.shard.id")));
         Assert.assertEquals(
                 "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream",
-                attributes.get(AttributeKey.stringKey("messaging.destination.name")));
+                attributes.get(AttributeKey.stringKey("aws.kinesis.stream_name")));
         Assert.assertEquals("worker-1", attributes.get(AttributeKey.stringKey("aws.kinesis.consumer.name")));
     }
 

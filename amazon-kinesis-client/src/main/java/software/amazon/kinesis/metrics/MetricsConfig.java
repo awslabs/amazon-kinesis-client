@@ -190,8 +190,6 @@ public class MetricsConfig {
      */
     private Map<String, String> buildAutoDetectedResourceAttributes() {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.name", namespace());
-        attributes.put("cloud.provider", "aws");
         attributes.put("messaging.system", "aws_kinesis");
         return attributes;
     }

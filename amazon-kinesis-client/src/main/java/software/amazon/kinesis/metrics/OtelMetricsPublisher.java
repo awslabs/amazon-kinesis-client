@@ -93,7 +93,7 @@ public class OtelMetricsPublisher {
         Map<String, String> dimMap = new HashMap<>();
         dimMap.put(MetricsUtil.OPERATION_DIMENSION_NAME, "aws.kinesis.operation");
         dimMap.put(MetricsUtil.SHARD_ID_DIMENSION_NAME, "aws.kinesis.shard.id");
-        dimMap.put(MetricsUtil.STREAM_IDENTIFIER, "messaging.destination.name");
+        dimMap.put(MetricsUtil.STREAM_IDENTIFIER, "aws.kinesis.stream_name");
         dimMap.put("WorkerIdentifier", "aws.kinesis.consumer.name");
         DIMENSION_TO_ATTRIBUTE_MAP = Collections.unmodifiableMap(dimMap);
     }
