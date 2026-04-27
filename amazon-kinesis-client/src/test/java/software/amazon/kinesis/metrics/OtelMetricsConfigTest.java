@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.metrics;
 
+import io.opentelemetry.api.OpenTelemetry;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,43 +46,74 @@ public class OtelMetricsConfigTest {
     }
 
     /**
-     * CLOUDWATCH_OTEL backend creates OtelMetricsFactory when endpoint is set.
+     * CLOUDWATCH backend explicitly set still creates CloudWatchMetricsFactory.
      */
     @Test
-    public void testOtelBackendCreatesOtelFactory() {
+    public void testCloudWatchBackendCreatesCloudWatchFactory() {
         MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        config.otelEndpoint("http://localhost:4318/v1/metrics");
+        config.metricsBackend(MetricsBackend.CLOUDWATCH);
 
         MetricsFactory factory = config.metricsFactory();
 
         Assert.assertTrue(
-                "CLOUDWATCH_OTEL backend should create OtelMetricsFactory", factory instanceof OtelMetricsFactory);
-
-        // Clean up the publication thread
-        ((OtelMetricsFactory) factory).shutdown();
+                "CLOUDWATCH backend should create CloudWatchMetricsFactory",
+                factory instanceof CloudWatchMetricsFactory);
     }
 
     /**
-     * CLOUDWATCH_OTEL without endpoint throws IllegalStateException.
+     * OTEL backend creates OtelMetricsFactory without requiring endpoint or resource attributes.
      */
-    @Test(expected = IllegalStateException.class)
-    public void testOtelBackendWithoutEndpointThrows() {
+    @Test
+    public void testOtelBackendCreatesOtelFactoryWithoutEndpointOrResourceAttributes() {
         MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        // otelEndpoint is not set
+        config.metricsBackend(MetricsBackend.OTEL);
+        // No otelEndpoint or otelResourceAttributes set
 
-        config.metricsFactory();
+        MetricsFactory factory = config.metricsFactory();
+
+        Assert.assertTrue(
+                "OTEL backend should create OtelMetricsFactory", factory instanceof OtelMetricsFactory);
     }
 
     /**
-     * CLOUDWATCH_OTEL with empty endpoint throws IllegalStateException.
+     * OTEL backend uses provided OpenTelemetry instance.
      */
-    @Test(expected = IllegalStateException.class)
-    public void testOtelBackendWithEmptyEndpointThrows() {
+    @Test
+    public void testOtelBackendUsesProvidedOpenTelemetryInstance() {
+        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
+        config.metricsBackend(MetricsBackend.OTEL);
+        config.openTelemetry(OpenTelemetry.noop());
+
+        MetricsFactory factory = config.metricsFactory();
+
+        Assert.assertTrue(
+                "OTEL backend with provided OpenTelemetry instance should create OtelMetricsFactory",
+                factory instanceof OtelMetricsFactory);
+    }
+
+    /**
+     * OTEL backend uses GlobalOpenTelemetry.get() when no instance provided (just verify it doesn't throw).
+     */
+    @Test
+    public void testOtelBackendUsesGlobalOpenTelemetryWhenNoInstanceProvided() {
+        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
+        config.metricsBackend(MetricsBackend.OTEL);
+        // openTelemetry is null — should fall back to GlobalOpenTelemetry.get()
+
+        MetricsFactory factory = config.metricsFactory();
+
+        Assert.assertNotNull("Factory should be created using GlobalOpenTelemetry fallback", factory);
+        Assert.assertTrue(factory instanceof OtelMetricsFactory);
+    }
+
+    /**
+     * CLOUDWATCH_OTEL backend now throws UnsupportedOperationException.
+     */
+    @SuppressWarnings("deprecation")
+    @Test(expected = UnsupportedOperationException.class)
+    public void testCloudWatchOtelBackendThrowsUnsupportedOperationException() {
         MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
         config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        config.otelEndpoint("");
 
         config.metricsFactory();
     }
@@ -93,8 +125,7 @@ public class OtelMetricsConfigTest {
     public void testCustomFactoryOverridesBackend() {
         MetricsFactory customFactory = mock(MetricsFactory.class);
         MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        config.otelEndpoint("http://localhost:4318/v1/metrics");
+        config.metricsBackend(MetricsBackend.OTEL);
         config.metricsFactory(customFactory);
 
         MetricsFactory factory = config.metricsFactory();
@@ -114,58 +145,5 @@ public class OtelMetricsConfigTest {
         MetricsFactory factory = config.metricsFactory();
 
         Assert.assertSame("Custom factory should override default CLOUDWATCH backend", customFactory, factory);
-    }
-
-    /**
-     * OTEL defaults to 30000ms buffer time when user hasn't changed from the CloudWatch default of 10000ms.
-     * We verify this indirectly: the factory is created successfully with OTEL backend,
-     * and the metricsBufferTimeMillis on the config remains at the default 10000ms
-     * (the OTEL path internally uses 30000ms).
-     */
-    @Test
-    public void testOtelDefaultBufferTime() {
-        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        config.otelEndpoint("http://localhost:4318/v1/metrics");
-
-        // metricsBufferTimeMillis is at default 10000ms — OTEL path should use 30000ms internally
-        Assert.assertEquals(10000L, config.metricsBufferTimeMillis());
-
-        MetricsFactory factory = config.metricsFactory();
-        Assert.assertTrue(factory instanceof OtelMetricsFactory);
-
-        // Clean up
-        ((OtelMetricsFactory) factory).shutdown();
-    }
-
-    /**
-     * User-overridden buffer time is respected for OTEL path.
-     */
-    @Test
-    public void testOtelUserOverriddenBufferTime() {
-        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-        config.otelEndpoint("http://localhost:4318/v1/metrics");
-        config.metricsBufferTimeMillis(60000L);
-
-        // User set a custom value — OTEL path should use 60000ms, not the 30000ms default
-        Assert.assertEquals(60000L, config.metricsBufferTimeMillis());
-
-        MetricsFactory factory = config.metricsFactory();
-        Assert.assertTrue(factory instanceof OtelMetricsFactory);
-
-        // Clean up
-        ((OtelMetricsFactory) factory).shutdown();
-    }
-
-    /**
-     * CloudWatch backend continues to use the default 10000ms buffer time.
-     */
-    @Test
-    public void testCloudWatchDefaultBufferTime() {
-        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-
-        Assert.assertEquals(10000L, config.metricsBufferTimeMillis());
-        Assert.assertEquals(MetricsBackend.CLOUDWATCH, config.metricsBackend());
     }
 }

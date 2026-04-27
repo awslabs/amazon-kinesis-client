@@ -17,68 +17,51 @@ package software.amazon.kinesis.metrics;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.metrics.Meter;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.core.exception.AbortedException;
 
 /**
- * A MetricsFactory that creates MetricsScopes which publish metrics via the CloudWatch OTEL endpoint.
- * Batches MetricsScopes together to reduce API calls. Mirrors {@link CloudWatchMetricsFactory} structurally.
+ * A {@link MetricsFactory} that creates {@link OtelMetricsScope} instances which record raw
+ * observations on OTel {@link Meter} instruments. Follows OTel library instrumentation best
+ * practices by depending only on the {@code opentelemetry-api} and letting the application
+ * owner configure the SDK (exporters, resource attributes, batching).
+ *
+ * <p>This factory does not manage any background threads, custom batching, or export logic.
+ * The OTel SDK (configured by the application owner) handles aggregation, batching, and export.
  */
-@Slf4j
 public class OtelMetricsFactory implements MetricsFactory {
 
-    private final OtelPublisherRunnable runnable;
-    private final Thread publicationThread;
-
-    /**
-     * Enabled metrics level. All metrics below this level will be dropped.
-     */
+    private final Meter meter;
     private final MetricsLevel metricsLevel;
-
-    /**
-     * List of enabled dimensions for metrics.
-     */
     private final Set<String> metricsEnabledDimensions;
 
     /**
      * Constructor.
      *
-     * @param publisher          the OTEL metrics publisher
-     * @param bufferTimeMillis   time to buffer metrics before publishing to the OTEL endpoint
-     * @param maxQueueSize       maximum number of metrics that we can have in a queue
-     * @param metricsLevel       metrics level to enable
-     * @param metricsEnabledDimensions metrics dimensions to allow
-     * @param flushSize          size of batch that can be published at a time
+     * @param openTelemetry           the OpenTelemetry instance to obtain a Meter from
+     * @param metricsLevel            metrics level threshold; observations below this level are dropped
+     * @param metricsEnabledDimensions set of dimension names to include in recorded observations
      */
     public OtelMetricsFactory(
-            @NonNull final OtelMetricsPublisher publisher,
-            final long bufferTimeMillis,
-            final int maxQueueSize,
+            @NonNull final OpenTelemetry openTelemetry,
             @NonNull final MetricsLevel metricsLevel,
-            @NonNull final Set<String> metricsEnabledDimensions,
-            final int flushSize) {
+            @NonNull final Set<String> metricsEnabledDimensions) {
+        this.meter = openTelemetry.getMeter("software.amazon.kinesis");
         this.metricsLevel = metricsLevel;
-        this.metricsEnabledDimensions =
-                (metricsEnabledDimensions == null ? ImmutableSet.of() : ImmutableSet.copyOf(metricsEnabledDimensions));
-
-        runnable = new OtelPublisherRunnable(publisher, bufferTimeMillis, maxQueueSize, flushSize);
-        publicationThread = new Thread(runnable);
-        publicationThread.setName("otel-metrics-publisher");
-        publicationThread.start();
+        this.metricsEnabledDimensions = ImmutableSet.copyOf(metricsEnabledDimensions);
     }
 
     @Override
     public MetricsScope createMetrics() {
-        return new OtelMetricsScope(runnable, metricsLevel, metricsEnabledDimensions);
+        return new OtelMetricsScope(meter, metricsLevel, metricsEnabledDimensions);
     }
 
+    /**
+     * No-op shutdown. The application owner is responsible for managing the OTel
+     * {@code MeterProvider} lifecycle (including flushing and shutting down exporters).
+     */
     public void shutdown() {
-        runnable.shutdown();
-        try {
-            publicationThread.join();
-        } catch (InterruptedException e) {
-            throw AbortedException.builder().message(e.getMessage()).cause(e).build();
-        }
+        // No-op: application owner manages MeterProvider lifecycle
     }
 }

@@ -14,46 +14,167 @@
  */
 package software.amazon.kinesis.metrics;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
+
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.metrics.DoubleHistogram;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.Meter;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 /**
- * Metrics scope for CloudWatch OTEL metrics. Mirrors {@link CloudWatchMetricsScope}
- * but uses {@link OtelMetricKey} and enqueues to {@link OtelPublisherRunnable}.
+ * OTel-native metrics scope that implements {@link MetricsScope} directly.
+ * Records raw observations on OTel {@link Meter} instruments ({@link DoubleHistogram},
+ * {@link LongCounter}) when {@link #end()} is called. The OTel SDK (configured by the
+ * application owner) handles aggregation, batching, and export.
  */
-public class OtelMetricsScope extends FilteringMetricsScope implements MetricsScope {
-
-    private OtelPublisherRunnable publisher;
+public class OtelMetricsScope implements MetricsScope {
 
     /**
-     * Creates an OTEL metrics scope with given metrics level and enabled dimensions.
-     * @param publisher Publisher that emits OTEL metrics periodically.
-     * @param metricsLevel Metrics level to enable. All data with level below this will be dropped.
-     * @param metricsEnabledDimensions Enabled dimensions for OTEL metrics.
+     * Mapping of KCL dimension names to OTel semantic convention attribute keys.
      */
-    public OtelMetricsScope(
-            OtelPublisherRunnable publisher, MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
-        super(metricsLevel, metricsEnabledDimensions);
-        this.publisher = publisher;
+    static final Map<String, String> DIMENSION_TO_ATTRIBUTE_MAP;
+
+    static {
+        Map<String, String> dimMap = new HashMap<>();
+        dimMap.put(MetricsUtil.OPERATION_DIMENSION_NAME, "aws.kinesis.operation");
+        dimMap.put(MetricsUtil.SHARD_ID_DIMENSION_NAME, "aws.kinesis.shard.id");
+        dimMap.put(MetricsUtil.STREAM_IDENTIFIER, "aws.kinesis.stream_name");
+        dimMap.put("WorkerIdentifier", "aws.kinesis.consumer.name");
+        DIMENSION_TO_ATTRIBUTE_MAP = Collections.unmodifiableMap(dimMap);
     }
 
     /**
-     * Once we call this method, all MetricDatums added to the scope will be enqueued to the publisher runnable.
-     * We enqueue MetricDatumWithKey because the publisher will aggregate similar metrics (i.e. MetricDatum with the
-     * same metricName) in the background thread. Hence aggregation using MetricDatumWithKey will be especially useful
-     * when aggregating across multiple MetricScopes.
+     * Mapping of CloudWatch StandardUnit to OTel UCUM unit strings.
      */
+    private static final Map<StandardUnit, String> UNIT_MAP;
+
+    static {
+        Map<StandardUnit, String> map = new HashMap<>();
+        map.put(StandardUnit.SECONDS, "s");
+        map.put(StandardUnit.MICROSECONDS, "us");
+        map.put(StandardUnit.MILLISECONDS, "ms");
+        map.put(StandardUnit.BYTES, "By");
+        map.put(StandardUnit.KILOBYTES, "kBy");
+        map.put(StandardUnit.MEGABYTES, "MBy");
+        map.put(StandardUnit.GIGABYTES, "GBy");
+        map.put(StandardUnit.TERABYTES, "TBy");
+        map.put(StandardUnit.BITS, "bit");
+        map.put(StandardUnit.KILOBITS, "kbit");
+        map.put(StandardUnit.MEGABITS, "Mbit");
+        map.put(StandardUnit.GIGABITS, "Gbit");
+        map.put(StandardUnit.TERABITS, "Tbit");
+        map.put(StandardUnit.PERCENT, "%");
+        map.put(StandardUnit.COUNT, "1");
+        map.put(StandardUnit.BYTES_SECOND, "By/s");
+        map.put(StandardUnit.KILOBYTES_SECOND, "kBy/s");
+        map.put(StandardUnit.MEGABYTES_SECOND, "MBy/s");
+        map.put(StandardUnit.GIGABYTES_SECOND, "GBy/s");
+        map.put(StandardUnit.TERABYTES_SECOND, "TBy/s");
+        map.put(StandardUnit.BITS_SECOND, "bit/s");
+        map.put(StandardUnit.KILOBITS_SECOND, "kbit/s");
+        map.put(StandardUnit.MEGABITS_SECOND, "Mbit/s");
+        map.put(StandardUnit.GIGABITS_SECOND, "Gbit/s");
+        map.put(StandardUnit.TERABITS_SECOND, "Tbit/s");
+        map.put(StandardUnit.COUNT_SECOND, "1/s");
+        map.put(StandardUnit.NONE, "1");
+        UNIT_MAP = Collections.unmodifiableMap(map);
+    }
+
+    private final Meter meter;
+    private final MetricsLevel metricsLevel;
+    private final Set<String> metricsEnabledDimensions;
+    private final boolean allDimensionsEnabled;
+
+    private final List<MetricObservation> observations = new ArrayList<>();
+    private final AttributesBuilder attributesBuilder = Attributes.builder();
+    private boolean ended = false;
+
+    /**
+     * Creates an OTel-native metrics scope.
+     *
+     * @param meter the OTel Meter to record observations on
+     * @param metricsLevel the minimum metrics level threshold; data points below this are dropped
+     * @param metricsEnabledDimensions the set of dimension names to include; use {@link MetricsScope#METRICS_DIMENSIONS_ALL} to include all
+     */
+    public OtelMetricsScope(Meter meter, MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
+        this.meter = meter;
+        this.metricsLevel = metricsLevel;
+        this.metricsEnabledDimensions = metricsEnabledDimensions;
+        this.allDimensionsEnabled = metricsEnabledDimensions.contains(METRICS_DIMENSIONS_ALL);
+    }
+
+    @Override
+    public void addData(String name, double value, StandardUnit unit) {
+        addData(name, value, unit, MetricsLevel.DETAILED);
+    }
+
+    @Override
+    public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {
+        checkNotEnded();
+        if (level.getValue() < metricsLevel.getValue()) {
+            return;
+        }
+        observations.add(new MetricObservation(name, value, unit));
+    }
+
+    @Override
+    public void addDimension(String name, String value) {
+        checkNotEnded();
+        if (!allDimensionsEnabled && !metricsEnabledDimensions.contains(name)) {
+            return;
+        }
+        String attrKey = DIMENSION_TO_ATTRIBUTE_MAP.getOrDefault(name, name);
+        attributesBuilder.put(AttributeKey.stringKey(attrKey), value);
+    }
+
     @Override
     public void end() {
-        super.end();
+        checkNotEnded();
+        ended = true;
+        Attributes attrs = attributesBuilder.build();
+        for (MetricObservation obs : observations) {
+            recordObservation(obs, attrs);
+        }
+    }
 
-        final List<MetricDatumWithKey<OtelMetricKey>> dataWithKeys = data.values().stream()
-                .map(metricDatum ->
-                        metricDatum.toBuilder().dimensions(getDimensions()).build())
-                .map(metricDatum -> new MetricDatumWithKey<>(new OtelMetricKey(metricDatum), metricDatum))
-                .collect(Collectors.toList());
+    private void recordObservation(MetricObservation obs, Attributes attrs) {
+        if (obs.unit == StandardUnit.COUNT) {
+            LongCounter counter = meter.counterBuilder(obs.name)
+                    .setUnit(convertUnit(obs.unit))
+                    .build();
+            counter.add((long) obs.value, attrs);
+        } else {
+            DoubleHistogram histogram = meter.histogramBuilder(obs.name)
+                    .setUnit(convertUnit(obs.unit))
+                    .build();
+            histogram.record(obs.value, attrs);
+        }
+    }
 
-        publisher.enqueue(dataWithKeys);
+    /**
+     * Converts a CloudWatch StandardUnit to an OTel UCUM unit string.
+     *
+     * @param unit the StandardUnit to convert
+     * @return the UCUM unit string, or "1" if null or unknown
+     */
+    static String convertUnit(StandardUnit unit) {
+        if (unit == null) {
+            return "1";
+        }
+        return UNIT_MAP.getOrDefault(unit, "1");
+    }
+
+    private void checkNotEnded() {
+        if (ended) {
+            throw new IllegalArgumentException("MetricsScope has already been ended");
+        }
     }
 }
