@@ -35,6 +35,9 @@ public class FleetSegmentingHandler {
     @Getter
     private boolean isVersionEmittedByAllActiveWorkers = false;
 
+    @Getter
+    private final boolean isEnabled;
+
     private final long versionHashExpiryMillis = TimeUnit.HOURS.toMillis(1);
     private final String versionHashLutKey = "versionHashLut";
     private final String leaderTableName;
@@ -46,6 +49,7 @@ public class FleetSegmentingHandler {
         this.ddbClient = ddbClient;
         this.versionHash =
                 String.valueOf(config.leaseAssignmentStrategy().name().hashCode());
+        isEnabled = config.enableSafeMigrationSystem();
     }
 
     /**
@@ -55,7 +59,8 @@ public class FleetSegmentingHandler {
     // TODO: test this
     public String getHashKeyForLeaderLock() {
         final GetItemResponse currentVersionResponse = getItemFromCoordinatorTable(CURRENT_VERSION_KEY);
-        if (!currentVersionResponse.hasItem()
+        if (!isEnabled
+                || !currentVersionResponse.hasItem()
                 || (isVersionHashValid(currentVersionResponse) && doesVersionHashMatch(currentVersionResponse))) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
@@ -84,9 +89,7 @@ public class FleetSegmentingHandler {
     }
 
     public boolean isOnDeployingVersion() {
-        final GetItemResponse getLeaderItemResponse =
-                getItemFromCoordinatorTable(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
-        return doesVersionHashMatch(getLeaderItemResponse);
+        return !isOnCurrentVersion();
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {

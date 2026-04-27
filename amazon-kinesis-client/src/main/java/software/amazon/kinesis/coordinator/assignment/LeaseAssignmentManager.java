@@ -259,7 +259,7 @@ public final class LeaseAssignmentManager {
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
                 metricsScope.addData(
-                        "NumOfLeasesReassignment." + segmentingHandler.getVersionHash(),
+                        "NumOfLeasesReassignment",
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
                                 - totalNewAssignmentBeforeWorkerVarianceBalancing,
                         StandardUnit.COUNT,
@@ -736,7 +736,7 @@ public final class LeaseAssignmentManager {
          */
         // TODO: check unit test
         public List<WorkerMetricStats> getAssignableWorkers() {
-            if (segmentingHandler.isOnCurrentVersion()) {
+            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
                 return activeWorkerMetrics;
             }
             return getWorkersOnVersionHash();

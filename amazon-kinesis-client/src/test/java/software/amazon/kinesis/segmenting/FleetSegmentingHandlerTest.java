@@ -145,24 +145,24 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void isOnDeployingVersion_returnsTrue_whenVersionHashMatches() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader(sampleVersionHash));
+    void isOnDeployingVersion_returnsTrue_whenNotOnCurrentVersion() {
+        when(mockDdbClient.getItem(createGetItemRequestForCurrentLeader()))
+                .thenReturn(createGetItemResponseForCurrentLeader("differentHash"));
         assertTrue(handler.isOnDeployingVersion());
     }
 
     @Test
-    void isOnDeployingVersion_returnsFalse_whenVersionHashDoesNotMatch() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(createGetItemResponseForDeployingLeader("differentHash"));
+    void isOnDeployingVersion_returnsFalse_whenOnCurrentVersion() {
+        when(mockDdbClient.getItem(createGetItemRequestForCurrentLeader()))
+                .thenReturn(createGetItemResponseForCurrentLeader(sampleVersionHash));
         assertFalse(handler.isOnDeployingVersion());
     }
 
     @Test
-    void isOnDeployingVersion_returnsFalse_whenItemNotPresent() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
+    void isOnDeployingVersion_returnsTrue_whenNoLeaderItem() {
+        when(mockDdbClient.getItem(createGetItemRequestForCurrentLeader()))
                 .thenReturn(GetItemResponse.builder().build());
-        assertFalse(handler.isOnDeployingVersion());
+        assertTrue(handler.isOnDeployingVersion());
     }
 
     @Test
@@ -318,5 +318,34 @@ public class FleetSegmentingHandlerTest {
                 .tableName(tableName)
                 .key(Collections.singletonMap("key", AttributeValue.fromS("CurrentVersion")))
                 .build();
+    }
+
+    @Test
+    void isEnabled_returnsTrue_whenConfigEnabled() {
+        assertTrue(handler.isEnabled());
+    }
+
+    @Test
+    void isEnabled_returnsFalse_whenConfigDisabled() {
+        config.enableSafeMigrationSystem(false);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockDdbClient, tableName);
+        assertFalse(disabledHandler.isEnabled());
+    }
+
+    @Test
+    void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() {
+        config.enableSafeMigrationSystem(false);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockDdbClient, tableName);
+
+        // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("versionHash", AttributeValue.fromS("differentHash"));
+        item.put(
+                "versionHashLut",
+                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        when(mockDdbClient.getItem(createGetItemRequestForCurrentVersion()))
+                .thenReturn(GetItemResponse.builder().item(item).build());
+
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, disabledHandler.getHashKeyForLeaderLock());
     }
 }

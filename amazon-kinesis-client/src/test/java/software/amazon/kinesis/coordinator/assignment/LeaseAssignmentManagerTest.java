@@ -1470,6 +1470,33 @@ class LeaseAssignmentManagerTest {
                         .count());
     }
 
+    @Test
+    void performAssignment_disabled_assignsToAllWorkersRegardlessOfVersion() throws Exception {
+        when(mockSegmentingHandler.isEnabled()).thenReturn(false);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        // When disabled, all workers get leases regardless of version
+        assertTrue(
+                leaseRefresher.listLeases().stream().anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
@@ -1711,5 +1738,6 @@ class LeaseAssignmentManagerTest {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
         when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
     }
 }
