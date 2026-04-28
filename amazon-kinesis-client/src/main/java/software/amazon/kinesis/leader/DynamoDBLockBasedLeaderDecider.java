@@ -127,6 +127,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // before obtaining a leader lock, release any lock that does not match the worker's version
         releaseLockIfVersionHashDoesNotMatch(CoordinatorState.LEADER_HASH_KEY);
         releaseLockIfVersionHashDoesNotMatch(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        releaseDeployingLeaderLockIfWorkerHasBothLocks();
 
         final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
@@ -175,6 +176,21 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         if (lockItem.isPresent() && !doesVersionHashMatchLockVersionHash(lockItem.get())) {
             dynamoDBLockClient.releaseLock(lockItem.get());
         }
+    }
+
+    private void releaseDeployingLeaderLockIfWorkerHasBothLocks() {
+        if (isWorkerLeader(CoordinatorState.LEADER_HASH_KEY)
+                && isWorkerLeader(CoordinatorState.DEPLOYING_LEADER_HASH_KEY)
+                && segmentingHandler.isVersionEmittedByAllActiveWorkers()) {
+            final Optional<LockItem> deployingLeaderLock =
+                    dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
+            deployingLeaderLock.ifPresent(dynamoDBLockClient::releaseLock);
+        }
+    }
+
+    private boolean isWorkerLeader(final String ddbLeaderKey) {
+        Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
+        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
     }
 
     private boolean doesVersionHashMatchLockVersionHash(final LockItem leaderLock) {
