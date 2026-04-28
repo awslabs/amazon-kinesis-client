@@ -20,6 +20,12 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
+/**
+ * Component responsible for handling the safe migration system. If enabled, workers that are getting deployed with
+ * a new lease assignment algorithm will contend for the DeployingLeader lock. Workers that have the new algorithm will
+ * have its leases balanced by the DeployingLeader. Leases owned by workers on the deploying version cannot be
+ * transferred over unless the lease becomes unassigned.
+ */
 @Slf4j
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
@@ -53,7 +59,7 @@ public class FleetSegmentingHandler {
     }
 
     /**
-     * Returns the key of the leader lock to take depending on the worker's own version hash.
+     * Returns the key of the leader lock to take depending on whether the worker is part of the deploying version.
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      */
     public String getHashKeyForLeaderLock() {
@@ -74,11 +80,8 @@ public class FleetSegmentingHandler {
     }
 
     public Map<String, AttributeValue> getVersionHashWithLastUpdatedTimeForLockTable() {
-        final Map<String, AttributeValue> workerProperties = new HashMap<>();
-        workerProperties.put(versionHashKey, AttributeValue.fromS(versionHash));
-        workerProperties.put(
-                versionHashLutKey,
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
+        Map<String, AttributeValue> workerProperties = new HashMap<>();
+        getVersionHashWithLastUpdatedTime().forEach((k, v) -> workerProperties.put(k, AttributeValue.fromS(v)));
         return workerProperties;
     }
 
@@ -109,8 +112,19 @@ public class FleetSegmentingHandler {
         isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.size() == workersOnVersionHash.size();
     }
 
-    public boolean doesDeployingLeaderHaveValidVersion() {
-        return isVersionHashValid(getItemFromCoordinatorTable(CoordinatorState.DEPLOYING_LEADER_HASH_KEY));
+    /**
+     * Update the CurrentVersion item in the Coordinator table with the current version hash and the last updated time.
+     */
+    public void updateCurrentVersion() {
+        if (isVersionEmittedByAllActiveWorkers) {
+            Map<String, AttributeValue> currentVersionMap = getVersionHashWithLastUpdatedTimeForLockTable();
+            currentVersionMap.put("key", AttributeValue.fromS(CURRENT_VERSION_KEY));
+            final PutItemRequest putItemRequest = PutItemRequest.builder()
+                    .item(currentVersionMap)
+                    .tableName(leaderTableName)
+                    .build();
+            ddbClient.putItem(putItemRequest);
+        }
     }
 
     private boolean isVersionHashValid(final GetItemResponse getLeaderItemResponse) {
@@ -141,17 +155,5 @@ public class FleetSegmentingHandler {
         return getItemResponse.hasItem()
                 && getItemResponse.item().containsKey(versionHashKey)
                 && versionHash.equals(getItemResponse.item().get(versionHashKey).s());
-    }
-
-    public void updateCurrentVersion() {
-        if (isVersionEmittedByAllActiveWorkers) {
-            Map<String, AttributeValue> currentVersionMap = getVersionHashWithLastUpdatedTimeForLockTable();
-            currentVersionMap.put("key", AttributeValue.fromS(CURRENT_VERSION_KEY));
-            final PutItemRequest putItemRequest = PutItemRequest.builder()
-                    .item(currentVersionMap)
-                    .tableName(leaderTableName)
-                    .build();
-            ddbClient.putItem(putItemRequest);
-        }
     }
 }

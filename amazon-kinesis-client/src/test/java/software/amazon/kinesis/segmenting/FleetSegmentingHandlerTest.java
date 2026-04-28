@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
@@ -27,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
@@ -181,6 +184,36 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
+    void getVersionHashWithLastUpdatedTimeForLockTable_returnsAttributeValueMap() {
+        final long before = Instant.now().getEpochSecond();
+        final Map<String, AttributeValue> result = handler.getVersionHashWithLastUpdatedTimeForLockTable();
+        final long after = Instant.now().getEpochSecond();
+
+        assertEquals(sampleVersionHash, result.get("versionHash").s());
+        final long lut = Long.parseLong(result.get("versionHashLut").s());
+        assertTrue(lut >= before && lut <= after);
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void updateCurrentVersion_putsItemWhenAllWorkersEmitting() {
+        WorkerMetricStats w1 = mock(WorkerMetricStats.class);
+        when(w1.getWorkerId()).thenReturn("worker1");
+        handler.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
+
+        handler.updateCurrentVersion();
+
+        verify(mockDdbClient).putItem(any(PutItemRequest.class));
+    }
+
+    @Test
+    void updateCurrentVersion_doesNotPutItemWhenNotAllWorkersEmitting() {
+        handler.updateCurrentVersion();
+
+        verify(mockDdbClient, never()).putItem(any(PutItemRequest.class));
+    }
+
+    @Test
     void isWorkerVersionHashStale_returnsTrue_whenLutKeyMissing() {
         WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
         when(mockWorker.getProperties()).thenReturn(Collections.singletonMap("versionHash", "123"));
@@ -210,52 +243,6 @@ public class FleetSegmentingHandlerTest {
         WorkerMetricStats worker = mock(WorkerMetricStats.class);
         when(worker.getProperties()).thenReturn(null);
         assertTrue(handler.isWorkerVersionHashStale(worker));
-    }
-
-    @Test
-    void doesDeployingLeaderHaveValidVersion_returnsTrue_whenDeployingLeaderHasValidVersionAndLut() {
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("versionHash", AttributeValue.fromS("someHash"));
-        item.put(
-                "versionHashLut",
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().item(item).build());
-
-        assertTrue(handler.doesDeployingLeaderHaveValidVersion());
-    }
-
-    @Test
-    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenNoDeployingLeaderItem() {
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().build());
-
-        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
-    }
-
-    @Test
-    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenLutExpired() {
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("versionHash", AttributeValue.fromS("someHash"));
-        item.put(
-                "versionHashLut",
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond() - 3601)));
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().item(item).build());
-
-        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
-    }
-
-    @Test
-    void doesDeployingLeaderHaveValidVersion_returnsFalse_whenVersionHashMissing() {
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put(
-                "versionHashLut",
-                AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond())));
-        when(mockDdbClient.getItem(createGetItemRequestForDeployingLeader()))
-                .thenReturn(GetItemResponse.builder().item(item).build());
-
-        assertFalse(handler.doesDeployingLeaderHaveValidVersion());
     }
 
     @Test

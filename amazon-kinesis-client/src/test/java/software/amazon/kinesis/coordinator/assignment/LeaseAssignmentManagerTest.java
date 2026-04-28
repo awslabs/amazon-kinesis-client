@@ -1408,7 +1408,6 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_noDeployingLeader_varianceBalancingUsesAllActiveWorkers() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
-        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
@@ -1441,7 +1440,6 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_withDeployingLeader_varianceBalancingUsesOnlyVersionFilteredWorkers() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
-        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
@@ -1737,7 +1735,6 @@ class LeaseAssignmentManagerTest {
         when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
-        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
     }
 }
