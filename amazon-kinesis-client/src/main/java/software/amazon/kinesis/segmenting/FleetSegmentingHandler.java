@@ -56,7 +56,6 @@ public class FleetSegmentingHandler {
      * Returns the key of the leader lock to take depending on the worker's own version hash.
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      */
-    // TODO: test this
     public String getHashKeyForLeaderLock() {
         final GetItemResponse currentVersionResponse = getItemFromCoordinatorTable(CURRENT_VERSION_KEY);
         if (!isEnabled
@@ -89,7 +88,9 @@ public class FleetSegmentingHandler {
     }
 
     public boolean isOnDeployingVersion() {
-        return !isOnCurrentVersion();
+        final GetItemResponse getLeaderItemResponse =
+                getItemFromCoordinatorTable(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        return doesVersionHashMatch(getLeaderItemResponse);
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
