@@ -22,7 +22,6 @@ import software.amazon.kinesis.leases.Lease;
 
 @KinesisClientInternalApi
 public interface LeaseAssignmentDecider {
-
     /**
      * Assigns expiredOrUnAssignedLeases to the available workers.
      */

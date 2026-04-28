@@ -63,6 +63,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static software.amazon.kinesis.common.HashKeyRangeForLease.fromHashKeyRange;
 
@@ -97,6 +98,7 @@ class PeriodicShardSyncManager {
     private final MetricsFactory metricsFactory;
     private final long leasesRecoveryAuditorExecutionFrequencyMillis;
     private final int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
+    private final FleetSegmentingHandler segmentingHandler;
 
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced;
@@ -113,7 +115,8 @@ class PeriodicShardSyncManager {
             MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
             int leasesRecoveryAuditorInconsistencyConfidenceThreshold,
-            AtomicBoolean leaderSynced) {
+            AtomicBoolean leaderSynced,
+            FleetSegmentingHandler segmentingHandler) {
         this(
                 workerId,
                 leaseRefresher,
@@ -125,7 +128,8 @@ class PeriodicShardSyncManager {
                 metricsFactory,
                 leasesRecoveryAuditorExecutionFrequencyMillis,
                 leasesRecoveryAuditorInconsistencyConfidenceThreshold,
-                leaderSynced);
+                leaderSynced,
+                segmentingHandler);
     }
 
     PeriodicShardSyncManager(
@@ -139,7 +143,8 @@ class PeriodicShardSyncManager {
             MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
             int leasesRecoveryAuditorInconsistencyConfidenceThreshold,
-            AtomicBoolean leaderSynced) {
+            AtomicBoolean leaderSynced,
+            FleetSegmentingHandler segmentingHandler) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         this.workerId = workerId;
         this.leaseRefresher = leaseRefresher;
@@ -153,10 +158,15 @@ class PeriodicShardSyncManager {
         this.leasesRecoveryAuditorInconsistencyConfidenceThreshold =
                 leasesRecoveryAuditorInconsistencyConfidenceThreshold;
         this.leaderSynced = leaderSynced;
+        this.segmentingHandler = segmentingHandler;
     }
 
     public synchronized TaskResult start(final LeaderDecider leaderDecider) {
         Validate.notNull(leaderDecider, "LeaderDecider is required to start PeriodicShardSyncManager.");
+        if (segmentingHandler.isOnDeployingVersion()) {
+            log.info("{} is on deploying version, skipping shard sync.", workerId);
+            return new TaskResult(null);
+        }
         this.leaderDecider = leaderDecider;
         if (!isRunning) {
             final Runnable periodicShardSyncer = () -> {
@@ -183,6 +193,9 @@ class PeriodicShardSyncManager {
     public synchronized void syncShardsOnce() throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
+        if (segmentingHandler.isOnDeployingVersion()) {
+            return;
+        }
         for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
             log.info("Syncing Kinesis shard info for {}", streamConfig);
             final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfig);

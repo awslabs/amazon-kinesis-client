@@ -3,7 +3,9 @@ package software.amazon.kinesis.coordinator.assignment;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -29,6 +31,7 @@ import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -39,6 +42,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
@@ -53,6 +57,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +70,8 @@ class LeaseAssignmentManagerTest {
     private static final String TEST_LEADER_WORKER_ID = "workerId";
     private static final String TEST_TAKE_WORKER_ID = "workerIdTake";
     private static final String TEST_YIELD_WORKER_ID = "workerIdYield";
+    private static final Map<String, String> TEST_VERSION_HASH =
+            Collections.singletonMap("versionHash", String.valueOf("CPU".hashCode()));
 
     private static final String LEASE_TABLE_NAME = "leaseTable";
     private static final String WORKER_METRICS_TABLE_NAME = "workerMetrics";
@@ -91,6 +98,7 @@ class LeaseAssignmentManagerTest {
             LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
             DefaultSdkAutoConstructList.getInstance());
     private WorkerMetricStatsDAO workerMetricsDAO;
+    private FleetSegmentingHandler mockSegmentingHandler;
 
     @BeforeEach
     void setup() throws ProvisionedThroughputException, DependencyException {
@@ -110,6 +118,8 @@ class LeaseAssignmentManagerTest {
                     return scheduledFuture;
                 });
         when(scheduledFuture.cancel(anyBoolean())).thenReturn(true);
+
+        initializeFleetSegmentingHandlerMocks();
         leaseRefresher.createLeaseTableIfNotExists();
     }
 
@@ -1181,8 +1191,10 @@ class LeaseAssignmentManagerTest {
                 System::nanoTime,
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 2 * failoverTimeMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
 
         leaseAssignmentManager.start();
 
@@ -1212,14 +1224,277 @@ class LeaseAssignmentManagerTest {
                 System::nanoTime,
                 Integer.MAX_VALUE,
                 gracefulLeaseHandoffConfig,
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 leaseAssignmentIntervalMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
 
         leaseAssignmentManager.start();
 
         verify(mockExecutor)
                 .scheduleWithFixedDelay(
                         any(Runnable.class), eq(0L), eq(leaseAssignmentIntervalMillis), eq(TimeUnit.MILLISECONDS));
+    }
+
+    /**
+     * The deploying leader should not assign expired or unassigned leases. This is handled by the current leader.
+     * @throws Exception
+     */
+    @Test
+    void performAssignment_deployingLeader_doesNotAssignUnassignedLeases() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "oldWorker".equals(lease.leaseOwner()))
+                        .count());
+    }
+
+    @Test
+    void performAssignment_currentLeader_assignsToAllWorkers() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(
+                leaseRefresher.listLeases().stream().anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
+    }
+
+    @Test
+    void performAssignment_deployingLeader_noMatchingWorkers_noAssignment() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "oldWorker".equals(lease.leaseOwner())));
+    }
+
+    @Test
+    void performAssignment_deployingLeader_varianceBalancingRespectsVersionFilter() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        // Old version worker should not receive rebalanced leases
+        final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
+        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(oldWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "oldWorker".equals(lease.leaseOwner()))
+                        .count());
+        assertEquals(
+                1,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
+    }
+
+    @Test
+    void performAssignment_deployingLeader_doesNotAssignUnassignedLeasesEvenWhenAllWorkersOnSameVersion()
+            throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker1"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker2"));
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker1".equals(lease.leaseOwner())));
+        assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
+    }
+
+    @Test
+    void performAssignment_deployingLeader_staleWorkerExcludedFromVarianceBalancing() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        populateLeasesInLeaseTable(lease1);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // Stale workers should not receive rebalanced leases
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                        .count());
+    }
+
+    @Test
+    void performAssignment_noDeployingLeader_varianceBalancingUsesAllActiveWorkers() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        // Worker with different version hash should still participate in balancing
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // With no deploying leader, all active workers participate in variance balancing
+        final long totalRebalanced = leaseRefresher.listLeases().stream()
+                .filter(lease ->
+                        TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()) || "otherWorker".equals(lease.leaseOwner()))
+                .count();
+        assertTrue(totalRebalanced > 0, "Expected rebalancing to include workers regardless of version hash");
+    }
+
+    @Test
+    void performAssignment_withDeployingLeader_varianceBalancingUsesOnlyVersionFilteredWorkers() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(1000D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        populateLeasesInLeaseTable(lease1, lease2);
+
+        leaseAssignmentManagerRunnable.run();
+
+        // With deploying leader, only version-filtered workers participate
+        assertEquals(
+                0L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "otherWorker".equals(lease.leaseOwner()))
+                        .count());
+    }
+
+    @Test
+    void performAssignment_disabled_assignsToAllWorkersRegardlessOfVersion() throws Exception {
+        when(mockSegmentingHandler.isEnabled()).thenReturn(false);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        // When disabled, all workers get leases regardless of version
+        assertTrue(
+                leaseRefresher.listLeases().stream().anyMatch(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner())));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
     }
 
     private LeaseAssignmentManager createLeaseAssignmentManager(
@@ -1240,6 +1515,42 @@ class LeaseAssignmentManagerTest {
             LeaseRefresher leaseRefresher,
             WorkerMetricStatsDAO workerMetricStatsDao) {
 
+        return createLeaseAssignmentManagerWithStrategy(
+                config,
+                leaseDurationMillis,
+                nanoTimeProvider,
+                maxLeasesPerWorker,
+                leaseRefresher,
+                workerMetricStatsDao,
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
+    }
+
+    private LeaseAssignmentManager createLeaseAssignmentManagerWithStrategy(
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final Long leaseDurationMillis,
+            final Supplier<Long> nanoTimeProvider,
+            final int maxLeasesPerWorker,
+            final LeaseAssignmentStrategy strategy) {
+
+        return createLeaseAssignmentManagerWithStrategy(
+                config,
+                leaseDurationMillis,
+                nanoTimeProvider,
+                maxLeasesPerWorker,
+                leaseRefresher,
+                workerMetricsDAO,
+                strategy);
+    }
+
+    private LeaseAssignmentManager createLeaseAssignmentManagerWithStrategy(
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final Long leaseDurationMillis,
+            final Supplier<Long> nanoTimeProvider,
+            final int maxLeasesPerWorker,
+            LeaseRefresher leaseRefresher,
+            WorkerMetricStatsDAO workerMetricStatsDao,
+            final LeaseAssignmentStrategy strategy) {
+
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
                 workerMetricStatsDao,
@@ -1252,8 +1563,10 @@ class LeaseAssignmentManagerTest {
                 nanoTimeProvider,
                 maxLeasesPerWorker,
                 gracefulLeaseHandoffConfig,
+                strategy,
                 2 * leaseDurationMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                mockSegmentingHandler);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }
@@ -1293,6 +1606,7 @@ class LeaseAssignmentManagerTest {
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of())
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1303,6 +1617,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1313,6 +1628,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, 50D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1324,6 +1640,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(value, value)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(operatingRangeMax)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1334,6 +1651,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, -1D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1344,6 +1662,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(-1D, 50D, 50D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1354,6 +1673,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(50L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1364,6 +1684,7 @@ class LeaseAssignmentManagerTest {
                 .lastUpdateTime(0L)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
                 .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L)))
+                .properties(TEST_VERSION_HASH)
                 .build();
     }
 
@@ -1374,5 +1695,49 @@ class LeaseAssignmentManagerTest {
                         .item(TableSchema.fromBean(WorkerMetricStats.class).itemToMap(workerMetrics, false))
                         .build())
                 .join();
+    }
+
+    @Test
+    void performAssignment_withWorkerUtilizationStrategy_usesVarianceDecider() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.listLeases().get(0).leaseOwner());
+    }
+
+    @Test
+    void performAssignment_withLeaseCountStrategy_usesLeaseCountDecider() throws Exception {
+        createLeaseAssignmentManagerWithStrategy(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                LeaseAssignmentStrategy.LEASE_COUNT_BASED);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.listLeases().get(0).leaseOwner());
+    }
+
+    private void initializeFleetSegmentingHandlerMocks() {
+        mockSegmentingHandler = mock((FleetSegmentingHandler.class));
+        when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
+        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
+        when(mockSegmentingHandler.doesDeployingLeaderHaveValidVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
     }
 }
