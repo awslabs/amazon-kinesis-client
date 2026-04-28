@@ -263,11 +263,13 @@ public class FleetSegmentingHandlerTest {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         WorkerMetricStats w2 = mock(WorkerMetricStats.class);
         WorkerMetricStats w3 = mock(WorkerMetricStats.class);
+        WorkerMetricStats w4 = mock(WorkerMetricStats.class);
         when(w1.getWorkerId()).thenReturn("worker1");
         when(w2.getWorkerId()).thenReturn("worker2");
-        when(w3.getWorkerId()).thenReturn("worker1");
+        when(w3.getWorkerId()).thenReturn("worker3");
+        when(w4.getWorkerId()).thenReturn("worker4");
         List<WorkerMetricStats> active = Arrays.asList(w1, w2);
-        List<WorkerMetricStats> onVersion = Collections.singletonList(w3);
+        List<WorkerMetricStats> onVersion = Arrays.asList(w3, w4);
         handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
 
         assertFalse(handler.isVersionEmittedByAllActiveWorkers());

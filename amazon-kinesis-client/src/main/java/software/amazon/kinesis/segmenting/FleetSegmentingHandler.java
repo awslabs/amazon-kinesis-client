@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -109,7 +110,8 @@ public class FleetSegmentingHandler {
 
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.size() == workersOnVersionHash.size();
+        isVersionEmittedByAllActiveWorkers =
+                new HashSet<>(activeWorkerMetrics).equals(new HashSet<>(workersOnVersionHash));
     }
 
     /**
