@@ -49,6 +49,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
+        config.enableSafeMigrationSystem(true);
         handler = new FleetSegmentingHandler(config, mockDdbClient, tableName);
     }
 
