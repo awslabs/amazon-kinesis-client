@@ -228,7 +228,7 @@ public final class LeaseAssignmentManager {
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
 
-            if (segmentingHandler.isOnCurrentVersion()) {
+            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
                 leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
                 MetricsUtil.addLatency(
                         metricsScope,
