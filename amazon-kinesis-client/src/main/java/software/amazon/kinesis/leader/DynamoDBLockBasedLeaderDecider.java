@@ -124,11 +124,11 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
         boolean response;
 
-        // If this worker is the deploying leader and all workers are emitting the deploying version, try to acquire
-        // the current leader lock. The worker has to be the deploying leader so that it can release its lock.
-        // Otherwise, two leaders on the same version hash may be functioning at the same time
-        final String ddbLeaderKey;
-        ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+        // before obtaining a leader lock, release any lock that does not match the worker's version
+        releaseLockIfVersionHashDoesNotMatch(CoordinatorState.LEADER_HASH_KEY);
+        releaseLockIfVersionHashDoesNotMatch(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+
+        final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
@@ -167,36 +167,24 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
 
-        // only release the deploying leader lock if this worker also acquired the current leader lock
-        if (isWorkerDeployingLeader()
-                && isWorkerCurrentLeader()
-                && segmentingHandler.isVersionEmittedByAllActiveWorkers()) {
-            releaseDeployingLeaderLock();
-        }
-
         return response;
     }
 
-    private boolean isWorkerDeployingLeader() {
-        Optional<LockItem> lockItem =
-                dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
-        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
-    }
-
-    private boolean isWorkerCurrentLeader() {
-        Optional<LockItem> lockItem = dynamoDBLockClient.getLock(CoordinatorState.LEADER_HASH_KEY, Optional.empty());
-        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
-    }
-
-    private void releaseDeployingLeaderLock() {
-        final Optional<LockItem> lockItem =
-                dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
-        if (lockItem.isPresent()
-                && !lockItem.get().isExpired()
-                && lockItem.get().getOwnerName().equals(workerId)) {
-            log.info("Releasing deploying leader lock since all workers are emitting the deploying version.");
-            lockItem.get().close();
+    private void releaseLockIfVersionHashDoesNotMatch(final String lockKey) {
+        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(lockKey, Optional.empty());
+        if (lockItem.isPresent() && !doesVersionHashMatchLockVersionHash(lockItem.get())) {
+            dynamoDBLockClient.releaseLock(lockItem.get());
         }
+    }
+
+    private boolean doesVersionHashMatchLockVersionHash(final LockItem leaderLock) {
+        return leaderLock.getAdditionalAttributes().containsKey(segmentingHandler.getVersionHashKey())
+                && segmentingHandler
+                        .getVersionHash()
+                        .equals(leaderLock
+                                .getAdditionalAttributes()
+                                .get(segmentingHandler.getVersionHashKey())
+                                .s());
     }
 
     private void publishIsLeaderMetrics(final boolean response) {

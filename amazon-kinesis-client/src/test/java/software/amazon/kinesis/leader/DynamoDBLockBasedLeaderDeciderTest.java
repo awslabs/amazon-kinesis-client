@@ -139,4 +139,46 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 .build();
         dynamoDBSyncClient.putItem(putItemRequest);
     }
+
+    @Test
+    void isLeader_doesNotReleaseExistingLockWithMatchingVersionHash() {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        // Worker acquires the lock first
+        assertTrue(decider.isLeader(workerId));
+
+        // Another worker with the same version hash should not release the lock
+        final String otherWorkerId = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider otherDecider = workerIdToLeaderDeciderMap.get(otherWorkerId);
+        assertFalse(otherDecider.isLeader(otherWorkerId));
+
+        // Original worker should still be leader
+        assertTrue(decider.isLeader(workerId));
+    }
+
+    @Test
+    void isLeader_releasesDeployingLeaderLockWithDifferentVersionHash() {
+        // Worker 1 acquires the deploying leader lock
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock())
+                .thenReturn(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        final String workerId1 = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider1 = workerIdToLeaderDeciderMap.get(workerId1);
+        assertTrue(decider1.isLeader(workerId1));
+
+        // Change version hash so the lock no longer matches, and target the leader key
+        Mockito.when(mockSegmentingHandler.getVersionHash()).thenReturn("newVersionHash");
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);
+
+        // Worker 1 calls isLeader — should release the deploying lock (version mismatch)
+        decider1.isLeader(workerId1);
+
+        // Worker 2 should be able to acquire the deploying leader lock since worker 1 released it
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock())
+                .thenReturn(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        Mockito.when(mockSegmentingHandler.getVersionHash()).thenReturn("worker2Version");
+        final String workerId2 = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider decider2 = workerIdToLeaderDeciderMap.get(workerId2);
+        assertTrue(decider2.isLeader(workerId2), "Worker 2 should acquire the released deploying leader lock");
+    }
 }
