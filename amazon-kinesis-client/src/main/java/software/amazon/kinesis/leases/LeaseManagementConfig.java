@@ -251,7 +251,7 @@ public class LeaseManagementConfig {
      * Flag to enable the safe migration system. When a new LeaseAssignmentStrategy is being used, then the new
      * strategy will only be used on a subset of workers as more KCL workers get updated with the new strategy.
      */
-    private boolean enableSafeMigrationSystem = true;
+    private boolean enableSafeMigrationSystem = false;
 
     /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
