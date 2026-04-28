@@ -486,6 +486,7 @@ public class Scheduler implements Runnable {
             shutdown();
         } finally {
             MetricsUtil.addSuccess(metricsScope, "Initialize", success, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(metricsScope);
         }
         while (!shouldShutdown()) {
             runProcessLoop();
