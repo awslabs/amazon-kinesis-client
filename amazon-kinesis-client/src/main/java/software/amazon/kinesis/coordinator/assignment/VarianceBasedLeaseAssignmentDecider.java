@@ -189,7 +189,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
     @Override
     public void balanceWorkerVariance() {
         log.info("WorkerMetricStats to corresponding fleet level average : {}", workerMetricsToFleetLevelAverageMap);
-        log.info("Workers to balance : {}", inMemoryStorageView.getAssignableWorkers());
+        log.info("Assignable workers : {}", inMemoryStorageView.getAssignableWorkers());
 
         final Map<String, Double> workerIdToThroughputToTakeMap = new HashMap<>();
         String largestOutlierWorkerMetricsName = "";
@@ -207,12 +207,15 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             final double fleetAverageForWorkerMetrics = workerMetricsToFleetLevelAverageEntry.getValue();
 
-            final List<WorkerMetricStats> workerToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
+            // Only workers on the leader's version hash will be considered when taking leases if segmenting
+            // is enabled
+            final List<WorkerMetricStats> workersToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
                     workersOnVersion, workerMetricsName, fleetAverageForWorkerMetrics);
+            log.info("Workers to take from : {}", workersToTakeLeasesFrom);
 
             final Map<String, Double> workerIdToThroughputToTakeForCurrentWorkerMetrics = new HashMap<>();
             double totalThroughputToTakeForCurrentWorkerMetrics = 0D;
-            for (final WorkerMetricStats workerToTakeLease : workerToTakeLeasesFrom) {
+            for (final WorkerMetricStats workerToTakeLease : workersToTakeLeasesFrom) {
                 final double workerMetricsValueForWorker = workerToTakeLease.getMetricStat(workerMetricsName);
                 // Load to take based on the difference compared to the fleet level average
                 final double loadPercentageToTake =
