@@ -14,10 +14,8 @@
  */
 package software.amazon.kinesis.metrics;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,9 +29,12 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 /**
  * OTel-native metrics scope that implements {@link MetricsScope} directly.
- * Records raw observations on OTel {@link Meter} instruments ({@link DoubleHistogram},
- * {@link LongCounter}) when {@link #end()} is called. The OTel SDK (configured by the
+ * Records raw observations immediately on OTel {@link Meter} instruments ({@link DoubleHistogram},
+ * {@link LongCounter}) as {@link #addData} is called. The OTel SDK (configured by the
  * application owner) handles aggregation, batching, and export.
+ *
+ * <p>Dimensions must be added via {@link #addDimension} before calling {@link #addData},
+ * as observations are recorded immediately with the current set of accumulated attributes.
  */
 public class OtelMetricsScope implements MetricsScope {
 
@@ -93,7 +94,6 @@ public class OtelMetricsScope implements MetricsScope {
     private final Set<String> metricsEnabledDimensions;
     private final boolean allDimensionsEnabled;
 
-    private final List<MetricObservation> observations = new ArrayList<>();
     private final AttributesBuilder attributesBuilder = Attributes.builder();
     private boolean ended = false;
 
@@ -122,7 +122,8 @@ public class OtelMetricsScope implements MetricsScope {
         if (level.getValue() < metricsLevel.getValue()) {
             return;
         }
-        observations.add(new MetricObservation(name, value, unit));
+        Attributes attrs = attributesBuilder.build();
+        recordObservation(name, value, unit, attrs);
     }
 
     @Override
@@ -139,23 +140,19 @@ public class OtelMetricsScope implements MetricsScope {
     public void end() {
         checkNotEnded();
         ended = true;
-        Attributes attrs = attributesBuilder.build();
-        for (MetricObservation obs : observations) {
-            recordObservation(obs, attrs);
-        }
     }
 
-    private void recordObservation(MetricObservation obs, Attributes attrs) {
-        if (obs.unit == StandardUnit.COUNT) {
-            LongCounter counter = meter.counterBuilder(obs.name)
-                    .setUnit(convertUnit(obs.unit))
+    private void recordObservation(String name, double value, StandardUnit unit, Attributes attrs) {
+        if (unit == StandardUnit.COUNT) {
+            LongCounter counter = meter.counterBuilder(name)
+                    .setUnit(convertUnit(unit))
                     .build();
-            counter.add((long) obs.value, attrs);
+            counter.add((long) value, attrs);
         } else {
-            DoubleHistogram histogram = meter.histogramBuilder(obs.name)
-                    .setUnit(convertUnit(obs.unit))
+            DoubleHistogram histogram = meter.histogramBuilder(name)
+                    .setUnit(convertUnit(unit))
                     .build();
-            histogram.record(obs.value, attrs);
+            histogram.record(value, attrs);
         }
     }
 
