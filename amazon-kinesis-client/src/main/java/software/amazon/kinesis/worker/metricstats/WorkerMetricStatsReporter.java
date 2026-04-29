@@ -51,12 +51,11 @@ public class WorkerMetricStatsReporter implements Runnable {
              * case where a worker can have a failure for some time and thus does not update the workerMetrics entry
              * and LeaseAssigmentManager cleans it and then worker ends updating entry without operating range.
              */
-            final long lastUpdateTime = Instant.now().getEpochSecond();
             final WorkerMetricStats workerMetrics = WorkerMetricStats.builder()
                     .workerId(workerIdentifier)
                     .metricStats(workerMetricsManager.computeMetrics())
                     .operatingRange(workerMetricsManager.getOperatingRange())
-                    .lastUpdateTime(lastUpdateTime)
+                    .lastUpdateTime(Instant.now().getEpochSecond())
                     .properties(segmentingHandler.getVersionHashWithLastUpdatedTime())
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
