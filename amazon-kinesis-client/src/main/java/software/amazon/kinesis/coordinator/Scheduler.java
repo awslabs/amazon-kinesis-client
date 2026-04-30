@@ -336,7 +336,8 @@ public class Scheduler implements Runnable {
         this.segmentingHandler = new FleetSegmentingHandler(
                 leaseManagementConfig,
                 new DynamoDbAsyncToSyncClientAdapter(leaseManagementConfig.dynamoDBClient()),
-                coordinatorConfig.coordinatorStateTableConfig().tableName());
+                coordinatorConfig.coordinatorStateTableConfig().tableName(),
+                coordinatorStateDAO);
 
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
@@ -621,7 +622,6 @@ public class Scheduler implements Runnable {
                 checkAndSyncStreamShardsAndLeases();
                 leaderSynced.set(true);
                 streamInfoManager.start();
-                segmentingHandler.updateCurrentVersion();
             } else {
                 leaderSynced.set(false);
                 streamInfoManager.stop(false);

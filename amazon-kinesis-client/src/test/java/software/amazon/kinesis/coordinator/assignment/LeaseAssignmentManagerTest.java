@@ -71,7 +71,7 @@ class LeaseAssignmentManagerTest {
     private static final String TEST_TAKE_WORKER_ID = "workerIdTake";
     private static final String TEST_YIELD_WORKER_ID = "workerIdYield";
     private static final Map<String, String> TEST_VERSION_HASH =
-            Collections.singletonMap("versionHash", String.valueOf("CPU".hashCode()));
+            Collections.singletonMap("VersionHash", String.valueOf("CPU".hashCode()));
 
     private static final String LEASE_TABLE_NAME = "leaseTable";
     private static final String WORKER_METRICS_TABLE_NAME = "workerMetrics";
@@ -1252,7 +1252,7 @@ class LeaseAssignmentManagerTest {
 
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
-        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        oldWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(oldWorker);
 
         leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
@@ -1284,7 +1284,7 @@ class LeaseAssignmentManagerTest {
 
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
-        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        otherWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(otherWorker);
 
         leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
@@ -1308,7 +1308,7 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE);
 
         final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
-        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        oldWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(oldWorker);
 
         leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
@@ -1332,7 +1332,7 @@ class LeaseAssignmentManagerTest {
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         // Old version worker should not receive rebalanced leases
         final WorkerMetricStats oldWorker = createDummyTakeWorkerMetrics("oldWorker");
-        oldWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        oldWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(oldWorker);
 
         final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
@@ -1419,7 +1419,7 @@ class LeaseAssignmentManagerTest {
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         // Worker with different version hash should still participate in balancing
         final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
-        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        otherWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(otherWorker);
 
         final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
@@ -1450,7 +1450,7 @@ class LeaseAssignmentManagerTest {
         workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
-        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        otherWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(otherWorker);
 
         final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
@@ -1481,7 +1481,7 @@ class LeaseAssignmentManagerTest {
 
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
         final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
-        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        otherWorker.setProperties(Collections.singletonMap("VersionHash", "differentHash"));
         workerMetricsDAO.updateMetrics(otherWorker);
 
         leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
@@ -1731,8 +1731,7 @@ class LeaseAssignmentManagerTest {
 
     private void initializeFleetSegmentingHandlerMocks() {
         mockSegmentingHandler = mock((FleetSegmentingHandler.class));
-        when(mockSegmentingHandler.getVersionHashKey()).thenReturn("versionHash");
-        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
+        when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("VersionHash"));
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);

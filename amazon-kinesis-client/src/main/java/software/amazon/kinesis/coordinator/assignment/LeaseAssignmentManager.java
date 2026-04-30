@@ -749,7 +749,7 @@ public final class LeaseAssignmentManager {
                     .filter(workerMetricStats -> workerMetricStats.getProperties() != null
                             && workerMetricStats
                                     .getProperties()
-                                    .get(segmentingHandler.getVersionHashKey())
+                                    .get(FleetSegmentingHandler.VERSION_HASH_KEY)
                                     .equals(segmentingHandler.getVersionHash())
                             && !segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
                     .collect(Collectors.toList());

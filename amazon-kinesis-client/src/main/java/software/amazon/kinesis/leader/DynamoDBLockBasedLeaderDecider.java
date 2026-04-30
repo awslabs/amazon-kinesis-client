@@ -23,13 +23,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.LockItem;
+import com.amazonaws.services.dynamodbv2.ReleaseLockOptions;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -124,11 +124,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
         boolean response;
 
-        // before obtaining a leader lock, release any lock that does not match the worker's version
-        releaseLockIfVersionHashDoesNotMatch(CoordinatorState.LEADER_HASH_KEY);
-        releaseLockIfVersionHashDoesNotMatch(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
-        releaseDeployingLeaderLockIfDeployingLeaderIsNotNeeded();
-
         final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
         // Get the lockItem from storage (if present)
@@ -146,7 +141,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                         .withShouldSkipBlockingWait(true)
                         .withAdditionalAttributes(segmentingHandler.getVersionHashWithLastUpdatedTimeForLockTable())
                         .build());
-                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
+                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new {}", item.getOwnerName(), ddbLeaderKey));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
             } catch (final InterruptedException e) {
@@ -171,36 +166,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         return response;
     }
 
-    private void releaseLockIfVersionHashDoesNotMatch(final String lockKey) {
-        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(lockKey, Optional.empty());
-        if (lockItem.isPresent() && !doesVersionHashMatchLockVersionHash(lockItem.get())) {
-            dynamoDBLockClient.releaseLock(lockItem.get());
-        }
-    }
-
-    private void releaseDeployingLeaderLockIfDeployingLeaderIsNotNeeded() {
-        if (isWorkerLeader(CoordinatorState.LEADER_HASH_KEY)
-                        && isWorkerLeader(CoordinatorState.DEPLOYING_LEADER_HASH_KEY)
-                || segmentingHandler.isVersionEmittedByAllActiveWorkers()) {
-            final Optional<LockItem> deployingLeaderLock =
-                    dynamoDBLockClient.getLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, Optional.empty());
-            deployingLeaderLock.ifPresent(dynamoDBLockClient::releaseLock);
-        }
-    }
-
     private boolean isWorkerLeader(final String ddbLeaderKey) {
         Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
         return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
-    }
-
-    private boolean doesVersionHashMatchLockVersionHash(final LockItem leaderLock) {
-        return leaderLock.getAdditionalAttributes().containsKey(segmentingHandler.getVersionHashKey())
-                && segmentingHandler
-                        .getVersionHash()
-                        .equals(leaderLock
-                                .getAdditionalAttributes()
-                                .get(segmentingHandler.getVersionHashKey())
-                                .s());
     }
 
     private void publishIsLeaderMetrics(final boolean response) {
@@ -246,7 +214,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                         "Current worker : {} holds the lock, releasing it.",
                         lockItem.get().getOwnerName());
                 // LockItem.close() will release the lock if current worker owns it else this call is no op.
-                lockItem.get().close();
+                dynamoDBLockClient.releaseLock(ReleaseLockOptions.builder(lockItem.get())
+                        .withDeleteLock(false)
+                        .build());
             }
         } catch (final Exception e) {
             log.error("Failed to complete releaseLeadershipIfHeld call.", e);

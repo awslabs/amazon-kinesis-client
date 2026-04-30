@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.leases;
 
+import lombok.Getter;
+
 /**
  * Enum defining the lease assignment strategy for the KCL.
  */
@@ -33,7 +35,7 @@ public enum LeaseAssignmentStrategy {
      * - Dampening and gradual rebalancing
      * - Throughput-aware assignment
      */
-    WORKER_UTILIZATION_AWARE,
+    WORKER_UTILIZATION_AWARE(0),
 
     /**
      * Lease count-based assignment.
@@ -42,5 +44,12 @@ public enum LeaseAssignmentStrategy {
      * evenly across workers based purely on lease count, ignoring worker utilization
      * metrics.
      */
-    LEASE_COUNT_BASED
+    LEASE_COUNT_BASED(1);
+
+    @Getter
+    private final int versionNum;
+
+    LeaseAssignmentStrategy(int versionNum) {
+        this.versionNum = versionNum;
+    }
 }
