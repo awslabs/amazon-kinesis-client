@@ -366,9 +366,16 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         workerToLeasesMap.put("worker1", new HashSet<>());
         workerToLeasesMap.put("worker2", new HashSet<>());
 
-        Set<String> activeWorkers = new HashSet<>(Arrays.asList("worker1", "worker2"));
+        List<WorkerMetricStats> activeWorkerMetrics = Arrays.asList("worker1", "worker2").stream()
+                .map(id -> {
+                    WorkerMetricStats stats = new WorkerMetricStats();
+                    stats.setWorkerId(id);
+                    stats.setMetricStats(new HashMap<>());
+                    return stats;
+                })
+                .collect(Collectors.toList());
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
-        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(activeWorkers);
+        when(inMemoryStorageView.getAssignableWorkers()).thenReturn(activeWorkerMetrics);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(deadLease1, deadLease2, deadLease3));
 
         decider.assignExpiredOrUnassignedLeases(expiredLeases);
