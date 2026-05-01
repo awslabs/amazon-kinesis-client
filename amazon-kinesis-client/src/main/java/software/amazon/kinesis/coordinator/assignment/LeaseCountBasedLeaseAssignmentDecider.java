@@ -62,7 +62,7 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
 
         expiredOrUnAssignedLeases.sort(Comparator.comparingLong(Lease::lastCounterIncrementNanos));
 
-        final Map<String, Integer> leaseCounts = computeEstimatedLeaseCounts();
+        final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
         final int target = calculateTargetLeaseCount();
 
         log.info(
@@ -71,7 +71,7 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
                 inMemoryStorageView.getActiveWorkerIdSet().size(),
                 target);
 
-        final List<String> workerQueue = leaseCounts.entrySet().stream()
+        final List<String> workerQueue = leaseCountPerActiveWorker.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
@@ -88,8 +88,8 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
             assignLease(lease, workerToAssign);
             assignedLeases.add(lease);
 
-            final int newCount = leaseCounts.get(workerToAssign) + 1;
-            leaseCounts.put(workerToAssign, newCount);
+            final int newCount = leaseCountPerActiveWorker.get(workerToAssign) + 1;
+            leaseCountPerActiveWorker.put(workerToAssign, newCount);
 
             if (newCount >= target) {
                 workerIndex++;
@@ -108,11 +108,11 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
         if (inMemoryStorageView.getActiveWorkerIdSet().isEmpty()) {
             return;
         }
-        final Map<String, Integer> estimatedLeaseCounts = computeEstimatedLeaseCounts();
+        final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
         final Map<String, List<Lease>> availableLeasesByWorker = computeAvailableLeases();
         final int target = calculateTargetLeaseCount();
 
-        final List<Map.Entry<String, Integer>> sortedWorkers = estimatedLeaseCounts.entrySet().stream()
+        final List<Map.Entry<String, Integer>> sortedWorkers = leaseCountPerActiveWorker.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
                 .collect(Collectors.toList());
 
@@ -188,26 +188,26 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
     }
 
     /**
-     * Computes estimated lease counts using the in-memory worker-to-leases mapping.
+     * Computes lease counts using the in-memory worker-to-leases mapping.
      * This reflects real-time assignments made during the current run.
      *
      * @return map of worker ID to estimated lease count after pending transfers
      */
-    private Map<String, Integer> computeEstimatedLeaseCounts() {
+    private Map<String, Integer> getActiveWorkerLeaseCounts() {
         final Map<String, Integer> estimatedCounts = new HashMap<>();
+        final Set<String> activeWorkers = inMemoryStorageView.getActiveWorkerIdSet();
 
-        // Count leases by actual owner using workerToLeasesMap (reflects current assignments)
+        // Count leases by actual owner, only for active workers
         for (final Map.Entry<String, Set<Lease>> entry :
                 inMemoryStorageView.getWorkerToLeasesMap().entrySet()) {
             final String workerId = entry.getKey();
-            final int leaseCount = entry.getValue().size();
-            if (nonNull(workerId)) {
-                estimatedCounts.put(workerId, leaseCount);
+            if (nonNull(workerId) && activeWorkers.contains(workerId)) {
+                estimatedCounts.put(workerId, entry.getValue().size());
             }
         }
 
         // Ensure all active workers are represented
-        for (final String workerId : inMemoryStorageView.getActiveWorkerIdSet()) {
+        for (final String workerId : activeWorkers) {
             estimatedCounts.putIfAbsent(workerId, 0);
         }
 
