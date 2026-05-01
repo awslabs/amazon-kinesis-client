@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +28,6 @@ public class FleetSegmentingHandler {
 
     public static final String VERSION_HASH_KEY = "versionHash";
     private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
-    private static final long VERSION_HASH_EXPIRY_MILLIS = TimeUnit.HOURS.toMillis(1);
 
     @Getter
     private final String versionHash;
@@ -43,6 +41,7 @@ public class FleetSegmentingHandler {
     private final String leaderTableName;
     private final DynamoDbClient ddbClient;
     private final CoordinatorStateDAO coordinatorStateDAO;
+    private final long versionHashExpiryMillis;
 
     public FleetSegmentingHandler(
             final LeaseManagementConfig config,
@@ -54,6 +53,13 @@ public class FleetSegmentingHandler {
         this.ddbClient = ddbClient;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
         isEnabled = config.enableSafeMigrationSystem();
+
+        // 2 * workerMetricsReporterFreqInMillis is the current threshold for considering a WorkerMetricStats to
+        // be expired. Since the versionHashExpiry is also used when checking if a leader's version hash is stale,
+        // we will take the max of the leader lease duration and the stale metrics threshold.
+        this.versionHashExpiryMillis = Math.max(
+                config.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
+                2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
     }
 
     /**
@@ -132,7 +138,7 @@ public class FleetSegmentingHandler {
     }
 
     private boolean isVersionHashExpired(final long lut) {
-        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > VERSION_HASH_EXPIRY_MILLIS;
+        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
     }
 
     private Map<String, AttributeValue> getCoordinatorStateAttributes(final String key) {
