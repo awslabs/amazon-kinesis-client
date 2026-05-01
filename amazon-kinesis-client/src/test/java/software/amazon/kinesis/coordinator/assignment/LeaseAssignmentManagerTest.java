@@ -70,8 +70,7 @@ class LeaseAssignmentManagerTest {
     private static final String TEST_LEADER_WORKER_ID = "workerId";
     private static final String TEST_TAKE_WORKER_ID = "workerIdTake";
     private static final String TEST_YIELD_WORKER_ID = "workerIdYield";
-    private static final Map<String, String> TEST_VERSION_HASH =
-            Collections.singletonMap("versionHash", "0");
+    private static final Map<String, String> TEST_VERSION_HASH = Collections.singletonMap("versionHash", "0");
 
     private static final String LEASE_TABLE_NAME = "leaseTable";
     private static final String WORKER_METRICS_TABLE_NAME = "workerMetrics";
