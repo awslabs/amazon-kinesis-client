@@ -53,10 +53,23 @@
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
     <slf4j.version>2.0.13</slf4j.version>
+    <opentelemetry.version>1.60.1</opentelemetry.version>
     <gsr.version>1.1.27</gsr.version>
     <skipUTs>false</skipUTs>
     <skipITs>true</skipITs>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.opentelemetry</groupId>
+        <artifactId>opentelemetry-bom</artifactId>
+        <version>${opentelemetry.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -201,6 +214,11 @@
       <artifactId>lombok</artifactId>
       <version>1.18.38</version>
       <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-api</artifactId>
     </dependency>
 
     <!-- Test -->

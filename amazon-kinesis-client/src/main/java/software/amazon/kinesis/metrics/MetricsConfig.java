@@ -18,6 +18,8 @@ package software.amazon.kinesis.metrics;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
@@ -106,19 +108,49 @@ public class MetricsConfig {
      */
     private int publisherFlushBuffer = 200;
 
+    /**
+     * The metrics publishing backend to use.
+     *
+     * <p>
+     * Default value: {@link MetricsBackend#CLOUDWATCH}
+     * </p>
+     */
+    private MetricsBackend metricsBackend = MetricsBackend.CLOUDWATCH;
+
+    /**
+     * Optional custom {@link OpenTelemetry} instance to use when the {@link MetricsBackend#OTEL} backend is selected.
+     * If null, {@link GlobalOpenTelemetry#getOrNoop()} will be used as the default.
+     *
+     * <p>
+     * Default value: null
+     * </p>
+     */
+    private OpenTelemetry openTelemetry;
+
     private MetricsFactory metricsFactory;
+
 
     public MetricsFactory metricsFactory() {
         if (metricsFactory == null) {
-            metricsFactory = new CloudWatchMetricsFactory(
-                    cloudWatchClient(),
-                    namespace(),
-                    metricsBufferTimeMillis(),
-                    metricsMaxQueueSize(),
-                    metricsLevel(),
-                    metricsEnabledDimensions(),
-                    publisherFlushBuffer());
+            switch (metricsBackend) {
+                case OTEL:
+                    OpenTelemetry otel = openTelemetry != null ? openTelemetry : GlobalOpenTelemetry.getOrNoop();
+                    metricsFactory = new OtelMetricsFactory(otel, metricsLevel(), metricsEnabledDimensions());
+                    break;
+                case CLOUDWATCH:
+                default:
+                    metricsFactory = new CloudWatchMetricsFactory(
+                            cloudWatchClient(),
+                            namespace(),
+                            metricsBufferTimeMillis(),
+                            metricsMaxQueueSize(),
+                            metricsLevel(),
+                            metricsEnabledDimensions(),
+                            publisherFlushBuffer());
+                    break;
+            }
         }
         return metricsFactory;
     }
+
 }
