@@ -24,15 +24,6 @@ public enum MetricsBackend {
     CLOUDWATCH,
 
     /**
-     * Publish metrics via the CloudWatch OpenTelemetry (OTEL) endpoint in OTLP format.
-     *
-     * @deprecated Use {@link #OTEL} instead, which follows OTel library instrumentation best practices
-     *     by depending only on the OTel API and letting the application owner configure the SDK.
-     */
-    @Deprecated
-    CLOUDWATCH_OTEL,
-
-    /**
      * Native OpenTelemetry library instrumentation backend. Records raw observations on OTel
      * {@code Meter} instruments (counters, histograms) using only the {@code opentelemetry-api}
      * dependency. The application owner configures exporters and resource attributes through

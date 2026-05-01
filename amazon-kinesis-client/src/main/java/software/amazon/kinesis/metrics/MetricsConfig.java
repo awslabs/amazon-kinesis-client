@@ -15,8 +15,6 @@
 
 package software.amazon.kinesis.metrics;
 
-import java.util.Collections;
-import java.util.Map;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
@@ -120,32 +118,8 @@ public class MetricsConfig {
     private MetricsBackend metricsBackend = MetricsBackend.CLOUDWATCH;
 
     /**
-     * The OTEL endpoint URL for publishing metrics when using the {@link MetricsBackend#CLOUDWATCH_OTEL} backend.
-     * Required when metricsBackend is set to CLOUDWATCH_OTEL.
-     *
-     * @deprecated Use {@link MetricsBackend#OTEL} instead, which uses the standard OTel SDK autoconfiguration
-     *     and does not require an explicit endpoint.
-     */
-    @Deprecated
-    private String otelEndpoint;
-
-    /**
-     * User-supplied OTEL resource attributes as key-value pairs.
-     * These override any auto-detected resource attributes with the same key.
-     *
-     * <p>
-     * Default value: empty map
-     * </p>
-     *
-     * @deprecated Use {@link MetricsBackend#OTEL} instead, which uses the standard OTel SDK autoconfiguration
-     *     for resource attributes.
-     */
-    @Deprecated
-    private Map<String, String> otelResourceAttributes = Collections.emptyMap();
-
-    /**
      * Optional custom {@link OpenTelemetry} instance to use when the {@link MetricsBackend#OTEL} backend is selected.
-     * If null, {@link GlobalOpenTelemetry#get()} will be used as the default.
+     * If null, {@link GlobalOpenTelemetry#getOrNoop()} will be used as the default.
      *
      * <p>
      * Default value: null
@@ -160,14 +134,9 @@ public class MetricsConfig {
         if (metricsFactory == null) {
             switch (metricsBackend) {
                 case OTEL:
-                    OpenTelemetry otel = openTelemetry != null ? openTelemetry : GlobalOpenTelemetry.get();
+                    OpenTelemetry otel = openTelemetry != null ? openTelemetry : GlobalOpenTelemetry.getOrNoop();
                     metricsFactory = new OtelMetricsFactory(otel, metricsLevel(), metricsEnabledDimensions());
                     break;
-                case CLOUDWATCH_OTEL:
-                    throw new UnsupportedOperationException(
-                            "MetricsBackend.CLOUDWATCH_OTEL is deprecated and no longer supported. "
-                                    + "Please use MetricsBackend.OTEL instead, which uses the standard OTel SDK "
-                                    + "autoconfiguration. See MetricsConfig#openTelemetry for details.");
                 case CLOUDWATCH:
                 default:
                     metricsFactory = new CloudWatchMetricsFactory(

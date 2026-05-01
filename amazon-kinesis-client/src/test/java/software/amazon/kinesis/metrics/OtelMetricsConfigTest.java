@@ -92,30 +92,18 @@ public class OtelMetricsConfigTest {
     }
 
     /**
-     * OTEL backend uses GlobalOpenTelemetry.get() when no instance provided (just verify it doesn't throw).
+     * OTEL backend uses GlobalOpenTelemetry.getOrNoop() when no instance provided (just verify it doesn't throw).
      */
     @Test
     public void testOtelBackendUsesGlobalOpenTelemetryWhenNoInstanceProvided() {
         MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
         config.metricsBackend(MetricsBackend.OTEL);
-        // openTelemetry is null — should fall back to GlobalOpenTelemetry.get()
+        // openTelemetry is null — should fall back to GlobalOpenTelemetry.getOrNoop()
 
         MetricsFactory factory = config.metricsFactory();
 
         Assert.assertNotNull("Factory should be created using GlobalOpenTelemetry fallback", factory);
         Assert.assertTrue(factory instanceof OtelMetricsFactory);
-    }
-
-    /**
-     * CLOUDWATCH_OTEL backend now throws UnsupportedOperationException.
-     */
-    @SuppressWarnings("deprecation")
-    @Test(expected = UnsupportedOperationException.class)
-    public void testCloudWatchOtelBackendThrowsUnsupportedOperationException() {
-        MetricsConfig config = new MetricsConfig(cloudWatchClient, NAMESPACE);
-        config.metricsBackend(MetricsBackend.CLOUDWATCH_OTEL);
-
-        config.metricsFactory();
     }
 
     /**

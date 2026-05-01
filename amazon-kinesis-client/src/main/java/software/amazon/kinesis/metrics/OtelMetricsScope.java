@@ -14,24 +14,27 @@
  */
 package software.amazon.kinesis.metrics;
 
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.metrics.DoubleCounter;
+import io.opentelemetry.api.metrics.DoubleGauge;
 import io.opentelemetry.api.metrics.DoubleHistogram;
-import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.Meter;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 /**
  * OTel-native metrics scope that implements {@link MetricsScope} directly.
  * Records raw observations immediately on OTel {@link Meter} instruments ({@link DoubleHistogram},
- * {@link LongCounter}) as {@link #addData} is called. The OTel SDK (configured by the
- * application owner) handles aggregation, batching, and export.
+ * {@link DoubleCounter}, {@link DoubleGauge}) as {@link #addData} is called. The OTel SDK
+ * (configured by the application owner) handles aggregation, batching, and export.
  *
  * <p>Dimensions must be added via {@link #addDimension} before calling {@link #addData},
  * as observations are recorded immediately with the current set of accumulated attributes.
@@ -44,7 +47,7 @@ public class OtelMetricsScope implements MetricsScope {
     static final Map<String, String> DIMENSION_TO_ATTRIBUTE_MAP;
 
     static {
-        Map<String, String> dimMap = new HashMap<>();
+        Map<String, String> dimMap = new java.util.HashMap<>();
         dimMap.put(MetricsUtil.OPERATION_DIMENSION_NAME, "aws.kinesis.operation");
         dimMap.put(MetricsUtil.SHARD_ID_DIMENSION_NAME, "aws.kinesis.shard.id");
         dimMap.put(MetricsUtil.STREAM_IDENTIFIER, "aws.kinesis.stream_name");
@@ -53,12 +56,33 @@ public class OtelMetricsScope implements MetricsScope {
     }
 
     /**
+     * KCL metric names (original, pre-transformation) that should be recorded as gauges
+     * rather than counters or histograms.
+     */
+    static final Set<String> GAUGE_METRIC_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "CurrentLeases",
+            "TotalLeases",
+            "NumWorkers",
+            "ExpiredLeases",
+            "VeryOldLeases",
+            "ActiveStreams.Count",
+            "StreamsPendingDeletion.Count",
+            "QueueSize",
+            "NumStreamsToSync",
+            "NumWorkersWithInvalidEntry",
+            "NumWorkersWithFailingWorkerMetric",
+            "GsiReadyStatus",
+            "WorkerMetricsReadyStatus",
+            "CurrentState:3xWorker",
+            "CurrentState:2xCompatibleWorker")));
+
+    /**
      * Mapping of CloudWatch StandardUnit to OTel UCUM unit strings.
      */
     private static final Map<StandardUnit, String> UNIT_MAP;
 
     static {
-        Map<StandardUnit, String> map = new HashMap<>();
+        Map<StandardUnit, String> map = new EnumMap<>(StandardUnit.class);
         map.put(StandardUnit.SECONDS, "s");
         map.put(StandardUnit.MICROSECONDS, "us");
         map.put(StandardUnit.MILLISECONDS, "ms");
@@ -95,6 +119,7 @@ public class OtelMetricsScope implements MetricsScope {
     private final boolean allDimensionsEnabled;
 
     private final AttributesBuilder attributesBuilder = Attributes.builder();
+    private Attributes cachedAttributes = null;
     private boolean ended = false;
 
     /**
@@ -122,8 +147,10 @@ public class OtelMetricsScope implements MetricsScope {
         if (level.getValue() < metricsLevel.getValue()) {
             return;
         }
-        Attributes attrs = attributesBuilder.build();
-        recordObservation(name, value, unit, attrs);
+        if (cachedAttributes == null) {
+            cachedAttributes = attributesBuilder.build();
+        }
+        recordObservation(name, value, unit, cachedAttributes);
     }
 
     @Override
@@ -143,14 +170,23 @@ public class OtelMetricsScope implements MetricsScope {
     }
 
     private void recordObservation(String name, double value, StandardUnit unit, Attributes attrs) {
-        if (unit == StandardUnit.COUNT) {
-            LongCounter counter = meter.counterBuilder(name)
-                    .setUnit(convertUnit(unit))
+        boolean isGauge = GAUGE_METRIC_NAMES.contains(name);
+        String otelName = OtelMetricNameTransformer.transformName(name);
+        String otelUnit = convertUnit(unit);
+
+        if (isGauge) {
+            DoubleGauge gauge =
+                    meter.gaugeBuilder(otelName).setUnit(otelUnit).build();
+            gauge.set(value, attrs);
+        } else if (unit == StandardUnit.COUNT) {
+            DoubleCounter counter = meter.counterBuilder(otelName)
+                    .ofDoubles()
+                    .setUnit(otelUnit)
                     .build();
-            counter.add((long) value, attrs);
+            counter.add(value, attrs);
         } else {
-            DoubleHistogram histogram = meter.histogramBuilder(name)
-                    .setUnit(convertUnit(unit))
+            DoubleHistogram histogram = meter.histogramBuilder(otelName)
+                    .setUnit(otelUnit)
                     .build();
             histogram.record(value, attrs);
         }
