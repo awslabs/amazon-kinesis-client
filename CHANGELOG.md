@@ -6,6 +6,13 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.4.3 (April 30, 2026)
+* [#1734](https://github.com/awslabs/amazon-kinesis-client/pull/1734) Fix metricsScope not being closed properly in Scheduler.run
+* [#1731](https://github.com/awslabs/amazon-kinesis-client/pull/1731) Perform initial shard sync operation after leader election
+* [#1730](https://github.com/awslabs/amazon-kinesis-client/pull/1730) Add StreamType to StreamIdentifier and skip hash range ERROR logs for DynamoDB Streams
+* [#1729](https://github.com/awslabs/amazon-kinesis-client/pull/1729) Fix heartbeat not being stopped for graceful handoff lease in shutting down state
+* [#1670](https://github.com/awslabs/amazon-kinesis-client/pull/1670) Add lease count-based assignment strategy as an alternative to worker utilization-aware assignment
+
 ### Release (3.4.2 - April 1, 2026)
 * [#1718](https://github.com/awslabs/amazon-kinesis-client/pull/1718) Fix stuck leases when worker restarts with pending checkpoint leases
 * [#1717](https://github.com/awslabs/amazon-kinesis-client/pull/1717) Refactor KinesisDataFetcher to use GetRecordsResponseAdapter
