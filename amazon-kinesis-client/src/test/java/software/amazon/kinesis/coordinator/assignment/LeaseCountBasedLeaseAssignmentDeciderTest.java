@@ -50,6 +50,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
     @Mock
     private LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
 
+    private LeaseCountBasedLeaseAssignmentDecider decider;
     private static final int MAX_LEASES_FOR_WORKER = 10;
 
     private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
@@ -73,6 +74,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        decider = new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER);
     }
 
     @Test
@@ -346,6 +348,35 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         // Verify only MAX_LEASES_FOR_WORKER (10) assignments were made
         verify(inMemoryStorageView, times(MAX_LEASES_FOR_WORKER)).performLeaseAssignment(any(), eq("worker1"));
         assertEquals(5, unassignedLeases.size()); // 5 leases should remain unassigned
+    }
+
+    @Test
+    void assignExpiredOrUnassignedLeases_deadWorkerLeasesExcludedFromCounts_deadWorkerGetsNoAssignments() {
+        // Dead worker "deadWorker" owns 3 leases but is not in activeWorkerIdSet.
+        // Only "worker1" and "worker2" are active. Dead worker's expired leases
+        // should be reassigned only to active workers.
+        Lease deadLease1 = createLease("dead1", "deadWorker", 100L);
+        Lease deadLease2 = createLease("dead2", "deadWorker", 200L);
+        Lease deadLease3 = createLease("dead3", "deadWorker", 300L);
+        List<Lease> expiredLeases = new ArrayList<>(Arrays.asList(deadLease1, deadLease2, deadLease3));
+
+        Map<String, Set<Lease>> workerToLeasesMap = new HashMap<>();
+        Set<Lease> deadWorkerLeases = new HashSet<>(Arrays.asList(deadLease1, deadLease2, deadLease3));
+        workerToLeasesMap.put("deadWorker", deadWorkerLeases);
+        workerToLeasesMap.put("worker1", new HashSet<>());
+        workerToLeasesMap.put("worker2", new HashSet<>());
+
+        Set<String> activeWorkers = new HashSet<>(Arrays.asList("worker1", "worker2"));
+        when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
+        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(activeWorkers);
+        when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(deadLease1, deadLease2, deadLease3));
+
+        decider.assignExpiredOrUnassignedLeases(expiredLeases);
+
+        // All leases assigned to active workers, none to deadWorker
+        verify(inMemoryStorageView, never()).performLeaseAssignment(any(), eq("deadWorker"));
+        verify(inMemoryStorageView, times(3)).performLeaseAssignment(any(), any());
+        assertTrue(expiredLeases.isEmpty());
     }
 
     private Lease createLease(String leaseKey, String owner, long lastCounterIncrement) {

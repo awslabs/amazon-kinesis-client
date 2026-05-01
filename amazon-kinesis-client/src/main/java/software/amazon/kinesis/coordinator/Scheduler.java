@@ -503,6 +503,7 @@ public class Scheduler implements Runnable {
             shutdown();
         } finally {
             MetricsUtil.addSuccess(metricsScope, "Initialize", success, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(metricsScope);
         }
         while (!shouldShutdown()) {
             runProcessLoop();
@@ -526,8 +527,17 @@ public class Scheduler implements Runnable {
                     leaseCoordinator.initialize();
                     coordinatorStateDAO.initialize();
                     StreamIdCache.initialize(streamIdCacheManager, leaseManagementConfig.streamIdOnboardingState());
+
+                    // Initialize the state machine after lease table has been initialized
+                    // Migration state machine creates and waits for GSI if necessary,
+                    // it must be initialized before starting leaseCoordinator, which runs LeaseDiscoverer
+                    // and that requires GSI to be present and active. (migrationStateMachine.initialize is idempotent)
+                    migrationStateMachine.initialize();
+                    leaderDecider = migrationComponentsInitializer.leaderDecider();
+
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
-                        if (shouldInitiateLeaseSync()) {
+                        if (shouldInitiateLeaseSync()
+                                && leaderDecider.isLeader(leaseManagementConfig.workerIdentifier())) {
                             log.info(
                                     "Worker {} is initiating the lease sync.",
                                     leaseManagementConfig.workerIdentifier());
@@ -536,13 +546,6 @@ public class Scheduler implements Runnable {
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                     }
-
-                    // Initialize the state machine after lease table has been initialized
-                    // Migration state machine creates and waits for GSI if necessary,
-                    // it must be initialized before starting leaseCoordinator, which runs LeaseDiscoverer
-                    // and that requires GSI to be present and active. (migrationStateMachine.initialize is idempotent)
-                    migrationStateMachine.initialize();
-                    leaderDecider = migrationComponentsInitializer.leaderDecider();
 
                     leaseCleanupManager.start();
 
@@ -609,7 +612,18 @@ public class Scheduler implements Runnable {
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                 ShardConsumer shardConsumer = createOrGetShardConsumer(
                         shardInfo, processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
-
+                if (shardConsumer.isShutdown() && !ShutdownReason.SHARD_END.equals(shardConsumer.shutdownReason())) {
+                    final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
+                    if (currentLease != null
+                            && currentLease.concurrencyToken() != null
+                            && shardInfo
+                                    .concurrencyToken()
+                                    .equals(currentLease.concurrencyToken().toString())) {
+                        // dropping the lease to stop heartbeat so it gets cleaned up in the next round
+                        log.warn("Unexpected that lease is shutdown but still held. Stop heartbeat {}", currentLease);
+                        leaseCoordinator.dropLease(currentLease);
+                    }
+                }
                 shardConsumer.executeLifecycle();
                 assignedShards.add(shardInfo);
             }

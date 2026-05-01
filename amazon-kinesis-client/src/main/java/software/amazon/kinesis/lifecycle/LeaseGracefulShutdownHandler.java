@@ -150,8 +150,7 @@ public class LeaseGracefulShutdownHandler {
                 final ShardInfo shardInfo = entry.getKey();
                 leaseKey = leasePendingShutdown.lease.leaseKey();
 
-                if (leasePendingShutdown.shardConsumer.isShutdown()
-                        || shardInfoShardConsumerMap.get(shardInfo) == null
+                if (shardInfoShardConsumerMap.get(shardInfo) == null
                         || leaseCoordinator.getCurrentlyHeldLease(leaseKey) == null) {
                     logTimeoutMessage(leasePendingShutdown);
                     shardInfoLeasePendingShutdownMap.remove(shardInfo);
@@ -197,18 +196,7 @@ public class LeaseGracefulShutdownHandler {
     private void transferLeaseIfOwner(LeasePendingShutdown leasePendingShutdown)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         final Lease lease = leasePendingShutdown.lease;
-        if (leaseCoordinator.workerIdentifier().equals(lease.checkpointOwner())) {
-            // assignLease will increment the leaseCounter which will cause the heartbeat to stop on the current owner
-            // for the lease
-            leaseCoordinator.leaseRefresher().assignLease(lease, lease.leaseOwner());
-        } else {
-            // the worker ID check is just for sanity. We don't expect it to be different from the current worker.
-            log.error(
-                    "Lease {} checkpoint owner mismatch found {} but it should be {}",
-                    lease.leaseKey(),
-                    lease.checkpointOwner(),
-                    leaseCoordinator.workerIdentifier());
-        }
+        attemptLeaseTransfer(lease, leaseCoordinator);
         // mark it true because we don't want to enter the method again because update is not possible anymore.
         leasePendingShutdown.leaseTransferCalled = true;
     }
@@ -224,5 +212,21 @@ public class LeaseGracefulShutdownHandler {
         long timeoutTimestampMillis;
         boolean shutdownRequested = false;
         boolean leaseTransferCalled = false;
+    }
+
+    public static void attemptLeaseTransfer(Lease lease, LeaseCoordinator leaseCoordinator)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (lease != null && lease.shutdownRequested()) {
+            if (leaseCoordinator.workerIdentifier().equals(lease.checkpointOwner())) {
+                leaseCoordinator.leaseRefresher().assignLease(lease, lease.leaseOwner());
+            } else {
+                // the worker ID check is just for sanity. We don't expect it to be different from the current worker.
+                log.warn(
+                        "Lease {} checkpoint owner mismatch found {} but it should be {}",
+                        lease.leaseKey(),
+                        lease.checkpointOwner(),
+                        leaseCoordinator.workerIdentifier());
+            }
+        }
     }
 }

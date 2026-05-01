@@ -1697,6 +1697,10 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_withWorkerUtilizationStrategy_usesVarianceDecider() throws Exception {
+        // Variance decider assigns based on utilization, not lease count.
+        // Yield worker (90% CPU) has 0 leases, Take worker (50% CPU) has 1 lease.
+        // Variance decider should assign to Take worker (lower utilization) despite having more leases.
+        // If lease-count decider were used instead, it would assign to Yield worker (fewer leases).
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
                 100L,
@@ -1705,15 +1709,23 @@ class LeaseAssignmentManagerTest {
 
         workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
-        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("existingLease", TEST_TAKE_WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("newLease"));
 
         leaseAssignmentManagerRunnable.run();
 
-        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.listLeases().get(0).leaseOwner());
+        final Map<String, String> leaseAssignments =
+                leaseRefresher.listLeases().stream().collect(Collectors.toMap(Lease::leaseKey, Lease::leaseOwner));
+        // Variance decider picks Take worker (lower CPU) even though it already has a lease
+        assertEquals(TEST_TAKE_WORKER_ID, leaseAssignments.get("newLease"));
     }
 
     @Test
     void performAssignment_withLeaseCountStrategy_usesLeaseCountDecider() throws Exception {
+        // Lease-count decider assigns based on lease count, ignoring utilization.
+        // Yield worker (90% CPU) has 0 leases, Take worker (50% CPU) has 1 lease.
+        // Lease-count decider should assign to Yield worker (fewer leases) despite higher utilization.
+        // If variance decider were used instead, it would assign to Take worker (lower utilization).
         createLeaseAssignmentManagerWithStrategy(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
                 100L,
@@ -1721,12 +1733,17 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 LeaseAssignmentStrategy.LEASE_COUNT_BASED);
 
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
         workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
-        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("existingLease", TEST_TAKE_WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("newLease"));
 
         leaseAssignmentManagerRunnable.run();
 
-        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.listLeases().get(0).leaseOwner());
+        final Map<String, String> leaseAssignments =
+                leaseRefresher.listLeases().stream().collect(Collectors.toMap(Lease::leaseKey, Lease::leaseOwner));
+        // Lease-count decider picks Yield worker (fewer leases) despite higher CPU
+        assertEquals(TEST_YIELD_WORKER_ID, leaseAssignments.get("newLease"));
     }
 
     private void initializeFleetSegmentingHandlerMocks() {

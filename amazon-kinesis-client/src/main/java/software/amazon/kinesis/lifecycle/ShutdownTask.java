@@ -162,8 +162,24 @@ public class ShutdownTask implements ConsumerTask {
                         throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                     }
                 } else {
+                    // When shutdown reason is not SHARD_END (i.e., LEASE_LOST), the lease is typically
+                    // already lost and currentShardLease would be null. However, if a graceful lease
+                    // shutdown was requested but the ShardConsumer transitioned directly to ShutdownTask
+                    // (e.g., from WAITING_ON_PARENT_SHARDS) without going through
+                    // ShutdownNotificationTask, the lease may still be held. In that case, we need to
+                    // transfer the lease to the intended new owner and drop it locally.
+                    if (currentShardLease != null && currentShardLease.shutdownRequested()) {
+                        log.info("Attempting to transfer and drop shutdown requested lease {}", leaseKey);
+                        try {
+                            LeaseGracefulShutdownHandler.attemptLeaseTransfer(currentShardLease, leaseCoordinator);
+                        } catch (Exception e) {
+                            log.warn("Unable to transfer lease {}", leaseKey, e);
+                        }
+                        dropLease(currentShardLease, leaseKey);
+                    }
                     throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                 }
+
                 log.debug("Shutting down retrieval strategy for shard {}.", leaseKey);
                 recordsPublisher.shutdown();
 
@@ -388,7 +404,7 @@ public class ShutdownTask implements ConsumerTask {
                     leaseKey);
         } else {
             leaseCoordinator.dropLease(currentLease);
-            log.info("Dropped lease for shutting down ShardConsumer: " + currentLease.leaseKey());
+            log.info("Dropped lease for shutting down ShardConsumer: {}", currentLease.leaseKey());
         }
     }
 }
