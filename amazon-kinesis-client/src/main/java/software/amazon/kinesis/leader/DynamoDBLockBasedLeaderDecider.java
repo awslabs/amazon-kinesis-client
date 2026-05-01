@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -126,6 +127,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
 
+        // If the version hash of a worker changes, and it is trying to get the lock of the other leader, release
+        // the opposite lock if held. This can happen when a worker was originally the deploying leader, the
+        // deployment finishes, and the same worker becomes the current leader.
+        if (ddbLeaderKey.equals(CoordinatorState.LEADER_HASH_KEY)) {
+            releaseLeaderLock(CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
+        } else {
+            releaseLeaderLock(CoordinatorState.LEADER_HASH_KEY);
+        }
+
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
         lockItem.ifPresent(item -> log.info("Worker : {} is the current {}.", item.getOwnerName(), ddbLeaderKey));
@@ -166,17 +176,18 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         return response;
     }
 
-    private boolean isWorkerLeader(final String ddbLeaderKey) {
-        Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
-        return lockItem.isPresent() && lockItem.get().getOwnerName().equals(workerId);
-    }
-
     private void publishIsLeaderMetrics(final boolean response) {
         final MetricsScope metricsScope =
                 MetricsUtil.createMetricsWithOperation(metricsFactory, METRIC_OPERATION_LEADER_DECIDER);
         metricsScope.addData(
                 METRIC_OPERATION_LEADER_DECIDER_IS_LEADER, response ? 1 : 0, StandardUnit.COUNT, MetricsLevel.DETAILED);
         MetricsUtil.endScope(metricsScope);
+    }
+
+    private void releaseLeaderLock(final String ddbLeaderKey) {
+        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(ddbLeaderKey, Optional.empty());
+        lockItem.ifPresent(item -> dynamoDBLockClient.releaseLock(
+                ReleaseLockOptions.builder(item).withDeleteLock(false).build()));
     }
 
     /**

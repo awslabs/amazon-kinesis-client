@@ -174,10 +174,10 @@ public class FleetSegmentingHandlerTest {
         final Map<String, String> result = handler.getVersionHashWithLastUpdatedTime();
         final long after = Instant.now().getEpochSecond();
 
-        assertTrue(result.containsKey("VersionHash"));
-        assertTrue(result.containsKey("VersionHashLut"));
-        assertEquals(sampleVersionHash, result.get("VersionHash"));
-        final long lut = Long.parseLong(result.get("VersionHashLut"));
+        assertTrue(result.containsKey("versionHash"));
+        assertTrue(result.containsKey("versionHashLut"));
+        assertEquals(sampleVersionHash, result.get("versionHash"));
+        final long lut = Long.parseLong(result.get("versionHashLut"));
         assertTrue(lut >= before && lut <= after);
         assertEquals(2, result.size());
     }
@@ -188,8 +188,8 @@ public class FleetSegmentingHandlerTest {
         final Map<String, AttributeValue> result = handler.getVersionHashWithLastUpdatedTimeForLockTable();
         final long after = Instant.now().getEpochSecond();
 
-        assertEquals(sampleVersionHash, result.get("VersionHash").s());
-        final long lut = Long.parseLong(result.get("VersionHashLut").s());
+        assertEquals(sampleVersionHash, result.get("versionHash").s());
+        final long lut = Long.parseLong(result.get("versionHashLut").s());
         assertTrue(lut >= before && lut <= after);
         assertEquals(2, result.size());
     }
@@ -197,7 +197,7 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isWorkerVersionHashStale_returnsTrue_whenLutKeyMissing() {
         WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
-        when(mockWorker.getProperties()).thenReturn(Collections.singletonMap("VersionHash", "123"));
+        when(mockWorker.getProperties()).thenReturn(Collections.singletonMap("versionHash", "123"));
         assertTrue(handler.isWorkerVersionHashStale(mockWorker));
     }
 
@@ -205,7 +205,7 @@ public class FleetSegmentingHandlerTest {
     void isWorkerVersionHashStale_returnsFalse_whenLutIsRecent() {
         WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
         Map<String, String> props = new HashMap<>();
-        props.put("VersionHashLut", String.valueOf(Instant.now().getEpochSecond()));
+        props.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond()));
         when(mockWorker.getProperties()).thenReturn(props);
         assertFalse(handler.isWorkerVersionHashStale(mockWorker));
     }
@@ -214,7 +214,7 @@ public class FleetSegmentingHandlerTest {
     void isWorkerVersionHashStale_returnsTrue_whenLutIsOlderThanOneHour() {
         WorkerMetricStats mockWorker = mock(WorkerMetricStats.class);
         Map<String, String> props = new HashMap<>();
-        props.put("VersionHashLut", String.valueOf(Instant.now().getEpochSecond() - 3601));
+        props.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond() - 3601));
         when(mockWorker.getProperties()).thenReturn(props);
         assertTrue(handler.isWorkerVersionHashStale(mockWorker));
     }
@@ -284,8 +284,8 @@ public class FleetSegmentingHandlerTest {
 
     private void mockCoordinatorState(String key, String versionHash, long lut) throws Exception {
         Map<String, AttributeValue> attrs = new HashMap<>();
-        attrs.put("VersionHash", AttributeValue.fromS(versionHash));
-        attrs.put("VersionHashLut", AttributeValue.fromS(String.valueOf(lut)));
+        attrs.put("versionHash", AttributeValue.fromS(versionHash));
+        attrs.put("versionHashLut", AttributeValue.fromS(String.valueOf(lut)));
         CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
         when(mockCoordinatorStateDAO.getCoordinatorState(eq(key))).thenReturn(state);

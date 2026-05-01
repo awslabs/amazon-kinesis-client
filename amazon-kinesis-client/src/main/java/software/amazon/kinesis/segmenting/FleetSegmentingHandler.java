@@ -27,8 +27,8 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 @KinesisClientInternalApi
 public class FleetSegmentingHandler {
 
-    public static final String VERSION_HASH_KEY = "VersionHash";
-    private static final String VERSION_HASH_LUT_KEY = "VersionHashLut";
+    public static final String VERSION_HASH_KEY = "versionHash";
+    private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
     private static final long VERSION_HASH_EXPIRY_MILLIS = TimeUnit.HOURS.toMillis(1);
 
     @Getter
