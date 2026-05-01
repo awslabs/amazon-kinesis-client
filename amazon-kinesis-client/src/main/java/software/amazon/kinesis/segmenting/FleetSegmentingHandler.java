@@ -65,8 +65,8 @@ public class FleetSegmentingHandler {
         if (!isEnabled) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
-        // If the current version does not exist, then this is the first time we are deploying versioned workers.
-        // If the current version does exist but is expired, then the versioned workers were rolled back. For both
+        // If the current leader does not exist, default to obtaining the Leader lock.
+        // If the current leader does exist but is expired, then the versioned workers were rolled back. For both
         // cases, obtain the normal leader lock.
         final Map<String, AttributeValue> currentVersionAttrs =
                 getCoordinatorStateAttributes(CoordinatorState.LEADER_HASH_KEY);
