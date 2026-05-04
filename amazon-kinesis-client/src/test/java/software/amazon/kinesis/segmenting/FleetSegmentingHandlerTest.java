@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.coordinator.CoordinatorState;
@@ -30,7 +29,6 @@ import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
 
-    private DynamoDbClient mockDdbClient;
     private CoordinatorStateDAO mockCoordinatorStateDAO;
     private FleetSegmentingHandler handler;
     private String sampleVersionHash;
@@ -40,7 +38,6 @@ public class FleetSegmentingHandlerTest {
     @BeforeEach
     void setup() {
         clearInvocations();
-        mockDdbClient = mock(DynamoDbClient.class);
         mockCoordinatorStateDAO = mock(CoordinatorStateDAO.class);
         sampleVersionHash = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionNum());
         config = new LeaseManagementConfig(
@@ -50,7 +47,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
         config.enableSafeMigrationSystem(true);
-        handler = new FleetSegmentingHandler(config, mockDdbClient, tableName, mockCoordinatorStateDAO);
+        handler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
     }
 
     @Test
@@ -61,8 +58,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getVersionHash_isSameAcrossInstancesForSameConfig() {
-        FleetSegmentingHandler handler2 =
-                new FleetSegmentingHandler(config, mockDdbClient, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
         assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
@@ -264,16 +260,14 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
         config.enableSafeMigrationSystem(false);
-        FleetSegmentingHandler disabledHandler =
-                new FleetSegmentingHandler(config, mockDdbClient, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
         assertFalse(disabledHandler.isEnabled());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() throws Exception {
         config.enableSafeMigrationSystem(false);
-        FleetSegmentingHandler disabledHandler =
-                new FleetSegmentingHandler(config, mockDdbClient, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
 
         // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader
         mockCoordinatorState(

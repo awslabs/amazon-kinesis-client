@@ -8,7 +8,6 @@ import java.util.Map;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
@@ -39,18 +38,15 @@ public class FleetSegmentingHandler {
     private final boolean isEnabled;
 
     private final String leaderTableName;
-    private final DynamoDbClient ddbClient;
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final long versionHashExpiryMillis;
 
     public FleetSegmentingHandler(
             final LeaseManagementConfig config,
-            final DynamoDbClient ddbClient,
             final String leaderTableName,
             final CoordinatorStateDAO coordinatorStateDAO) {
         this.leaderTableName = leaderTableName;
         this.coordinatorStateDAO = coordinatorStateDAO;
-        this.ddbClient = ddbClient;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
         isEnabled = config.enableSafeMigrationSystem();
 
