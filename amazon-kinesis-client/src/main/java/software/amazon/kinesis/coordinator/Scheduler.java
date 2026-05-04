@@ -114,6 +114,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
@@ -225,6 +226,10 @@ public class Scheduler implements Runnable {
 
     private boolean leasesSyncedOnAppInit = false;
 
+    private final FleetSegmentingHandler segmentingHandler;
+
+    private final WorkerMetricStatsDAO workerMetricsDAO;
+
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
 
@@ -322,6 +327,17 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
+
+        this.workerMetricsDAO = new WorkerMetricStatsDAO(
+                leaseManagementConfig.dynamoDBClient(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+
+        this.segmentingHandler = new FleetSegmentingHandler(
+                leaseManagementConfig,
+                coordinatorConfig.coordinatorStateTableConfig().tableName(),
+                coordinatorStateDAO);
+
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,
@@ -394,7 +410,8 @@ public class Scheduler implements Runnable {
                 metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
-                leaderSynced);
+                leaderSynced,
+                segmentingHandler);
         this.leaseCleanupManager = leaseManagementFactory.createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
@@ -415,11 +432,6 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig
                         .workerUtilizationAwareAssignmentConfig()
                         .inMemoryWorkerMetricsCaptureFrequencyMillis());
-
-        final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
-                leaseManagementConfig.dynamoDBClient(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)
@@ -449,7 +461,8 @@ public class Scheduler implements Runnable {
                         leaseManagementConfig.gracefulLeaseHandoffConfig(),
                         leaseManagementConfig.leaseAssignmentStrategy(),
                         leaseManagementConfig.leaseAssignmentIntervalMillis(),
-                        streamIdCacheManager))
+                        streamIdCacheManager,
+                        segmentingHandler))
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
@@ -458,10 +471,12 @@ public class Scheduler implements Runnable {
                         leaseCoordinator.workerIdentifier(),
                         metricsFactory,
                         leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
-                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()))
+                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
+                        segmentingHandler))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
+                .segmentingHandler(segmentingHandler)
                 .build();
     }
 

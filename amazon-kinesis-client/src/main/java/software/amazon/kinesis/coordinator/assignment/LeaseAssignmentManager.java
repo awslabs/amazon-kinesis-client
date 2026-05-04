@@ -63,6 +63,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.NullMetricsScope;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
@@ -124,6 +125,7 @@ public final class LeaseAssignmentManager {
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
+    private final FleetSegmentingHandler segmentingHandler;
 
     private Future<?> managerFuture;
 
@@ -196,6 +198,8 @@ public final class LeaseAssignmentManager {
 
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
+            segmentingHandler.setIsVersionEmittedByAllActiveWorkers(
+                    inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
@@ -223,20 +227,28 @@ public final class LeaseAssignmentManager {
                     "ExpiredLeases", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
-            leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
-            MetricsUtil.addLatency(
-                    metricsScope,
-                    "AssignExpiredOrUnassignedLeases",
-                    expiredAndUnassignedLeaseAssignmentStartTime,
-                    MetricsLevel.DETAILED);
 
-            if (!expiredOrUnAssignedLeases.isEmpty()) {
-                // When expiredOrUnAssignedLeases is not empty, that means
-                // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
-                // per worker for all workers.
-                log.warn("Not able to assign all expiredOrUnAssignedLeases");
-                metricsScope.addData(
-                        "LeaseSpillover", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
+                leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
+                MetricsUtil.addLatency(
+                        metricsScope,
+                        "AssignExpiredOrUnassignedLeases",
+                        expiredAndUnassignedLeaseAssignmentStartTime,
+                        MetricsLevel.DETAILED);
+
+                if (!expiredOrUnAssignedLeases.isEmpty()) {
+                    // When expiredOrUnAssignedLeases is not empty, that means
+                    // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
+                    // per worker for all workers.
+                    log.warn("Not able to assign all expiredOrUnAssignedLeases");
+                    metricsScope.addData(
+                            "LeaseSpillover",
+                            expiredOrUnAssignedLeases.size(),
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
+            } else {
+                log.info("Leader {} is on deploying version. Ignoring unassigned/expired leases", currentWorkerId);
             }
 
             if (shouldRunVarianceBalancing()) {
@@ -714,6 +726,33 @@ public final class LeaseAssignmentManager {
 
         public Double getTotalAssignedThroughput(final String workerId) {
             return workerToTotalAssignedThroughputMap.getOrDefault(workerId, 0D);
+        }
+
+        /**
+         * List of workers that the LeaseAssignmentDecider can assign leases to. This list will be used to calculate
+         * the fleet average for each metric.
+         * @return List of workers to assign leases to. If the version is the deploying version, return the workers
+         * on the same version. Otherwise, return all the workers.
+         */
+        public List<WorkerMetricStats> getAssignableWorkers() {
+            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
+                return activeWorkerMetrics;
+            }
+            return getWorkersOnVersionHash();
+        }
+
+        public List<WorkerMetricStats> getWorkersOnVersionHash() {
+            if (!segmentingHandler.isEnabled()) {
+                return activeWorkerMetrics;
+            }
+            return activeWorkerMetrics.stream()
+                    .filter(workerMetricStats -> workerMetricStats.getProperties() != null
+                            && workerMetricStats
+                                    .getProperties()
+                                    .get(FleetSegmentingHandler.VERSION_HASH_KEY)
+                                    .equals(segmentingHandler.getVersionHash())
+                            && !segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
+                    .collect(Collectors.toList());
         }
 
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
