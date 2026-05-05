@@ -126,6 +126,15 @@ public class FleetSegmentingHandler {
                 && workersOnVersionHash.containsAll(activeWorkerMetrics);
     }
 
+    /**
+     * PeriodicShardSyncManager should always be run if the segmenting handler is disabled. If enabled, then
+     * periodic shard sync manager should run only if it is on the current version
+     * @return
+     */
+    public boolean shouldRunPeriodicShardSyncManager() {
+        return !isEnabled || isOnCurrentVersion();
+    }
+
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {
         return item.containsKey(VERSION_HASH_KEY)
                 && item.containsKey(VERSION_HASH_LUT_KEY)

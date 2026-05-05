@@ -90,6 +90,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
+        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(true);
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
@@ -615,9 +616,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void start_onDeployingVersion_skipsShardSync() {
-        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.isOnDeployingVersion()).thenReturn(true);
-
+        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(false);
         PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
                 "worker",
                 leaseRefresher,
@@ -640,9 +639,6 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void start_onCurrentVersion_startsShardSync() {
-        when(mockSegmentingHandler.isOnDeployingVersion()).thenReturn(false);
-        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-
         PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
                 "worker",
                 leaseRefresher,
@@ -664,8 +660,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
-        when(mockSegmentingHandler.isOnDeployingVersion()).thenReturn(true);
-        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(false);
 
         periodicShardSyncManager.syncShardsOnce();
 
@@ -675,8 +670,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onCurrentVersion_syncsAllStreams() throws Exception {
-        when(mockSegmentingHandler.isOnDeployingVersion()).thenReturn(false);
-        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(true);
 
         StreamConfig mockStreamConfig = mock(StreamConfig.class);
         when(currentStreamConfigMap.values()).thenReturn(Collections.singletonList(mockStreamConfig));
@@ -689,29 +683,6 @@ public class PeriodicShardSyncManagerTest {
 
         Mockito.verify(shardSyncTaskManagerProvider).apply(mockStreamConfig);
         Mockito.verify(mockTaskManager).callShardSyncTask();
-    }
-
-    @Test
-    public void start_segmentingHandlerDisabled_startsShardSync() {
-        when(mockSegmentingHandler.isEnabled()).thenReturn(false);
-
-        PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
-                "worker",
-                leaseRefresher,
-                currentStreamConfigMap,
-                shardSyncTaskManagerProvider,
-                streamToShardSyncTaskManagerMap,
-                mockScheduledExecutor,
-                true,
-                new NullMetricsFactory(),
-                2 * 60 * 1000,
-                3,
-                new AtomicBoolean(true),
-                mockSegmentingHandler);
-
-        manager.start(leaderDecider);
-
-        Assert.assertTrue(manager.isRunning());
     }
 
     private List<Lease> generateInitialLeases(int initialShardCount) {

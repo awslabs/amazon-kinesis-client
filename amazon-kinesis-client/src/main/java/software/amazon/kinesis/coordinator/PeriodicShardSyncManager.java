@@ -164,8 +164,8 @@ class PeriodicShardSyncManager {
 
     public synchronized TaskResult start(final LeaderDecider leaderDecider) {
         Validate.notNull(leaderDecider, "LeaderDecider is required to start PeriodicShardSyncManager.");
-        if (segmentingHandler.isEnabled() && segmentingHandler.isOnDeployingVersion()) {
-            log.info("{} is on deploying version, skipping shard sync.", workerId);
+        if (!segmentingHandler.shouldRunPeriodicShardSyncManager()) {
+            log.info("{} is not on current version, skipping shard sync.", workerId);
             return new TaskResult(null);
         }
         this.leaderDecider = leaderDecider;
@@ -194,7 +194,8 @@ class PeriodicShardSyncManager {
     public synchronized void syncShardsOnce() throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
-        if (segmentingHandler.isEnabled() && segmentingHandler.isOnDeployingVersion()) {
+        if (!segmentingHandler.shouldRunPeriodicShardSyncManager()) {
+            log.info("{} is not on current version, skipping shard sync.", workerId);
             return;
         }
         for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
