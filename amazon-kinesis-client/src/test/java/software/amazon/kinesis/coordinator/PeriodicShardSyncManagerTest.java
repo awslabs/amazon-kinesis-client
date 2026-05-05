@@ -90,7 +90,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(true);
+        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(true);
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
@@ -615,29 +615,6 @@ public class PeriodicShardSyncManagerTest {
     }
 
     @Test
-    public void start_onDeployingVersion_skipsShardSync() {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(false);
-        PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
-                "worker",
-                leaseRefresher,
-                currentStreamConfigMap,
-                shardSyncTaskManagerProvider,
-                streamToShardSyncTaskManagerMap,
-                mockScheduledExecutor,
-                true,
-                new NullMetricsFactory(),
-                2 * 60 * 1000,
-                3,
-                new AtomicBoolean(true),
-                mockSegmentingHandler);
-
-        TaskResult result = manager.start(leaderDecider);
-
-        Assert.assertNull(result.getException());
-        Assert.assertFalse(manager.isRunning());
-    }
-
-    @Test
     public void start_onCurrentVersion_startsShardSync() {
         PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
                 "worker",
@@ -660,7 +637,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(false);
+        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(false);
 
         periodicShardSyncManager.syncShardsOnce();
 
@@ -670,7 +647,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onCurrentVersion_syncsAllStreams() throws Exception {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSyncManager()).thenReturn(true);
+        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(true);
 
         StreamConfig mockStreamConfig = mock(StreamConfig.class);
         when(currentStreamConfigMap.values()).thenReturn(Collections.singletonList(mockStreamConfig));

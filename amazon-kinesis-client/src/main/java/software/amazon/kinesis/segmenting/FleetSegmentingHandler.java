@@ -128,10 +128,9 @@ public class FleetSegmentingHandler {
 
     /**
      * PeriodicShardSyncManager should always be run if the segmenting handler is disabled. If enabled, then
-     * periodic shard sync manager should run only if it is on the current version
-     * @return
+     * periodic shard sync manager should run only if it is on the current version.
      */
-    public boolean shouldRunPeriodicShardSyncManager() {
+    public boolean shouldRunPeriodicShardSync() {
         return !isEnabled || isOnCurrentVersion();
     }
 
