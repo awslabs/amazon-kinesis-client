@@ -105,6 +105,18 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
+    void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashKeyMissing() throws Exception {
+        Map<String, AttributeValue> attrs = new HashMap<>();
+        attrs.put("someOtherKey", AttributeValue.fromS("value"));
+        CoordinatorState state = mock(CoordinatorState.class);
+        when(state.getAttributes()).thenReturn(attrs);
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(CoordinatorState.LEADER_HASH_KEY)))
+                .thenReturn(state);
+
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
     void isOnCurrentVersion_returnsTrue_whenVersionHashMatches() throws Exception {
         mockCoordinatorState(
                 CoordinatorState.LEADER_HASH_KEY,

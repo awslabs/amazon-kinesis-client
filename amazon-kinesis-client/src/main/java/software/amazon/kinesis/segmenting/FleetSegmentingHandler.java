@@ -72,7 +72,9 @@ public class FleetSegmentingHandler {
         // cases, obtain the normal leader lock.
         final Map<String, AttributeValue> currentVersionAttrs =
                 getCoordinatorStateAttributes(CoordinatorState.LEADER_HASH_KEY);
-        if (currentVersionAttrs == null || isVersionHashExpired(currentVersionAttrs)) {
+        if (currentVersionAttrs == null
+                || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
+                || isVersionHashExpired(currentVersionAttrs)) {
             return CoordinatorState.LEADER_HASH_KEY;
         }
 
