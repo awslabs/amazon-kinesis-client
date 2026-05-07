@@ -46,7 +46,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
-        config.enableSafeMigrationSystem(true);
+        config.enableRollingDeploymentSystem(true);
         handler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
     }
 
@@ -259,14 +259,14 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
-        config.enableSafeMigrationSystem(false);
+        config.enableRollingDeploymentSystem(false);
         FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
         assertFalse(disabledHandler.isEnabled());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() throws Exception {
-        config.enableSafeMigrationSystem(false);
+        config.enableRollingDeploymentSystem(false);
         FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
 
         // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader

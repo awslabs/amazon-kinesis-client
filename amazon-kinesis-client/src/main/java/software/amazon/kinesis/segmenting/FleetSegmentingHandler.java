@@ -16,7 +16,7 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
- * Component responsible for handling the safe migration system. If enabled, workers that are getting deployed with
+ * Component responsible for handling the rolling deployment system. If enabled, workers that are getting deployed with
  * a new lease assignment algorithm will contend for the DeployingLeader lock. Workers that have the new algorithm will
  * have its leases balanced by the DeployingLeader. Leases owned by workers on the deploying version cannot be
  * transferred over unless the lease becomes unassigned.
@@ -48,7 +48,7 @@ public class FleetSegmentingHandler {
         this.leaderTableName = leaderTableName;
         this.coordinatorStateDAO = coordinatorStateDAO;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
-        isEnabled = config.enableSafeMigrationSystem();
+        isEnabled = config.enableRollingDeploymentSystem();
 
         // 2 * workerMetricsReporterFreqInMillis is the current threshold for considering a WorkerMetricStats to
         // be expired. Since the versionHashExpiry is also used when checking if a leader's version hash is stale,
