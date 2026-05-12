@@ -27,6 +27,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbAttribute;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
@@ -41,6 +42,7 @@ import software.amazon.kinesis.utils.ExponentialMovingAverage;
 import software.amazon.kinesis.worker.metric.WorkerMetricType;
 
 import static java.util.Objects.isNull;
+import static software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer.LEASE_KEY_KEY;
 
 /**
  * DataModel for a WorkerMetric, this data model is used to store the current state of a Worker in terms of relevant
@@ -54,7 +56,7 @@ import static java.util.Objects.isNull;
  *                        and is used during Lease assignment only
  */
 @Data
-@Builder
+@SuperBuilder
 @DynamoDbBean
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -65,7 +67,53 @@ public class WorkerMetricStats {
     static final String KEY_LAST_UPDATE_TIME = "lut";
     static final String KEY_WORKER_ID = "wid";
 
-    @Getter(onMethod_ = {@DynamoDbPartitionKey, @DynamoDbAttribute(KEY_WORKER_ID)})
+    /**
+     * Schema for worker stats table uses "wid" as the partition key
+     */
+    @DynamoDbBean
+    @NoArgsConstructor
+    @SuperBuilder
+    public static class WorkerMetricStatsForWorkerTable extends WorkerMetricStats {
+        @Override
+        @DynamoDbPartitionKey
+        @DynamoDbAttribute(KEY_WORKER_ID)
+        public String getWorkerId() {
+            return super.getWorkerId();
+        }
+    }
+
+    /**
+     * Schema for lease table uses "leaseKey" as the partition key
+     */
+    @DynamoDbBean
+    @NoArgsConstructor
+    @SuperBuilder
+    public static class WorkerMetricStatsForLeaseTable extends WorkerMetricStats {
+        @Override
+        @DynamoDbPartitionKey
+        @DynamoDbAttribute(LEASE_KEY_KEY)
+        public String getWorkerId() {
+            return super.getWorkerId();
+        }
+    }
+
+    /**
+     * Add any new "breaking" feature to the END of this list.
+     */
+    enum Features {
+        SINGLE_TABLE_MIGRATION
+    }
+
+    /**
+     * This support code is incremented when adding "breaking" features whose fleetwide support must be
+     * tracked by the leader to ensure backward-compatibility and rollback safety. The support last
+     * update time field is the worker's way of "heartbeating" that the support code is up-to-date,
+     * since versions before the support code's introduction will be doing a DynamoDB partial update
+     * to the worker metrics item and would persist the support code field after rollback.
+     */
+    static final Integer SUPPORT_CODE = Features.values().length;
+
+    @Getter
     private String workerId;
 
     @Getter(onMethod_ = {@DynamoDbAttribute(KEY_LAST_UPDATE_TIME)})
@@ -76,6 +124,12 @@ public class WorkerMetricStats {
 
     @Getter(onMethod_ = {@DynamoDbAttribute("opr")})
     private Map<String, List<Long>> operatingRange;
+
+    @Getter(onMethod_ = {@DynamoDbAttribute("sup")})
+    private Integer supportCode;
+
+    @Getter(onMethod_ = {@DynamoDbAttribute("slu")})
+    private Long supportLastUpdateTime;
 
     /**
      * This map contains the WorkerMetric to its metric stat value. Metric stat value stored in this is exponentially averaged over

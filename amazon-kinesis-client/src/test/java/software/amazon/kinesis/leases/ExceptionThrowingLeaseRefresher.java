@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.leases;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -24,6 +25,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
  * Mock LeaseRefresher by randomly throwing Leasing Exceptions.
@@ -237,5 +239,10 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
                 "isLeaseOwnerToLeaseKeyIndexActive",
                 ExceptionThrowingLeaseRefresherMethods.IS_LEASE_OWNER_TO_LEASE_KEY_INDEX_ACTIVE);
         return false;
+    }
+
+    @Override
+    public List<WorkerMetricStats> getWorkerMetrics() {
+        return new ArrayList<>();
     }
 }

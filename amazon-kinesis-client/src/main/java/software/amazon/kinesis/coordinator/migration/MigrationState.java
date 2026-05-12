@@ -59,6 +59,9 @@ public class MigrationState extends CoordinatorState {
     public static final String HISTORY_ATTRIBUTE_NAME = "h";
     private static final int MAX_HISTORY_ENTRIES = 10;
 
+    public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
+    public static final String ENTITY_TYPE = "migrationState";
+
     private ClientVersion clientVersion;
     private String modifiedBy;
     private long modifiedTimestamp;
@@ -77,6 +80,7 @@ public class MigrationState extends CoordinatorState {
         this.modifiedBy = modifiedBy;
         this.modifiedTimestamp = modifiedTimestamp;
         this.history = historyEntries;
+        this.entityType = ENTITY_TYPE;
     }
 
     public MigrationState(final String key, final String modifiedBy) {
@@ -94,6 +98,7 @@ public class MigrationState extends CoordinatorState {
         result.put(CLIENT_VERSION_ATTRIBUTE_NAME, AttributeValue.fromS(clientVersion.name()));
         result.put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(modifiedBy));
         result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));
+        // entityType is always the same for MigrationState entries and is set in constructor, no need to parse
 
         if (!history.isEmpty()) {
             final List<AttributeValue> historyList = new ArrayList<>();
@@ -108,7 +113,7 @@ public class MigrationState extends CoordinatorState {
         return result;
     }
 
-    public static MigrationState deserialize(final String key, final HashMap<String, AttributeValue> attributes) {
+    public static MigrationState deserialize(final String key, final Map<String, AttributeValue> attributes) {
         if (!MIGRATION_HASH_KEY.equals(key)) {
             return null;
         }
@@ -121,6 +126,7 @@ public class MigrationState extends CoordinatorState {
                     mutableAttributes.remove(MODIFIED_BY_ATTRIBUTE_NAME).s();
             final long modifiedTimestamp = Long.parseLong(
                     mutableAttributes.remove(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME).n());
+            // entityType is always the same for MigrationState entries and is set in constructor, no need to parse
 
             final List<HistoryEntry> historyList = new ArrayList<>();
             if (attributes.containsKey(HISTORY_ATTRIBUTE_NAME)) {
@@ -203,6 +209,13 @@ public class MigrationState extends CoordinatorState {
                 MODIFIED_TIMESTAMP_ATTRIBUTE_NAME,
                 AttributeValueUpdate.builder()
                         .value(AttributeValue.fromN(String.valueOf(modifiedTimestamp)))
+                        .action(AttributeAction.PUT)
+                        .build());
+        // immutable/constant entityType field is used by LAM for filtering
+        updates.put(
+                ENTITY_TYPE_ATTRIBUTE_NAME,
+                AttributeValueUpdate.builder()
+                        .value(AttributeValue.fromS(ENTITY_TYPE))
                         .action(AttributeAction.PUT)
                         .build());
         if (!history.isEmpty()) {

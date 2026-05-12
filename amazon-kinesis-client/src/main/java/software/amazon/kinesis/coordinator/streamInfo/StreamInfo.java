@@ -21,13 +21,20 @@ public class StreamInfo extends CoordinatorState {
     public static final String STREAM_ID_ATTRIBUTE_NAME = "streamId";
     public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
     public static final String ENTITY_TYPE = "STREAM";
+    public static final String MODIFIED_TIMESTAMP_ATTRIBUTE_NAME = "mts";
 
     private final String streamId;
+    private long modifiedTimestamp;
 
     public StreamInfo(final String key, final String streamId) {
+        this(key, streamId, System.currentTimeMillis());
+    }
+
+    public StreamInfo(final String key, final String streamId, long modifiedTimestamp) {
         setKey(key);
         this.streamId = streamId;
         setEntityType(ENTITY_TYPE);
+        this.modifiedTimestamp = modifiedTimestamp;
     }
 
     public HashMap<String, AttributeValue> serialize() {
@@ -35,12 +42,21 @@ public class StreamInfo extends CoordinatorState {
         result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(getKey())));
         result.put(STREAM_ID_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(streamId)));
         result.put(ENTITY_TYPE_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(entityType)));
+        result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));
         return result;
     }
 
     public static StreamInfo deserialize(final String key, final Map<String, AttributeValue> attributes) {
         final String streamId = attributes.get(STREAM_ID_ATTRIBUTE_NAME).s();
-        return new StreamInfo(key, streamId);
+
+        // parse modified timestamp attribute; may not exist
+        AttributeValue mts = attributes.get(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME);
+        final Long modifiedTimestamp = mts == null ? null : Long.parseLong(mts.n());
+
+        // use correct constructor depending on whether modified timestamp was available
+        return modifiedTimestamp == null
+                ? new StreamInfo(key, streamId)
+                : new StreamInfo(key, streamId, modifiedTimestamp);
     }
 
     public static String multiStreamLeaseKeyToStreamIdentifier(String multiStreamLeaseKey) {

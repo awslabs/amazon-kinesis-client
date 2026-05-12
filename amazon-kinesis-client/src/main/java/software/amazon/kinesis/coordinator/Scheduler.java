@@ -300,7 +300,9 @@ public class Scheduler implements Runnable {
         final LeaseManagementFactory leaseManagementFactory =
                 this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
         this.coordinatorStateDAO = new CoordinatorStateDAO(
-                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
+                leaseManagementConfig.dynamoDBClient(),
+                coordinatorConfig().coordinatorStateTableConfig(),
+                leaseManagementConfig);
         final StreamInfoDAO streamInfoDAO =
                 new StreamInfoDAO(coordinatorStateDAO, leaseManagementConfig.kinesisClient());
         this.streamInfoManager = leaseManagementFactory.createStreamInfoManager(
@@ -419,7 +421,8 @@ public class Scheduler implements Runnable {
         final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
                 leaseManagementConfig.dynamoDBClient(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
+                coordinatorStateDAO.isUsingLeaseTable() /* let coordinator state DAO decide, and copy its decision */);
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)
