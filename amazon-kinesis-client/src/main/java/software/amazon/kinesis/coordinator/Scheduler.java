@@ -419,9 +419,7 @@ public class Scheduler implements Runnable {
                         .inMemoryWorkerMetricsCaptureFrequencyMillis());
 
         final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
-                leaseManagementConfig.dynamoDBClient(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
+                leaseManagementConfig,
                 coordinatorStateDAO.isUsingLeaseTable() /* let coordinator state DAO decide, and copy its decision */);
 
         return DynamicMigrationComponentsInitializer.builder()

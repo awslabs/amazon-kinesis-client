@@ -828,7 +828,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         if (entityType == null) {
             // lease object; will be added to scanned leases list
             return serializer.fromDynamoRecord(item);
-        } else if (entityType.equals("workerStats")) {
+        } else if (entityType.equals(WorkerMetricStats.ENTITY_TYPE)) {
             // worker stats entry; use decided upon schema to deserialize -> should be lease table's schema
             scannedWorkerMetrics.get().add(WorkerMetricStatsDAO.getSchema().mapToItem(item));
         } else {

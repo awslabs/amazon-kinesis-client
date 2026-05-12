@@ -203,32 +203,21 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         return lockItem.get();
     }
 
+    // TODO: should we just read table migration status from coordinatorStateDao's leaderLockItemSnapshot?
     private synchronized boolean tryAcquireOtherLockIfNeeded(LockItem lock) {
-        for (int i = 0; i < 100; i++) {
-            log.info("Trying to find out if I need to grab the other lock and will try if needed!");
-        }
-
-        // check if table migration status is COMPLETE (will be in additional attributes if populated)
         String tableMigrationStatus = coordinatorStateDao.getTableMigrationStatus(lock.getAdditionalAttributes());
         if (tableMigrationStatus == null) {
-            for (int i = 0; i < 100; i++) {
-                log.info("Table migration status not found! We don't have to grab the other lock!");
-            }
             // no table migration status (e.g. table migration never requested via config) -> no other lock to grab
             return true;
         }
-        if (TableMigrationMachine.compareStatuses(tableMigrationStatus, "COMPLETE") >= 0) {
-            // while table migration is incomplete, leader must also grab lock from other table to be leader
+        if (TableMigrationMachine.compareStatuses(tableMigrationStatus, "PENDING") == 0) {
+            // while table migration is in PENDING, leader must also grab lock from other table to be leader
             if (otherDynamoDBLockClient == null) {
-                // create lock client for other table than the one coordinatorStateDao is using
                 otherDynamoDBLockClient = createDDBLockClient(!coordinatorStateDao.isUsingLeaseTable());
             }
             LockItem otherLock =
                     tryAcquireLock(otherDynamoDBLockClient, LEADER_HASH_KEY, leaderLockAdditionalAttributes());
             if (otherLock == null || !otherLock.getOwnerName().equals(workerId)) {
-                for (int i = 0; i < 100; i++) {
-                    log.info("Couldn't grab the other lock! Need to release leadership if held!");
-                }
                 // couldn't grab other lock, must release the one already grabbed
                 releaseLeadershipIfHeld();
                 return false;

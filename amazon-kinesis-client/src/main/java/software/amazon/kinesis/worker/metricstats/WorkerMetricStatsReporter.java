@@ -53,6 +53,7 @@ public class WorkerMetricStatsReporter implements Runnable {
                             ? WorkerMetricStats.WorkerMetricStatsForLeaseTable.builder()
                             : WorkerMetricStats.WorkerMetricStatsForWorkerTable.builder())
                     .workerId(workerIdentifier)
+                    .entityType(WorkerMetricStats.ENTITY_TYPE)
                     .metricStats(workerMetricsManager.computeMetrics())
                     .operatingRange(workerMetricsManager.getOperatingRange())
                     .lastUpdateTime(Instant.now().getEpochSecond())

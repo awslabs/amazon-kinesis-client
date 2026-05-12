@@ -67,6 +67,9 @@ public class WorkerMetricStats {
     static final String KEY_LAST_UPDATE_TIME = "lut";
     static final String KEY_WORKER_ID = "wid";
 
+    public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
+    public static final String ENTITY_TYPE = "workerStats";
+
     /**
      * Schema for worker stats table uses "wid" as the partition key
      */
@@ -115,6 +118,10 @@ public class WorkerMetricStats {
 
     @Getter
     private String workerId;
+
+    /** entityType is immutable/constant but still needs to be written to DDB so LAM can filter by it */
+    @Getter(onMethod_ = {@DynamoDbAttribute(ENTITY_TYPE_ATTRIBUTE_NAME)})
+    private String entityType;
 
     @Getter(onMethod_ = {@DynamoDbAttribute(KEY_LAST_UPDATE_TIME)})
     private Long lastUpdateTime;

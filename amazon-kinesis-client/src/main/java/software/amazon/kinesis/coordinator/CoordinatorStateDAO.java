@@ -116,8 +116,7 @@ public class CoordinatorStateDAO {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.config = config;
         this.dynamoDbSyncClient = createDelegateClient();
-        this.usingLeaseTable = false;
-        this.tableName = config.tableName();
+        setUsingLeaseTable(false);
     }
 
     public CoordinatorStateDAO(
@@ -125,18 +124,14 @@ public class CoordinatorStateDAO {
             final CoordinatorStateTableConfig config,
             final LeaseManagementConfig leaseManagementConfig) {
         this(dynamoDbAsyncClient, config);
-
-        // set up DAO to use lease table for initial table migration status check
-        this.usingLeaseTable = true;
         this.leaseManagementConfig = leaseManagementConfig;
-        this.tableName = leaseManagementConfig.tableName();
 
-        // revert to using coordinator table if should not use lease table
-        if (!(this.usingLeaseTable = shouldUseLeaseTable())) {
-            this.tableName = config.tableName();
+        // if item found, respond to table migration status; else, don't use lease table
+        if (getLeaderLockSnapshotFromLeaseTable()) {
+            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
+        } else {
+            setUsingLeaseTable(false);
         }
-
-        this.mutationTracker = MutationTracker.getOrCreateInstance(dynamoDbAsyncClient, config);
     }
 
     public void initialize() throws DependencyException {
@@ -148,6 +143,47 @@ public class CoordinatorStateDAO {
 
     private DynamoDbClient createDelegateClient() {
         return new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient);
+    }
+
+    private void setUsingLeaseTable(boolean using) {
+        usingLeaseTable = using;
+        tableName = using ? leaseManagementConfig.tableName() : config.tableName();
+    }
+
+    private boolean getLeaderLockSnapshotFromLeaseTable() {
+        setUsingLeaseTable(true);
+        return getLeaderLockSnapshot();
+    }
+
+    private boolean getLeaderLockSnapshot() {
+        CoordinatorState leaderLock = tryGetCoordinatorState(CoordinatorState.LEADER_HASH_KEY, 3);
+        return leaderLock != null && (leaderLockItemSnapshot = leaderLock.getAttributes()) != null;
+    }
+
+    private void respondToTableMigrationStatus(String tableMigrationStatus) {
+        if (tableMigrationStatus == null) {
+            setUsingLeaseTable(false);
+            return;
+        }
+
+        switch (tableMigrationStatus) {
+            case "PENDING": {
+                // sync coordinator states to coordinator table and fallthrough to use lease table
+                mutationTracker = MutationTracker.getOrCreateInstance(dynamoDbAsyncClient, config);
+            }
+            case "COMPLETE": {
+                setUsingLeaseTable(true);
+                return;
+            }
+        }
+        setUsingLeaseTable(false);
+    }
+
+    public static String getTableMigrationStatus(Map<String, AttributeValue> attributes) {
+        return attributes == null
+                ? null
+                : DynamoUtils.safeGetString(
+                        attributes.get(TableMigrationMachine.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME));
     }
 
     public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder() {
@@ -286,29 +322,6 @@ public class CoordinatorStateDAO {
         if (mutationTracker != null) {
             mutationTracker.sync();
         }
-    }
-
-    private boolean shouldUseLeaseTable() {
-        // try getting the leader lock item; it will only exist if we're in tableMigration=PENDING or higher
-        CoordinatorState leaderLockItem = tryGetCoordinatorState(CoordinatorState.LEADER_HASH_KEY, 3);
-        if (leaderLockItem == null) {
-            return false;
-        }
-
-        // get table migration status from leader lock item and save snapshot of it
-        String tableMigrationStatus =
-                getTableMigrationStatus((leaderLockItemSnapshot = leaderLockItem.getAttributes()));
-
-        // if the table migration status is PENDING or higher, use the lease table; else, use coordinator table
-        return tableMigrationStatus != null
-                && TableMigrationMachine.compareStatuses(tableMigrationStatus, "PENDING") >= 0;
-    }
-
-    public String getTableMigrationStatus(Map<String, AttributeValue> attributes) {
-        return attributes == null
-                ? null
-                : DynamoUtils.safeGetString(
-                        attributes.get(TableMigrationMachine.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME));
     }
 
     public CoordinatorState tryGetCoordinatorState(String key, int maxAttempts) {

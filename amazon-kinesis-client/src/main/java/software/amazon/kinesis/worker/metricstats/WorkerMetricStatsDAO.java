@@ -44,6 +44,7 @@ import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.utils.DdbUtil;
@@ -71,27 +72,41 @@ public class WorkerMetricStatsDAO {
     @SuppressWarnings("unchecked")
     private static TableSchema<WorkerMetricStats> schema;
 
+    @Deprecated // preferred to pass in LeaseManagementConfig, which has all three params plus lease table name
+    @SuppressWarnings("unchecked")
     public WorkerMetricStatsDAO(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final WorkerMetricsTableConfig tableConfig,
             final Long workerMetricsReporterFrequencyMillis) {
-        this(dynamoDbAsyncClient, tableConfig, workerMetricsReporterFrequencyMillis, false);
-    }
-
-    public WorkerMetricStatsDAO(
-            final DynamoDbAsyncClient dynamoDbAsyncClient,
-            final WorkerMetricsTableConfig tableConfig,
-            final Long workerMetricsReporterFrequencyMillis,
-            final boolean usingLeaseTable) {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.dynamoDbEnhancedAsyncClient = DynamoDbEnhancedAsyncClient.builder()
                 .dynamoDbClient(dynamoDbAsyncClient)
                 .build();
-        this.usingLeaseTable = usingLeaseTable;
+        this.usingLeaseTable = false;
         this.table = dynamoDbEnhancedAsyncClient.table(
                 tableConfig.tableName(), (schema = (TableSchema<WorkerMetricStats>) decideSchema(usingLeaseTable)));
         this.tableConfig = tableConfig;
         this.workerMetricsReporterFrequencyMillis = workerMetricsReporterFrequencyMillis;
+    }
+
+    public WorkerMetricStatsDAO(final LeaseManagementConfig leaseManagementConfig) {
+        this(leaseManagementConfig, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    public WorkerMetricStatsDAO(final LeaseManagementConfig leaseManagementConfig, boolean usingLeaseTable) {
+        this.dynamoDbAsyncClient = leaseManagementConfig.dynamoDBClient();
+        this.dynamoDbEnhancedAsyncClient = DynamoDbEnhancedAsyncClient.builder()
+                .dynamoDbClient(dynamoDbAsyncClient)
+                .build();
+        this.tableConfig =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig();
+        this.table = dynamoDbEnhancedAsyncClient.table(
+                usingLeaseTable ? leaseManagementConfig.tableName() : tableConfig.tableName(),
+                (schema = (TableSchema<WorkerMetricStats>) decideSchema(usingLeaseTable)));
+        this.workerMetricsReporterFrequencyMillis =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis();
+        this.usingLeaseTable = usingLeaseTable;
     }
 
     /**
