@@ -119,6 +119,7 @@ public class CoordinatorStateDAO {
         setUsingLeaseTable(false);
     }
 
+    // TODO: create constructor that just takes LeaseManagementConfig and builds CoordinatorStateTableConfig on its own?
     public CoordinatorStateDAO(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final CoordinatorStateTableConfig config,
@@ -317,6 +318,8 @@ public class CoordinatorStateDAO {
         }
     }
 
+    // TODO: if leaderDecider's lastLeaderResult is true, perform one last sync before cancelling the scheduled update
+    // TODO: also, cancel the scheduled update and let it finish before setting table migration status to COMPLETE
     public static void syncCoordinatorStates() {
         MutationTracker mutationTracker = MutationTracker.getInstance();
         if (mutationTracker != null) {

@@ -36,6 +36,7 @@ public class TableMigrationMachine {
         DISABLE
     }
 
+    /** TODO: if leaderDecider's lastLeaderResult is false, cancel the scheduled update or no-op */
     public void update(DynamoDBLockBasedLeaderDecider leaderDecider) {
         for (int i = 0; i < 100; i++) {
             log.info("HELLO, WORLD! WE'RE DOING A SCHEDULED UPDATE BECAUSE WE'RE THE LEADER!!!");
