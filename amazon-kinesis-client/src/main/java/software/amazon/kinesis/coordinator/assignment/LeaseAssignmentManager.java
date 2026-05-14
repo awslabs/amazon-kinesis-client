@@ -745,14 +745,7 @@ public final class LeaseAssignmentManager {
             if (!segmentingHandler.isEnabled()) {
                 return activeWorkerMetrics;
             }
-            return activeWorkerMetrics.stream()
-                    .filter(workerMetricStats -> workerMetricStats.getProperties() != null
-                            && workerMetricStats
-                                    .getProperties()
-                                    .get(FleetSegmentingHandler.VERSION_HASH_KEY)
-                                    .equals(segmentingHandler.getVersionHash())
-                            && !segmentingHandler.isWorkerVersionHashStale(workerMetricStats))
-                    .collect(Collectors.toList());
+            return segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics);
         }
 
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {

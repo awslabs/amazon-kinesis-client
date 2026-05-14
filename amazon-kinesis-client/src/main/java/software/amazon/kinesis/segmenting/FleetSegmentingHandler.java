@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -134,6 +135,17 @@ public class FleetSegmentingHandler {
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
         isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.containsAll(workersOnVersionHash)
                 && workersOnVersionHash.containsAll(activeWorkerMetrics);
+    }
+
+    public List<WorkerMetricStats> filterWorkersOnVersionHash(final List<WorkerMetricStats> activeWorkers) {
+        return activeWorkers.stream()
+                .filter(workerMetricStats -> workerMetricStats.getProperties() != null
+                        && workerMetricStats
+                                .getProperties()
+                                .get(VERSION_HASH_KEY)
+                                .equals(getVersionHash())
+                        && !isWorkerVersionHashStale(workerMetricStats))
+                .collect(Collectors.toList());
     }
 
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {

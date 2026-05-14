@@ -242,6 +242,39 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
+    void filterWorkersOnVersionHash_filtersCorrectly() {
+        Map<String, String> matchingProps = new HashMap<>();
+        matchingProps.put("versionHash", sampleVersionHash);
+        matchingProps.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond()));
+
+        Map<String, String> differentProps = new HashMap<>();
+        differentProps.put("versionHash", "differentHash");
+        differentProps.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond()));
+
+        Map<String, String> staleProps = new HashMap<>();
+        staleProps.put("versionHash", sampleVersionHash);
+        staleProps.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond() - 7200));
+
+        WorkerMetricStats matching = mock(WorkerMetricStats.class);
+        when(matching.getProperties()).thenReturn(matchingProps);
+
+        WorkerMetricStats different = mock(WorkerMetricStats.class);
+        when(different.getProperties()).thenReturn(differentProps);
+
+        WorkerMetricStats stale = mock(WorkerMetricStats.class);
+        when(stale.getProperties()).thenReturn(staleProps);
+
+        WorkerMetricStats nullProps = mock(WorkerMetricStats.class);
+        when(nullProps.getProperties()).thenReturn(null);
+
+        List<WorkerMetricStats> result =
+                handler.filterWorkersOnVersionHash(Arrays.asList(matching, different, stale, nullProps));
+
+        assertEquals(1, result.size());
+        assertEquals(matching, result.get(0));
+    }
+
+    @Test
     void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSameWorkerIds() {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         WorkerMetricStats w2 = mock(WorkerMetricStats.class);
