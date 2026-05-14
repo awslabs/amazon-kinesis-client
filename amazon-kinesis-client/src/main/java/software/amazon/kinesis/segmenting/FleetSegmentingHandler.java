@@ -3,6 +3,7 @@ package software.amazon.kinesis.segmenting;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -133,8 +134,8 @@ public class FleetSegmentingHandler {
 
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.containsAll(workersOnVersionHash)
-                && workersOnVersionHash.containsAll(activeWorkerMetrics);
+        isVersionEmittedByAllActiveWorkers =
+                new HashSet<>(activeWorkerMetrics).equals(new HashSet<>(workersOnVersionHash));
     }
 
     public List<WorkerMetricStats> filterWorkersOnVersionHash(final List<WorkerMetricStats> activeWorkers) {
