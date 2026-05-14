@@ -64,11 +64,11 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
         expiredOrUnAssignedLeases.sort(Comparator.comparingLong(Lease::lastCounterIncrementNanos));
 
         final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
-        final int totalLeases = leaseCountPerActiveWorker.values().stream()
-                        .mapToInt(Integer::intValue)
-                        .sum()
-                + expiredOrUnAssignedLeases.size();
-        final int target = calculateTargetLeaseCount(totalLeases);
+
+        // Only the current leader should be assigning unassigned leases. In this case, the totalLeases will be
+        // all the leases regardless of each lease's owner.
+        final int target =
+                calculateTargetLeaseCount(inMemoryStorageView.getLeaseList().size());
 
         log.info(
                 "Lease count balancing: {} total leases, {} workers, target {} leases per worker",
@@ -114,6 +114,12 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
             return;
         }
         final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
+
+        // When balancing leases between workers, the target lease count should be calculated from the sum of leases for
+        // assignable workers. For example, if the leader is the DeployingLeader and there are:
+        //    - 3 workers on the current version with 150 leases
+        //    - 2 workers on deploying version with 50 leases
+        // we would expect the workers on the deploying version to have 25 leases each.
         final int totalLeases = leaseCountPerActiveWorker.values().stream()
                 .mapToInt(Integer::intValue)
                 .sum();
