@@ -90,7 +90,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
@@ -637,7 +637,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(false);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
 
         periodicShardSyncManager.syncShardsOnce();
 
@@ -647,7 +647,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onCurrentVersion_syncsAllStreams() throws Exception {
-        when(mockSegmentingHandler.shouldRunPeriodicShardSync()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
 
         StreamConfig mockStreamConfig = mock(StreamConfig.class);
         when(currentStreamConfigMap.values()).thenReturn(Collections.singletonList(mockStreamConfig));

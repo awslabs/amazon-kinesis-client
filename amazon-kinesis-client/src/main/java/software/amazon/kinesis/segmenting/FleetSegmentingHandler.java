@@ -100,7 +100,15 @@ public class FleetSegmentingHandler {
         return workerProperties;
     }
 
+    /**
+     * Used by the leader to check if it should handle the current Leader responsibilities (as opposed to the
+     * DeployingLeader responsibilities). If the segmenting handler is disabled, the leader will behave as it normally
+     * would without segmenting.
+     */
     public boolean isOnCurrentVersion() {
+        if (!isEnabled) {
+            return true;
+        }
         final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(CoordinatorState.LEADER_HASH_KEY);
         return doesVersionHashMatch(attrs);
     }
@@ -126,14 +134,6 @@ public class FleetSegmentingHandler {
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
         isVersionEmittedByAllActiveWorkers = activeWorkerMetrics.containsAll(workersOnVersionHash)
                 && workersOnVersionHash.containsAll(activeWorkerMetrics);
-    }
-
-    /**
-     * PeriodicShardSyncManager should always be run if the segmenting handler is disabled. If enabled, then
-     * periodic shard sync manager should run only if it is on the current version.
-     */
-    public boolean shouldRunPeriodicShardSync() {
-        return !isEnabled || isOnCurrentVersion();
     }
 
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {

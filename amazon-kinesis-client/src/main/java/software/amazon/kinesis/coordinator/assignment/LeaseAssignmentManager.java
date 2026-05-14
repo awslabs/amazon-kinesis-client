@@ -228,7 +228,7 @@ public final class LeaseAssignmentManager {
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
 
-            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
+            if (segmentingHandler.isOnCurrentVersion()) {
                 leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
                 MetricsUtil.addLatency(
                         metricsScope,
@@ -735,7 +735,7 @@ public final class LeaseAssignmentManager {
          * on the same version. Otherwise, return all the workers.
          */
         public List<WorkerMetricStats> getAssignableWorkers() {
-            if (!segmentingHandler.isEnabled() || segmentingHandler.isOnCurrentVersion()) {
+            if (segmentingHandler.isOnCurrentVersion()) {
                 return activeWorkerMetrics;
             }
             return getWorkersOnVersionHash();

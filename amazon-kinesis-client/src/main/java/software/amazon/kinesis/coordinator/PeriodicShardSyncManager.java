@@ -168,7 +168,7 @@ class PeriodicShardSyncManager {
         if (!isRunning) {
             final Runnable periodicShardSyncer = () -> {
                 try {
-                    if (segmentingHandler.shouldRunPeriodicShardSync()) {
+                    if (segmentingHandler.isOnCurrentVersion()) {
                         runShardSync();
                     } else {
                         log.info("{} is not the current Leader, skipping shard sync.", workerId);
@@ -194,7 +194,7 @@ class PeriodicShardSyncManager {
     public synchronized void syncShardsOnce() throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
-        if (!segmentingHandler.shouldRunPeriodicShardSync()) {
+        if (!segmentingHandler.isOnCurrentVersion()) {
             log.info("{} is not on current version, skipping shard sync.", workerId);
             return;
         }

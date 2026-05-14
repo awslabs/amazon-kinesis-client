@@ -152,6 +152,13 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
+    void isOnCurrentVersion_returnsTrue_whenDisabled() {
+        config.enableRollingDeploymentSystem(false);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        assertTrue(disabledHandler.isOnCurrentVersion());
+    }
+
+    @Test
     void isOnDeployingVersion_returnsTrue_whenVersionHashMatches() throws Exception {
         mockCoordinatorState(
                 CoordinatorState.DEPLOYING_LEADER_HASH_KEY,
