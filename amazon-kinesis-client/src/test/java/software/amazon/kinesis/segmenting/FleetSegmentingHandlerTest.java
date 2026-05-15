@@ -279,7 +279,8 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void updateLeaderVersionHashLut_callsDAOWithCorrectKeyAndLut() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY)).thenReturn(null);
+        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
+                .thenReturn(null);
 
         final long before = Instant.now().getEpochSecond();
         handler.updateLeaderVersionHashLut();
@@ -289,13 +290,15 @@ public class FleetSegmentingHandlerTest {
 
         CoordinatorState captured = stateCaptor.getValue();
         assertEquals(CoordinatorState.LEADER_HASH_KEY, captured.getKey());
-        final long lut = Long.parseLong(captured.getAttributes().get("versionHashLut").s());
+        final long lut =
+                Long.parseLong(captured.getAttributes().get("versionHashLut").s());
         assertTrue(lut >= before && lut <= Instant.now().getEpochSecond());
     }
 
     @Test
     void updateLeaderVersionHashLut_doesNotThrowOnDAOException() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY)).thenReturn(null);
+        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
+                .thenReturn(null);
         when(mockCoordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), any()))
                 .thenThrow(new RuntimeException("DDB error"));
 
