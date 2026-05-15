@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -22,9 +23,11 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
@@ -272,6 +275,31 @@ public class FleetSegmentingHandlerTest {
 
         assertEquals(1, result.size());
         assertEquals(matching, result.get(0));
+    }
+
+    @Test
+    void updateLeaderVersionHashLut_callsDAOWithCorrectKeyAndLut() throws Exception {
+        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY)).thenReturn(null);
+
+        final long before = Instant.now().getEpochSecond();
+        handler.updateLeaderVersionHashLut();
+
+        ArgumentCaptor<CoordinatorState> stateCaptor = ArgumentCaptor.forClass(CoordinatorState.class);
+        verify(mockCoordinatorStateDAO).updateCoordinatorStateWithExpectation(stateCaptor.capture(), any());
+
+        CoordinatorState captured = stateCaptor.getValue();
+        assertEquals(CoordinatorState.LEADER_HASH_KEY, captured.getKey());
+        final long lut = Long.parseLong(captured.getAttributes().get("versionHashLut").s());
+        assertTrue(lut >= before && lut <= Instant.now().getEpochSecond());
+    }
+
+    @Test
+    void updateLeaderVersionHashLut_doesNotThrowOnDAOException() throws Exception {
+        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY)).thenReturn(null);
+        when(mockCoordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), any()))
+                .thenThrow(new RuntimeException("DDB error"));
+
+        handler.updateLeaderVersionHashLut();
     }
 
     @Test

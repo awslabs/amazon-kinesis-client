@@ -2,6 +2,7 @@ package software.amazon.kinesis.segmenting;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -11,6 +12,8 @@ import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator;
+import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
@@ -147,6 +150,33 @@ public class FleetSegmentingHandler {
                                 .equals(getVersionHash())
                         && !isWorkerVersionHashStale(workerMetricStats))
                 .collect(Collectors.toList());
+    }
+
+    public void updateLeaderVersionHashLut() {
+        try {
+            final String leaderKey = getHashKeyForLeaderLock();
+            final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
+            expectations.put(
+                    CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
+                    ExpectedAttributeValue.builder()
+                            .value(AttributeValue.fromS(leaderKey))
+                            .build());
+            expectations.put(
+                    VERSION_HASH_LUT_KEY,
+                    ExpectedAttributeValue.builder()
+                            .comparisonOperator(ComparisonOperator.NOT_NULL)
+                            .build());
+
+            final CoordinatorState state = CoordinatorState.builder()
+                    .key(leaderKey)
+                    .attributes(Collections.singletonMap(
+                            VERSION_HASH_LUT_KEY,
+                            AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond()))))
+                    .build();
+            coordinatorStateDAO.updateCoordinatorStateWithExpectation(state, expectations);
+        } catch (final Exception e) {
+            log.error("Failed to update leader versionHashLut", e);
+        }
     }
 
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {
