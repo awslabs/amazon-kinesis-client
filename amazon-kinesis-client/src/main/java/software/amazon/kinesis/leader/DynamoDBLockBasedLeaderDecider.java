@@ -167,12 +167,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         } else {
             response = lockItem.get().getOwnerName().equals(workerId);
-            if (response) {
-                // heartbeat the versionHash if the worker is the leader
-                segmentingHandler.updateLeaderVersionHashLut();
-            }
         }
 
+        segmentingHandler.setLeader(response);
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);

@@ -9,7 +9,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -23,11 +22,9 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
@@ -36,7 +33,6 @@ public class FleetSegmentingHandlerTest {
     private FleetSegmentingHandler handler;
     private String sampleVersionHash;
     private LeaseManagementConfig config;
-    private final String tableName = "dummyTableName";
 
     @BeforeEach
     void setup() {
@@ -44,13 +40,13 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorStateDAO = mock(CoordinatorStateDAO.class);
         sampleVersionHash = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionNum());
         config = new LeaseManagementConfig(
-                tableName,
+                "dummyTableName",
                 "dummyApplicationName",
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
         config.enableRollingDeploymentSystem(true);
-        handler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
     }
 
     @Test
@@ -61,7 +57,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getVersionHash_isSameAcrossInstancesForSameConfig() {
-        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
         assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
@@ -157,7 +153,7 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isOnCurrentVersion_returnsTrue_whenDisabled() {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
         assertTrue(disabledHandler.isOnCurrentVersion());
     }
 
@@ -278,34 +274,6 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void updateLeaderVersionHashLut_callsDAOWithCorrectKeyAndLut() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
-                .thenReturn(null);
-
-        final long before = Instant.now().getEpochSecond();
-        handler.updateLeaderVersionHashLut();
-
-        ArgumentCaptor<CoordinatorState> stateCaptor = ArgumentCaptor.forClass(CoordinatorState.class);
-        verify(mockCoordinatorStateDAO).updateCoordinatorStateWithExpectation(stateCaptor.capture(), any());
-
-        CoordinatorState captured = stateCaptor.getValue();
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, captured.getKey());
-        final long lut =
-                Long.parseLong(captured.getAttributes().get("versionHashLut").s());
-        assertTrue(lut >= before && lut <= Instant.now().getEpochSecond());
-    }
-
-    @Test
-    void updateLeaderVersionHashLut_doesNotThrowOnDAOException() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
-                .thenReturn(null);
-        when(mockCoordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), any()))
-                .thenThrow(new RuntimeException("DDB error"));
-
-        handler.updateLeaderVersionHashLut();
-    }
-
-    @Test
     void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSameWorkerIds() {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         WorkerMetricStats w2 = mock(WorkerMetricStats.class);
@@ -343,20 +311,80 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
         assertFalse(disabledHandler.isEnabled());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() throws Exception {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, tableName, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
 
         // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader
         mockCoordinatorState(
                 CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
         assertEquals(CoordinatorState.LEADER_HASH_KEY, disabledHandler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void startVersionHashHeartbeat_updatesDAO_whenLeader() throws Exception {
+        LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
+                "dummyTableName",
+                "dummyApplicationName",
+                Mockito.mock(DynamoDbAsyncClient.class),
+                Mockito.mock(KinesisAsyncClient.class),
+                "dummyWorkerId");
+        heartbeatConfig.enableRollingDeploymentSystem(true);
+        heartbeatConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(100);
+
+        CoordinatorStateDAO heartbeatDAO = mock(CoordinatorStateDAO.class);
+        mockCoordinatorState(
+                heartbeatDAO,
+                CoordinatorState.LEADER_HASH_KEY,
+                sampleVersionHash,
+                Instant.now().getEpochSecond());
+
+        FleetSegmentingHandler leaderHandler = new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO);
+        leaderHandler.setLeader(true);
+
+        Thread.sleep(250);
+
+        // with dynamoDbLockBasedLeaderHeartbeatPeriodInMillis set to 100 ms and after sleeping for 250 ms,
+        // the versionHash should heartbeat 3 times (once on start up, two more times for every 100 ms)
+        Mockito.verify(heartbeatDAO, Mockito.times(3))
+                .updateCoordinatorStateWithExpectation(Mockito.any(CoordinatorState.class), Mockito.anyMap());
+    }
+
+    @Test
+    void startVersionHashHeartbeat_doesNotUpdateDAO_whenNotLeader() throws Exception {
+        LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
+                "dummyTableName",
+                "dummyApplicationName",
+                Mockito.mock(DynamoDbAsyncClient.class),
+                Mockito.mock(KinesisAsyncClient.class),
+                "dummyWorkerId");
+        heartbeatConfig.enableRollingDeploymentSystem(true);
+        heartbeatConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(100);
+
+        CoordinatorStateDAO heartbeatDAO = mock(CoordinatorStateDAO.class);
+        FleetSegmentingHandler nonLeaderHandler = new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO);
+        nonLeaderHandler.setLeader(false);
+
+        Thread.sleep(250);
+
+        Mockito.verify(heartbeatDAO, Mockito.never())
+                .updateCoordinatorStateWithExpectation(Mockito.any(CoordinatorState.class), Mockito.anyMap());
+    }
+
+    private void mockCoordinatorState(CoordinatorStateDAO dao, String key, String versionHash, long lut)
+            throws Exception {
+        Map<String, AttributeValue> attrs = new HashMap<>();
+        attrs.put("versionHash", AttributeValue.fromS(versionHash));
+        attrs.put("versionHashLut", AttributeValue.fromS(String.valueOf(lut)));
+        CoordinatorState state = mock(CoordinatorState.class);
+        when(state.getAttributes()).thenReturn(attrs);
+        when(dao.getCoordinatorState(eq(key))).thenReturn(state);
     }
 
     private void mockCoordinatorState(String key, String versionHash, long lut) throws Exception {

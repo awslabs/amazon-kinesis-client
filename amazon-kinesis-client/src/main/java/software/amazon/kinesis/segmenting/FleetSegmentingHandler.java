@@ -7,9 +7,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator;
@@ -32,6 +36,7 @@ public class FleetSegmentingHandler {
 
     public static final String VERSION_HASH_KEY = "versionHash";
     private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
+    private static final String LEADER_LOCK_OWNER_KEY = "ownerName";
 
     @Getter
     private final String versionHash;
@@ -42,18 +47,18 @@ public class FleetSegmentingHandler {
     @Getter
     private final boolean isEnabled;
 
-    private final String leaderTableName;
+    @Setter
+    private volatile boolean isLeader = false;
+
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final long versionHashExpiryMillis;
+    private final String workerId;
 
-    public FleetSegmentingHandler(
-            final LeaseManagementConfig config,
-            final String leaderTableName,
-            final CoordinatorStateDAO coordinatorStateDAO) {
-        this.leaderTableName = leaderTableName;
+    public FleetSegmentingHandler(final LeaseManagementConfig config, final CoordinatorStateDAO coordinatorStateDAO) {
         this.coordinatorStateDAO = coordinatorStateDAO;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
         isEnabled = config.enableRollingDeploymentSystem();
+        workerId = config.workerIdentifier();
 
         // 2 * workerMetricsReporterFreqInMillis is the current threshold for considering a WorkerMetricStats to
         // be expired. Since the versionHashExpiry is also used when checking if a leader's version hash is stale,
@@ -61,6 +66,8 @@ public class FleetSegmentingHandler {
         this.versionHashExpiryMillis = Math.max(
                 config.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+
+        startVersionHashHeartbeat(config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis());
     }
 
     /**
@@ -152,31 +159,49 @@ public class FleetSegmentingHandler {
                 .collect(Collectors.toList());
     }
 
-    public void updateLeaderVersionHashLut() {
-        try {
-            final String leaderKey = getHashKeyForLeaderLock();
-            final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
-            expectations.put(
-                    CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
-                    ExpectedAttributeValue.builder()
-                            .value(AttributeValue.fromS(leaderKey))
-                            .build());
-            expectations.put(
-                    VERSION_HASH_LUT_KEY,
-                    ExpectedAttributeValue.builder()
-                            .comparisonOperator(ComparisonOperator.NOT_NULL)
-                            .build());
+    private void startVersionHashHeartbeat(final long leaderHeartbeatMillis) {
+        final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        executor.scheduleAtFixedRate(this::updateLeaderVersionHashLut, 0, leaderHeartbeatMillis, TimeUnit.MILLISECONDS);
+    }
 
-            final CoordinatorState state = CoordinatorState.builder()
-                    .key(leaderKey)
-                    .attributes(Collections.singletonMap(
-                            VERSION_HASH_LUT_KEY,
-                            AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond()))))
-                    .build();
+    private void updateLeaderVersionHashLut() {
+        // checking if worker is the leader to avoid unnecessary calls to DDB
+        if (!isLeader) {
+            return;
+        }
+        final String leaderKey = getHashKeyForLeaderLock();
+        final Map<String, ExpectedAttributeValue> expectations = getVersionHashHeartbeatExpectationMap(leaderKey);
+        final CoordinatorState state = CoordinatorState.builder()
+                .key(leaderKey)
+                .attributes(Collections.singletonMap(
+                        VERSION_HASH_LUT_KEY,
+                        AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond()))))
+                .build();
+        try {
             coordinatorStateDAO.updateCoordinatorStateWithExpectation(state, expectations);
         } catch (final Exception e) {
             log.error("Failed to update leader versionHashLut", e);
         }
+    }
+
+    private Map<String, ExpectedAttributeValue> getVersionHashHeartbeatExpectationMap(final String leaderKey) {
+        final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
+        expectations.put(
+                CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
+                ExpectedAttributeValue.builder()
+                        .value(AttributeValue.fromS(leaderKey))
+                        .build());
+        expectations.put(
+                VERSION_HASH_LUT_KEY,
+                ExpectedAttributeValue.builder()
+                        .comparisonOperator(ComparisonOperator.NOT_NULL)
+                        .build());
+        expectations.put(
+                LEADER_LOCK_OWNER_KEY,
+                ExpectedAttributeValue.builder()
+                        .value(AttributeValue.fromS(workerId))
+                        .build());
+        return expectations;
     }
 
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {
