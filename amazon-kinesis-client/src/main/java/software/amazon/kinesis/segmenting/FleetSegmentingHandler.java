@@ -60,11 +60,10 @@ public class FleetSegmentingHandler {
         isEnabled = config.enableRollingDeploymentSystem();
         workerId = config.workerIdentifier();
 
-        // 2 * workerMetricsReporterFreqInMillis is the current threshold for considering a WorkerMetricStats to
-        // be expired. Since the versionHashExpiry is also used when checking if a leader's version hash is stale,
-        // we will take the max of the leader lease duration and the stale metrics threshold.
+        // The expiry threshold will be the max of two leader heartbeats or two cycles of workers emitting metrics,
+        // which is the current expiry threshold for workers.
         this.versionHashExpiryMillis = Math.max(
-                config.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
+                2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
         startVersionHashHeartbeat(config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis());
