@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 /**
  * Transforms KCL metric names into OTel-compliant instrument names.
@@ -39,6 +40,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
  * </ol>
  */
 @Slf4j
+@KinesisClientInternalApi
 class OtelMetricNameTransformer {
 
     private static final String NAMESPACE_PREFIX = "aws.kinesis.client.";
