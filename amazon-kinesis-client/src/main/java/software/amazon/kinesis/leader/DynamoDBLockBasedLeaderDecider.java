@@ -25,7 +25,6 @@ import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
@@ -38,7 +37,9 @@ import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
@@ -81,8 +82,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private Map<Boolean, AmazonDynamoDBLockClient> lockClientMap = new HashMap<>();
     private boolean[] lockAcquisitionOrder;
 
-    /** this lock client is for acquiring the leader lock item in the other table (lease, coordinator states) */
-    private AmazonDynamoDBLockClient otherDynamoDBLockClient = null;
+    // used to check if additional attributes are in sync, and call raw UpdateItem request if not
+    private LockItem latestLeaderLockSnapshot;
 
     public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
     public static final String LEADER_LOCK_ENTITY_TYPE = "leaderLock";
@@ -162,9 +163,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     private synchronized void forEachLockClient(Runnable runnable, int maxAttemptsEach) {
         forEachLockClient(client -> {
-            // set the active client to the current client
-            dynamoDBLockClient = client;
-
             // try up to max attempts and count failure if runnable throws exception
             int retries = maxAttemptsEach - 1;
             while (true) {
@@ -221,6 +219,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * @param workerId ID of the worker
      * @return true if current worker is leader else false.
      */
+    // TODO: confirm whether there's a bug where the worker doesn't grab expired lock if it sees its own workerId
     @Override
     public synchronized Boolean isLeader(final String workerId) {
         // if the decider has shutdown, then return false and don't try acquireLock anymore.
@@ -249,6 +248,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         if (lock.get() != null) {
             // save the additional attributes from read lock item, leader or not
             saveAdditionalAttributes(lock.get().getAdditionalAttributes());
+            // save snapshot of leader lock item so we can frequently check if additional attributes are in sync
+            latestLeaderLockSnapshot = lock.get();
         }
         return response;
     }
@@ -257,7 +258,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     // TODO: check if trying to acquire expired lock that says your own workerId as the owner is special case
 
     /**
-     * Calls client's tryAcquireLock method. Caller must check non-null and ownerName equals workerId to check success.
+     * Calls client's tryAcquireLock method. Uses AtomicReference to also return the LockItem read or acquired.
      * @return LockItem if present at all, else null
      */
     private synchronized boolean tryAcquireLock(@NonNull final AtomicReference<LockItem> lock) {
@@ -286,7 +287,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 releaseLeadershipIfHeld();
                 log.error("Acquiring lock was interrupted in between", e);
             } catch (final LockCurrentlyUnavailableException e) {
-                // no-op; just fall through
+                // no-op, just fall through; no need to release leadership because this exception means we don't have it
             }
             // all failure cases fall through here; still give caller the read lock item if it's not populated yet
             lockItem.ifPresent(item -> lock.compareAndSet(null, item));
@@ -299,7 +300,52 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     private synchronized boolean tryAcquireAllLocks(@NonNull final AtomicReference<LockItem> lock) {
         // acquire locks in order -> if any fails, release in reverse order; else, return true with first lock item
-        return forEachLockClient(client -> tryAcquireLock(lock), this::tryReleaseLeadershipIfHeld);
+        return forEachLockClient(client -> tryAcquireLock(lock), this::releaseLeadershipIfHeld);
+    }
+
+    private void syncAdditionalAttributes() {
+        if (latestLeaderLockSnapshot == null) {
+            // must read item from DynamoDB first so we can compare; will retry on next scheduled attempt
+            return;
+        }
+
+        // get values that should be in DynamoDB and values last seen in DynamoDB
+        Map<String, AttributeValue> desired = leaderLockAdditionalAttributes();
+        Map<String, AttributeValue> current = latestLeaderLockSnapshot.getAdditionalAttributes();
+
+        // compute diff -> only include attributes that are missing or have a different value
+        Map<String, AttributeValueUpdate> updates = new HashMap<>();
+        for (Map.Entry<String, AttributeValue> entry : desired.entrySet()) {
+            AttributeValue currentValue = current.get(entry.getKey());
+
+            // if value is different than seen before, add attribute and value to updates to create request with
+            if (currentValue == null || !currentValue.equals(entry.getValue())) {
+                updates.put(
+                        entry.getKey(),
+                        AttributeValueUpdate.builder()
+                                .value(entry.getValue())
+                                .action(AttributeAction.PUT)
+                                .build());
+            }
+        }
+
+        if (!updates.isEmpty()) {
+            try {
+                // apply partial update; pass attribute updates map to DAO
+                coordinatorStateDao.syncLeaderLockAdditionalAttributes(updates);
+            } catch (Exception e) {
+                // all exceptions retry on next scheduled attempt
+                log.warn("Caught exception while trying to update leader lock additional attributes: ", e);
+            }
+        }
+    }
+
+    /**
+     * Creates scheduled update to sync the additional attributes in the leader lock item to the coordinator table.
+     * @param interval - the interval at which to schedule the update
+     */
+    public void syncAdditionalAttributes(long interval) {
+        new ScheduledUpdate(interval, this::syncAdditionalAttributes);
     }
 
     /**
@@ -307,7 +353,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * @param interval - the target frequency of the update, in milliseconds
      * @param update - the update function (consumes DynamoDBLockBasedLeaderDecider)
      */
-    public void createScheduledUpdate(long interval, Consumer<DynamoDBLockBasedLeaderDecider> update) {
+    public void createScheduledUpdate(long interval, Runnable update) {
         new ScheduledUpdate(interval, update);
     }
 
@@ -321,6 +367,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             for (ScheduledUpdate update : scheduledUpdatePriorityQueue) {
                 update.setCanceled(true);
             }
+            // TODO: should we just process the whole queue regardless of interval because we don't want to
+            // TODO: overlap with the next elected leader? should whether we wait or finish up immediately
+            // TODO: be a configurable option within the ScheduledUpdate class?
         }
         processScheduledUpdateQueue();
     }
@@ -338,13 +387,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         long lastRun;
         long priority;
         final long interval;
-        final Consumer<DynamoDBLockBasedLeaderDecider> update;
+        final Runnable update;
         final DynamoDBLockBasedLeaderDecider leaderDecider = DynamoDBLockBasedLeaderDecider.this;
 
         @Setter
         boolean canceled;
 
-        ScheduledUpdate(long interval, Consumer<DynamoDBLockBasedLeaderDecider> update) {
+        ScheduledUpdate(long interval, Runnable update) {
             this.interval = interval;
             this.update = update;
 
@@ -353,11 +402,11 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
 
         /**
-         * Invoke lambda (consumes the outer leaderDecider) and add this to queue with next due instant as priority
+         * Run update and add this to queue with next due instant as priority
          */
         private void execute() {
             try {
-                update.accept(leaderDecider);
+                update.run();
             } catch (Exception e) {
                 log.error("Current or recent leader failed scheduled update: ", e);
             } finally {
@@ -385,14 +434,10 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             // nothing to save; default or latest in-memory values will be written
             return;
         }
-        Long ss = null;
-        String tms = null;
 
         // get attributes from map
-        if (attributes != null) {
-            ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
-            tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
-        }
+        Long ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
+        String tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
 
         // save values to instance variables
         steadySinceEpoch = ss == null ? Instant.now().getEpochSecond() : ss;
@@ -401,6 +446,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         // update the order in which we grab leader lock items from tables, in case migration status changed
         setLockAcquisitionOrder();
+
+        // TODO: set CoordinatorStateDAO's usingLeaseTable based on table migration status
+
     }
 
     /**

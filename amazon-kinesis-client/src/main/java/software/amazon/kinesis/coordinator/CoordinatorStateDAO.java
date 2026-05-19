@@ -81,6 +81,7 @@ import software.amazon.kinesis.utils.DdbUtil;
 import static java.util.Objects.nonNull;
 import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
+import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
 import static software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer.LEASE_KEY_KEY;
 
 /**
@@ -97,7 +98,6 @@ public class CoordinatorStateDAO {
     private final CoordinatorStateTableConfig config;
 
     private String tableName;
-    private MutationTracker mutationTracker;
     private LeaseManagementConfig leaseManagementConfig;
 
     @Getter
@@ -170,7 +170,7 @@ public class CoordinatorStateDAO {
         switch (tableMigrationStatus) {
             case "PENDING": {
                 // sync coordinator states to coordinator table and fallthrough to use lease table
-                mutationTracker = MutationTracker.getOrCreateInstance(dynamoDbAsyncClient, config);
+                MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
             }
             case "COMPLETE": {
                 setUsingLeaseTable(true);
@@ -234,7 +234,7 @@ public class CoordinatorStateDAO {
             }
         }
 
-        static MutationTracker getOrCreateInstance(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
+        static MutationTracker createInstanceIfNull(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
             return (instance = instance != null ? instance : new MutationTracker(client, config));
         }
 
@@ -263,7 +263,7 @@ public class CoordinatorStateDAO {
         }
 
         synchronized void sync() {
-            // detect deletions by comparing all seen keys with the set from the latest lease table scan.
+            // detect deletions by comparing all seen keys with the set from the latest lease table scan
             for (String seen : new HashSet<>(lastSeenTimestamps.keySet())) {
                 if (!justScanned.contains(seen)) {
                     mutations.get(Mutations.DELETE).add(seen);
@@ -318,8 +318,6 @@ public class CoordinatorStateDAO {
         }
     }
 
-    // TODO: if leaderDecider's lastLeaderResult is true, perform one last sync before cancelling the scheduled update
-    // TODO: also, cancel the scheduled update and let it finish before setting table migration status to COMPLETE
     public static void syncCoordinatorStates() {
         MutationTracker mutationTracker = MutationTracker.getInstance();
         if (mutationTracker != null) {
@@ -572,6 +570,48 @@ public class CoordinatorStateDAO {
     }
 
     /**
+     * Writes the additional attributes values for the leader lock item into the item in the coordinator table
+     * @param updates - the attributes that need to be updated and their values
+     */
+    public void syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        MutationTracker mutationTracker = MutationTracker.getInstance();
+        if (mutationTracker != null) {
+            mutationTracker.coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
+        }
+    }
+
+    /**
+     * Updates the additional attributes in the leader lock item in the instance's tableName with the new values
+     * @param updates - the attributes that need to be updated and their values
+     * @return whether the update succeeded
+     */
+    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final UpdateItemRequest request = UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(getCoordinatorStateKey(LEADER_HASH_KEY))
+                .attributeUpdates(updates)
+                .build();
+        try {
+            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
+        } catch (final ProvisionedThroughputExceededException e) {
+            log.warn(
+                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
+                            + " on the table.",
+                    tableName);
+            throw new ProvisionedThroughputException(e);
+        } catch (final ResourceNotFoundException e) {
+            throw new InvalidStateException(String.format(
+                    "Cannot update leader lock additional attributes because table %s does not exist.", tableName));
+        } catch (final DynamoDbException e) {
+            throw new DependencyException(e);
+        }
+        log.info("Leader lock additional attributes updated: {}", updates);
+        return true;
+    }
+
+    /**
      * Update fields of the given coordinator state in DynamoDB. Conditional on the provided expectation.
      *
      * @return true if update succeeded, false otherwise when expectations are not met
@@ -620,7 +660,7 @@ public class CoordinatorStateDAO {
     }
 
     /**
-     * Creates the coordinator table (config.tableName()) if it does not exist and we don't want to use the lease table
+     * Creates the coordinator table (config.tableName()) if it does not exist; called when not using lease table
      * @throws DependencyException
      */
     private void createTableIfNotExists() throws DependencyException {

@@ -130,9 +130,6 @@ public final class LeaseAssignmentManager {
     private Future<?> managerFuture;
     private TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
 
-    @Getter
-    private static int minSupportCode = 0;
-
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
 
@@ -481,17 +478,18 @@ public final class LeaseAssignmentManager {
     private void initScheduledUpdateQueue(DynamoDBLockBasedLeaderDecider lockClientLeaderDecider) {
         // schedule table migration machine state update with same frequency as lease assignment interval
         lockClientLeaderDecider.createScheduledUpdate(
-                leaseAssignmentIntervalMillis, ld -> tableMigrationMachine.update(ld));
+                leaseAssignmentIntervalMillis, () -> tableMigrationMachine.update(lockClientLeaderDecider));
         // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
-        lockClientLeaderDecider.createScheduledUpdate(10000L, ld -> CoordinatorStateDAO.syncCoordinatorStates());
+        lockClientLeaderDecider.createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
+        // scheduled update to sync additional attributes from leader lock item if changed with frequent interval (10s)
+        lockClientLeaderDecider.syncAdditionalAttributes(10000L);
     }
 
     /**
      * Computes the minimum support code across the fleet, given the list of worker metric stats.
      * @param workerMetricStats - the list of active worker metric stats from the load
-     * @return the minimum of all non-expired support codes
      */
-    private int computeMinSupport(List<WorkerMetricStats> workerMetricStats) {
+    private void computeMinSupport(List<WorkerMetricStats> workerMetricStats) {
         int minSupport = Integer.MAX_VALUE;
 
         final long expiryThreshold = config.workerMetricsReporterFreqInMillis() * 3;
@@ -503,16 +501,20 @@ public final class LeaseAssignmentManager {
 
             if (supportCode == null || supportLut == null) {
                 // support code or support lut missing entirely; worker must be on older version
-                return (minSupportCode = 0);
+                minSupport = 0;
+                break;
             } else if ((supportLut + expiryThreshold) > currentEpoch) {
                 // support code is non-expired; if less than accumulated min support, update it
                 minSupport = Math.min(minSupport, supportCode);
             } else if (!isWorkerMetricsEntryStale(stat)) {
                 // worker has been reporting and yet support code is expired; that means it's persisted after rollback
-                return (minSupportCode = 0);
+                minSupport = 0;
+                break;
             }
         }
-        return (minSupportCode = (minSupport == Integer.MAX_VALUE ? 0 : minSupport));
+        if (minSupport != Integer.MAX_VALUE) {
+            tableMigrationMachine.setMinSupportCode(minSupport);
+        }
     }
 
     // Resolves and caches the stream ID for a given lease during lease acquisition.
@@ -605,14 +607,7 @@ public final class LeaseAssignmentManager {
             final List<WorkerMetricStats> workerMetricsFromStorage =
                     loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats);
 
-            // TODO: set variable (instance/static) somewhere to indicate worker metrics table scan
-            // TODO: returned no entries; that way TableMigrationMachine knows whether to transition
-
-            // if list of workers metrics loaded from worker stats table is empty, that means
-            // single table migration has completed on whole fleet of workers
-            // i.e. they are all in the lease table now
-            // so call TableMigrationStateMachine and tell leader (this worker running this) to stop
-            // copying coordinator states to coordinator table (and delete them from there)
+            tableMigrationMachine.setWorkerStatsTableFoundEmpty(workerMetricsFromStorage.isEmpty());
 
             // wait until lease table scan finishes before processing worker metrics
             leaseListFuture.join();

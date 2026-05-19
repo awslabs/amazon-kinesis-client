@@ -27,6 +27,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbAttribute;
@@ -101,10 +102,15 @@ public class WorkerMetricStats {
     }
 
     /**
-     * Add any new "breaking" feature to the END of this list.
+     * Add any new "breaking" feature to the END of this list. Features list must maintain chronological order.
      */
-    enum Features {
-        SINGLE_TABLE_MIGRATION
+    @Getter
+    @RequiredArgsConstructor
+    public enum Features {
+        ZERO_INDEX_PLACEHOLDER("ZERO_INDEX_PLACEHOLDER"), // ordinals are 0-indexed, but 0 should mean no support
+        SINGLE_TABLE_MIGRATION("SINGLE_TABLE_MIGRATION");
+
+        private final String name;
     }
 
     /**
@@ -114,7 +120,7 @@ public class WorkerMetricStats {
      * since versions before the support code's introduction will be doing a DynamoDB partial update
      * to the worker metrics item and would persist the support code field after rollback.
      */
-    static final Integer SUPPORT_CODE = Features.values().length;
+    static final Integer SUPPORT_CODE = Features.values().length - 1; // 1-indexed
 
     @Getter
     private String workerId;
