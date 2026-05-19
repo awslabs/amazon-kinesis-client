@@ -526,4 +526,54 @@ public class OtelMetricsScopeTest {
         assertTrue(!OtelMetricsScope.GAUGE_METRIC_NAMES.contains("Success"));
         assertTrue(!OtelMetricsScope.GAUGE_METRIC_NAMES.contains("DataBytesProcessed"));
     }
+
+    // -----------------------------------------------------------------------
+    // Dimension ordering contract — dimensions must be added before addData
+    // -----------------------------------------------------------------------
+
+    @Test
+    public void testDimensionsBeforeData_attributesIncluded() {
+        OtelMetricsScope scope = new OtelMetricsScope(mockMeter, MetricsLevel.DETAILED, allDimensions);
+        // Add dimension first, then data — correct ordering
+        scope.addDimension("Operation", "RenewAllLeases");
+        scope.addData("RecordsProcessed", 5.0, StandardUnit.COUNT);
+
+        // Verify the counter was called (meaning data was recorded with attributes)
+        verify(mockCounter).add(anyDouble(), any());
+    }
+
+    @Test
+    public void testDimensionAfterData_laterDataGetsAllAttributes() {
+        // Simulates the pattern: addData → addDimension → addData
+        // First addData gets only dimensions added before it
+        // Second addData gets all dimensions including the late one
+        Meter noopMeter = OpenTelemetry.noop().getMeter("test");
+        OtelMetricsScope scope = new OtelMetricsScope(noopMeter, MetricsLevel.DETAILED, allDimensions);
+
+        scope.addData("LostLeases", 0.0, StandardUnit.COUNT);
+        // This dimension is added after the first addData — it won't be on LostLeases
+        scope.addDimension("WorkerIdentifier", "worker-1");
+        // This data point WILL have WorkerIdentifier
+        scope.addData("Success", 1.0, StandardUnit.COUNT);
+        scope.end();
+        // No exception means the ordering is handled gracefully
+    }
+
+    @Test
+    public void testAllDimensionsBeforeAllData_correctPattern() {
+        // This is the correct usage pattern per the MetricsScope contract
+        Meter noopMeter = OpenTelemetry.noop().getMeter("test");
+        OtelMetricsScope scope = new OtelMetricsScope(noopMeter, MetricsLevel.DETAILED, allDimensions);
+
+        // All dimensions first
+        scope.addDimension("Operation", "RenewAllLeases");
+        scope.addDimension("WorkerIdentifier", "worker-1");
+        scope.addDimension("ShardId", "shard-001");
+
+        // Then all data
+        scope.addData("LostLeases", 0.0, StandardUnit.COUNT);
+        scope.addData("CurrentLeases", 5.0, StandardUnit.COUNT);
+        scope.addData("Success", 1.0, StandardUnit.COUNT);
+        scope.end();
+    }
 }

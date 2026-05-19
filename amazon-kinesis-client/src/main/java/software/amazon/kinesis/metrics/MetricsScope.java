@@ -19,6 +19,15 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 /**
  * An IMetricsScope represents a set of metric data that share a set of dimensions. IMetricsScopes know how to output
  * themselves (perhaps to disk, perhaps over service calls, etc).
+ *
+ * <p><b>Ordering contract:</b> All {@link #addDimension} calls should be made before any
+ * {@link #addData} calls. Some implementations (e.g., OtelMetricsScope) record observations
+ * immediately on addData with the dimensions accumulated so far. Dimensions added after addData
+ * may not be attached to earlier observations.
+ *
+ * // TODO: Consider extending AutoCloseable so callers can use try-with-resources
+ * //       instead of manual try/finally with end(). This would help ensure end() is
+ * //       always called and reduce boilerplate across the codebase.
  */
 public interface MetricsScope {
 

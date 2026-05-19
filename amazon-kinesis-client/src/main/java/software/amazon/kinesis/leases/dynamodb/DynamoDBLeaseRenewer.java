@@ -125,6 +125,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
          * safe.
          */
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, RENEW_ALL_LEASES_DIMENSION);
+        MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
 
         long startTime = System.currentTimeMillis();
         boolean success = false;
