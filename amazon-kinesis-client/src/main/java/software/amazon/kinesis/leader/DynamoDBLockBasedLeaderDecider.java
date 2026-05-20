@@ -25,6 +25,7 @@ import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
@@ -73,7 +74,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     // both fields need volatile as we don't know what lambdas might need to set them during scheduled update
     public volatile long steadySinceEpoch = Instant.now().getEpochSecond();
-    public volatile TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.DEPLOYING;
+    public volatile TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
 
     @Getter
     private PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
@@ -345,7 +346,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * @param interval - the interval at which to schedule the update
      */
     public void syncAdditionalAttributes(long interval) {
-        new ScheduledUpdate(interval, this::syncAdditionalAttributes);
+        new ScheduledUpdate(interval, () -> syncAdditionalAttributes());
     }
 
     /**
@@ -367,9 +368,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             for (ScheduledUpdate update : scheduledUpdatePriorityQueue) {
                 update.setCanceled(true);
             }
-            // TODO: should we just process the whole queue regardless of interval because we don't want to
-            // TODO: overlap with the next elected leader? should whether we wait or finish up immediately
-            // TODO: be a configurable option within the ScheduledUpdate class?
         }
         processScheduledUpdateQueue();
     }
@@ -394,9 +392,19 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         boolean canceled;
 
         ScheduledUpdate(long interval, Runnable update) {
-            this.interval = interval;
-            this.update = update;
+            this(interval, () -> {
+                update.run();
+                return true; // update should never cancel itself if created from this constructor
+            });
+        }
 
+        ScheduledUpdate(long interval, BooleanSupplier shouldCancel) {
+            this.interval = interval;
+            this.update = () -> {
+                if (shouldCancel.getAsBoolean()) {
+                    this.canceled = true;
+                }
+            };
             // always execute scheduled update immediately upon instantiation (adds itself to queue when done)
             execute();
         }
@@ -442,13 +450,12 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // save values to instance variables
         steadySinceEpoch = ss == null ? Instant.now().getEpochSecond() : ss;
         tableMigrationStatus =
-                tms == null ? TableMigrationMachine.States.DEPLOYING : TableMigrationMachine.States.valueOf(tms);
+                tms == null ? TableMigrationMachine.States.INIT : TableMigrationMachine.States.valueOf(tms);
 
         // update the order in which we grab leader lock items from tables, in case migration status changed
         setLockAcquisitionOrder();
 
-        // TODO: set CoordinatorStateDAO's usingLeaseTable based on table migration status
-
+        // TODO: if table migration status changed (based on snapshot), have DAOs respond to new status
     }
 
     /**

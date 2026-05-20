@@ -29,7 +29,9 @@ import java.util.function.Function;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
@@ -312,6 +314,11 @@ public class LeaseManagementConfig {
 
     private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
+    /**
+     * Controls whether we should consolidate worker stats and coordinator states into the lease table. Default=false
+     */
+    private TableFormatConfig tableFormatConfig = new TableFormatConfig(TableFormatConfig.Formats.MULTI_TABLE);
+
     @Deprecated
     public LeaseManagementConfig(
             String tableName,
@@ -528,7 +535,8 @@ public class LeaseManagementConfig {
                     leaseCleanupConfig(),
                     workerUtilizationAwareAssignmentConfig(),
                     gracefulLeaseHandoffConfig,
-                    leaseAssignmentIntervalMillis());
+                    leaseAssignmentIntervalMillis(),
+                    tableFormatConfig());
         }
         return leaseManagementFactory;
     }
@@ -628,5 +636,16 @@ public class LeaseManagementConfig {
         public WorkerMetricsTableConfig(final String applicationName) {
             super(applicationName, "WorkerMetricStats");
         }
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class TableFormatConfig {
+        public enum Formats {
+            MULTI_TABLE,
+            SINGLE_TABLE
+        }
+
+        private final Formats format;
     }
 }

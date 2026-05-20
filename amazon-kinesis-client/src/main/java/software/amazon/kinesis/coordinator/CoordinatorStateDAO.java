@@ -15,6 +15,7 @@
 package software.amazon.kinesis.coordinator;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -82,6 +83,8 @@ import static java.util.Objects.nonNull;
 import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
 import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
+import static software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider.STEADY_SINCE_ATTRIBUTE_NAME;
+import static software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME;
 import static software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer.LEASE_KEY_KEY;
 
 /**
@@ -105,6 +108,8 @@ public class CoordinatorStateDAO {
 
     @Getter
     private boolean usingLeaseTable;
+
+    private CoordinatorStateDAO coordinatorTableDAO;
 
     /** entityType field may not exist for all coordinator states in coordinator table, but should exist in lease table */
     private static final String ENTITY_TYPE = "entityType";
@@ -133,6 +138,8 @@ public class CoordinatorStateDAO {
         } else {
             setUsingLeaseTable(false);
         }
+
+        this.coordinatorTableDAO = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
     }
 
     public void initialize() throws DependencyException {
@@ -168,6 +175,16 @@ public class CoordinatorStateDAO {
         }
 
         switch (tableMigrationStatus) {
+            case "DEPLOYED": {
+                setUsingLeaseTable(false);
+                if (leaseManagementConfig.tableFormatConfig().format()
+                        != LeaseManagementConfig.TableFormatConfig.Formats.SINGLE_TABLE) {
+                    return;
+                }
+                // should be on second phase deployment based on config -> start table migration now that it's safe
+                updateTableMigrationStatus("PENDING");
+                // fall through because the new state will be PENDING
+            }
             case "PENDING": {
                 // sync coordinator states to coordinator table and fallthrough to use lease table
                 MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
@@ -569,16 +586,50 @@ public class CoordinatorStateDAO {
         return true;
     }
 
+    public boolean copyCoordinatorStatesToLeaseTable() {
+        List<CoordinatorState> states;
+        try {
+            states = coordinatorTableDAO.listCoordinatorState();
+        } catch (Exception e) {
+            // try again later to get full scan
+            log.warn("Caught exception while trying to copy coordinator states to lease table", e);
+            return false;
+        }
+
+        if (!usingLeaseTable) {
+            // should already be using lease table, but must use it to write items next
+            setUsingLeaseTable(true);
+        }
+
+        for (CoordinatorState state : states) {
+            Map<String, AttributeValue> item = toDynamoRecord(state);
+
+            // CoordinatorState subclasses going forward *should* have entityType in DDB; MigrationState needs it added
+            String entityType = (state instanceof MigrationState) ? MigrationState.ENTITY_TYPE : state.getEntityType();
+
+            // add entityType so LAM can filter during lease table scan
+            item.putIfAbsent(ENTITY_TYPE, AttributeValue.builder().s(entityType).build());
+
+            try {
+                // if the item exists already, we assume it's up-to-date
+                createCoordinatorStateIfNotExists(state);
+            } catch (Exception e) {
+                log.warn("Caught exception while trying to copy coordinator states to lease table", e);
+                return false;
+            }
+        }
+
+        log.info("Copied all coordinator states from coordinator table to lease table successfully");
+        return true;
+    }
+
     /**
      * Writes the additional attributes values for the leader lock item into the item in the coordinator table
      * @param updates - the attributes that need to be updated and their values
      */
     public void syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        MutationTracker mutationTracker = MutationTracker.getInstance();
-        if (mutationTracker != null) {
-            mutationTracker.coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
-        }
+        coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
     }
 
     /**
@@ -608,6 +659,39 @@ public class CoordinatorStateDAO {
             throw new DependencyException(e);
         }
         log.info("Leader lock additional attributes updated: {}", updates);
+        return true;
+    }
+
+    public boolean updateTableMigrationStatus(String tableMigrationStatus) {
+        Map<String, AttributeValueUpdate> updates = new HashMap<>();
+
+        // table migration status update
+        updates.put(
+                TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
+                AttributeValueUpdate.builder()
+                        .value(AttributeValue.builder().s(tableMigrationStatus).build())
+                        .action(AttributeAction.PUT)
+                        .build());
+
+        // since table migration status changed, also reset steady since epoch
+        updates.put(
+                STEADY_SINCE_ATTRIBUTE_NAME,
+                AttributeValueUpdate.builder()
+                        .value(AttributeValue.builder()
+                                .n(String.valueOf(Instant.now().getEpochSecond()))
+                                .build())
+                        .action(AttributeAction.PUT)
+                        .build());
+
+        try {
+            updateLeaderLockAdditionalAttributes(updates);
+        } catch (Exception e) {
+            // no need to retry; if the fields aren't updated, other workers will come online and try also
+            log.warn("Caught exception while trying to update the table migration status in DynamoDB", e);
+            return false;
+        }
+
+        log.info("Updated table migration status in the leader lock item");
         return true;
     }
 

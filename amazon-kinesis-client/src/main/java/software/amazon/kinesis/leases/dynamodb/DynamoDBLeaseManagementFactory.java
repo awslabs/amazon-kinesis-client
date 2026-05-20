@@ -83,6 +83,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final LeaseSerializer leaseSerializer;
 
     private final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig;
+    private final LeaseManagementConfig.TableFormatConfig tableFormatConfig;
 
     @NonNull
     private StreamConfig streamConfig;
@@ -189,7 +190,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final LeaseCleanupConfig leaseCleanupConfig,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final long leaseAssignmentIntervalMillis) {
+            final long leaseAssignmentIntervalMillis,
+            final LeaseManagementConfig.TableFormatConfig tableFormatConfig) {
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
         this.tableName = tableName;
@@ -225,6 +227,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.workerUtilizationAwareAssignmentConfig = workerUtilizationAwareAssignmentConfig;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
         this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
+        this.tableFormatConfig = tableFormatConfig;
     }
 
     @Override

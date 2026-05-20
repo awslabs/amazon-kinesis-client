@@ -17,7 +17,7 @@ public class TableMigrationMachine {
     public static final int TABLE_MIGRATION_FEATURE_INDEX =
             WorkerMetricStats.Features.valueOf(TABLE_MIGRATION_FEATURE_NAME).ordinal();
 
-    private static final long DEPLOYING_TO_PENDING_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
+    private static final long INIT_TO_DEPLOYED_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
     private static final long PENDING_TO_COMPLETE_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
 
     private int minSupportCode = 0;
@@ -27,28 +27,20 @@ public class TableMigrationMachine {
 
     /**
      * The different states the multi-to-single table migration could be in:
-     *  DEPLOYING -> code needs to be deployed everywhere
-     *  PENDING -> leader knows code is deployed everywhere
+     *  INIT -> code needs to be deployed everywhere before we can safely start the migration
+     *  DEPLOYING -> leader knows the code is deployed everywhere, waiting for second phase deployment to begin
+     *  PENDING -> table migration is in progress, workers are moving worker stats over
      *  COMPLETE -> all workers are using lease table for everything
      */
     @RequiredArgsConstructor
     public enum States {
-        DEPLOYING("DEPLOYING"),
+        INIT("INIT"),
+        DEPLOYED("DEPLOYED"),
         PENDING("PENDING"),
         COMPLETE("COMPLETE");
 
         @Getter
         private final String name;
-    }
-
-    /**
-     * If default config option ENABLE is selected, single table migration will proceed.
-     * If leader has DISABLE config option, it will not advance to PENDING.
-     * If already in PENDING and leader has DISABLE, it will rollback the migration progress.
-     */
-    public enum Options {
-        ENABLE,
-        DISABLE
     }
 
     public synchronized boolean setMinSupportCode(int minSupport) {
@@ -98,17 +90,25 @@ public class TableMigrationMachine {
 
         switch (tableMigrationStatus) {
             default:
-            case DEPLOYING: {
+            case INIT: {
+                // TODO: add logic for non-leaders to jump to PENDING based on migration state and client version config
                 if (minSupportCode >= TABLE_MIGRATION_FEATURE_INDEX
-                        && steadySinceEpoch + DEPLOYING_TO_PENDING_BAKE_TIME <= epochSecond) {
+                        && steadySinceEpoch + INIT_TO_DEPLOYED_BAKE_TIME <= epochSecond) {
                     // all workers support feature and bake time complete -> move to PENDING
-                    setTableMigrationStatus(States.PENDING, leaderDecider);
+                    log.info("All workers have table migration support deployed, setting status to deployed");
+                    setTableMigrationStatus(States.DEPLOYED, leaderDecider);
                 }
+                break;
+            }
+            case DEPLOYED: {
+                // no-op; DEPLOYED -> PENDING transition happens through non-leader on second-phase deployment
+                log.info("Waiting for second phase deployment to begin, cannot create lease table leader lock yet");
                 break;
             }
             case PENDING: {
                 if (workerStatsTableFoundEmpty && (steadySinceEpoch + PENDING_TO_COMPLETE_BAKE_TIME <= epochSecond)) {
                     // worker stats table was empty and bake time complete -> move to COMPLETE
+                    log.info("Worker stats table found empty, setting table migration status to complete");
                     setTableMigrationStatus(States.COMPLETE, leaderDecider);
                     // TODO: cancel sync to coordinator table scheduled update here
                 }
