@@ -84,7 +84,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     @Getter
     @VisibleForTesting
-    private String currentSequenceNumber;
+    private ExtendedSequenceNumber currentSequenceNumber;
 
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
     private boolean isFirstConnection = true;
@@ -130,7 +130,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     extendedSequenceNumber,
                     initialPositionInStreamExtended);
             this.initialPositionInStreamExtended = initialPositionInStreamExtended;
-            this.currentSequenceNumber = extendedSequenceNumber.sequenceNumber();
+            this.currentSequenceNumber = extendedSequenceNumber;
             this.isFirstConnection = true;
         }
     }
@@ -159,7 +159,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 throw new IllegalArgumentException(
                         "Provided ProcessRecordsInput not created from the FanOutRecordsPublisher");
             }
-            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
+            ExtendedSequenceNumber continuationSeqNum =
+                    ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
+            currentSequenceNumber = continuationSeqNum;
         }
     }
 
@@ -207,7 +209,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Take action based on the time spent by the event in queue.
             takeDelayedDeliveryActionIfRequired(streamAndShardId, recordsRetrievedContext.getEnqueueTimestamp(), log);
             // Update current sequence number for the successfully delivered event.
-            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
+            ExtendedSequenceNumber continuationSeqNum =
+                    ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
+            currentSequenceNumber = continuationSeqNum;
             // Update the triggering flow for post scheduling upstream request.
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue or execute the subscription shutdown action.
@@ -314,21 +318,31 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         return flow != null;
     }
 
-    private void subscribeToShard(String sequenceNumber) {
+    private void subscribeToShard(ExtendedSequenceNumber sequenceNumber) {
         synchronized (lockObject) {
             // Clear the delivery queue so that any stale entries from previous subscription are discarded.
             resetRecordsDeliveryStateOnSubscriptionOnInit();
+            log.info("ShardId: {}, consumrArn: {}", shardId, consumerArn);
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId)
                     .consumerARN(consumerArn);
             builder.streamId(StreamIdCache.get(streamIdentifier));
 
             SubscribeToShardRequest request;
-            if (isFirstConnection) {
-                request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStreamExtended)
+
+            // If sequenceNumber is SHARD_END, then we have reached the end of the shard before and this is
+            // reconnecting.
+            // Skip forward to the end of the shard.
+            if (sequenceNumber == ExtendedSequenceNumber.SHARD_END) {
+                request = IteratorBuilder.request(builder, "LATEST", initialPositionInStreamExtended)
+                        .build();
+            } else if (isFirstConnection) {
+                request = IteratorBuilder.request(
+                                builder, sequenceNumber.sequenceNumber(), initialPositionInStreamExtended)
                         .build();
             } else {
-                request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStreamExtended)
+                request = IteratorBuilder.reconnectRequest(
+                                builder, sequenceNumber.sequenceNumber(), initialPositionInStreamExtended)
                         .build();
             }
 
@@ -459,7 +473,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                             .isAtShardEnd(true)
                             .childShards(Collections.emptyList())
                             .build(),
-                    null,
+                    ExtendedSequenceNumber.SHARD_END,
                     triggeringFlow != null ? triggeringFlow.getSubscribeToShardId() : shardId + "-no-flow-found");
             subscriber.onNext(response);
             subscriber.onComplete();
@@ -569,8 +583,16 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         .records(records)
                         .childShards(recordBatchEvent.childShards())
                         .build();
+                final ExtendedSequenceNumber continuationSequenceNumber;
+                if (recordBatchEvent.continuationSequenceNumber() == null) {
+                    continuationSequenceNumber = ExtendedSequenceNumber.SHARD_END;
+                } else {
+                    continuationSequenceNumber =
+                            new ExtendedSequenceNumber(recordBatchEvent.continuationSequenceNumber());
+                }
+
                 FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(
-                        input, recordBatchEvent.continuationSequenceNumber(), triggeringFlow.subscribeToShardId);
+                        input, continuationSequenceNumber, triggeringFlow.subscribeToShardId);
                 bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
             } catch (Throwable t) {
                 log.warn(
@@ -633,7 +655,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 return;
             }
 
-            if (currentSequenceNumber != null) {
+            if (currentSequenceNumber != ExtendedSequenceNumber.SHARD_END) {
                 log.debug("{}: Shard hasn't ended. Resubscribing.", streamAndShardId);
                 subscribeToShard(currentSequenceNumber);
             } else {
@@ -792,10 +814,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     @Accessors(fluent = true)
     @Data
-    static class FanoutRecordsRetrieved implements RecordsRetrieved {
+    public static class FanoutRecordsRetrieved implements RecordsRetrieved {
 
         private final ProcessRecordsInput processRecordsInput;
-        private final String continuationSequenceNumber;
+        private final ExtendedSequenceNumber continuationSequenceNumber;
         private final String flowIdentifier;
         private final String batchUniqueIdentifier = UUID.randomUUID().toString();
 
