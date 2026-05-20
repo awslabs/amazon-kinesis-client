@@ -124,7 +124,26 @@ public class LeaseGracefulShutdownHandler {
         final ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
         final ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         if (consumer == null || consumer.isShutdown()) {
-            shardInfoLeasePendingShutdownMap.remove(shardInfo);
+            // The DDB lease transfer must happen here. Without it the lease stays stuck in DDB
+            // with checkpointOwner set forever (zombie handoff): the new owner will never take over
+            // because findOrCreateLeases skips leases where checkpointOwner is non-null, and the
+            // current code path silently removes the in-memory pending entry without performing
+            // the DDB cleanup. The cleanup must run regardless of whether an entry exists in the
+            // pending map: when the worker discovers an existing checkpointOwner=self lease via
+            // DDB read after a restart, no entry would have been added because the renewer
+            // observes consumer==null on the very first call.
+            final LeasePendingShutdown existing = shardInfoLeasePendingShutdownMap.remove(shardInfo);
+            final boolean alreadyTransferred = existing != null && existing.leaseTransferCalled;
+            if (!alreadyTransferred) {
+                try {
+                    attemptLeaseTransfer(lease, leaseCoordinator);
+                } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                    log.warn(
+                            "Failed to transfer lease {} after consumer shutdown. Will retry on next cycle.",
+                            lease.leaseKey(),
+                            e);
+                }
+            }
         } else {
             // there could be change shard get enqueued after getting removed. This should be okay because
             // this enqueue will be no-op and will be removed again because the shardConsumer associated with the
@@ -152,6 +171,24 @@ public class LeaseGracefulShutdownHandler {
 
                 if (shardInfoShardConsumerMap.get(shardInfo) == null
                         || leaseCoordinator.getCurrentlyHeldLease(leaseKey) == null) {
+                    // The DDB lease transfer must happen here when the consumer has shut down
+                    // before the timeout (common case for low-traffic shards). The original code
+                    // assumed consumer.gracefulShutdown() also cleaned up DDB, but it does not -
+                    // that is transferLeaseIfOwner's job, which previously only ran from the
+                    // timeout branch below. Without this, the lease stays stuck in DDB with
+                    // checkpointOwner set forever (zombie handoff).
+                    if (!leasePendingShutdown.leaseTransferCalled) {
+                        try {
+                            transferLeaseIfOwner(leasePendingShutdown);
+                        } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                            log.warn(
+                                    "Failed to transfer lease {} after consumer shutdown. Will retry on next cycle.",
+                                    leaseKey,
+                                    e);
+                            // Don't remove from map; let next cycle retry the transfer.
+                            continue;
+                        }
+                    }
                     logTimeoutMessage(leasePendingShutdown);
                     shardInfoLeasePendingShutdownMap.remove(shardInfo);
                 } else if (getCurrentTimeMillis() >= leasePendingShutdown.timeoutTimestampMillis

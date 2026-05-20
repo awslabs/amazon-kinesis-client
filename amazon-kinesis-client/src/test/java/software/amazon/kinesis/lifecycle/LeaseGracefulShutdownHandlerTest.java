@@ -120,6 +120,44 @@ class LeaseGracefulShutdownHandlerTest {
     }
 
     @Test
+    void testEnqueueShutdownTransfersLeaseWhenConsumerWasNeverStarted() throws Exception {
+        // Reproduces the bug where a worker discovers a lease with checkpointOwner=self
+        // in DDB after a restart (or right after acquiring the lease via cold transfer
+        // and before the ShardConsumer state machine reaches PROCESSING). In this case
+        // shardInfoShardConsumerMap has no entry, AND shardInfoLeasePendingShutdownMap
+        // has no entry (the renewer has not previously called enqueueShutdown for this
+        // lease). The fix must still perform the DDB transfer to clear the
+        // checkpointOwner field; otherwise the lease becomes a permanent zombie.
+        // Note: shardConsumerMap is intentionally empty, no prior enqueueShutdown call
+        // was made, so the pendingShutdown map is also empty.
+        handler.enqueueShutdown(lease);
+        verify(mockLeaseRefresher).assignLease(lease, lease.leaseOwner());
+    }
+
+    @Test
+    void testMonitorTransfersLeaseWhenConsumerShutsDownBeforeTimeout() throws Exception {
+        // Reproduces the most common manifestation of the bug. The worker starts a
+        // consumer for the lease, the renewer fires enqueueShutdown which schedules
+        // gracefulShutdown and adds an entry to the pendingShutdown map. The consumer
+        // shuts down quickly (faster than the 30s timeout, common for low-traffic
+        // shards). The next monitor cycle observes consumer == null in
+        // shardInfoShardConsumerMap (Branch A path). The original code silently
+        // removed the pending entry without performing the DDB transfer. The fix
+        // performs the transfer.
+        final ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
+        shardConsumerMap.put(shardInfo, mockShardConsumer);
+        when(mockShardConsumer.isShutdown()).thenReturn(false);
+        handler.enqueueShutdown(lease);
+
+        // simulate the consumer completing its shutdown and being removed from the map
+        // before the configured timeout fires
+        shardConsumerMap.remove(shardInfo);
+        gracefulShutdownRunnable.run();
+
+        verify(mockLeaseRefresher).assignLease(lease, lease.leaseOwner());
+    }
+
+    @Test
     void testIgnoreNonPendingShutdownLease() throws Exception {
         // enqueue a none shutdown lease
         lease.checkpointOwner(null);
@@ -151,10 +189,16 @@ class LeaseGracefulShutdownHandlerTest {
     }
 
     @Test
-    void testNotEnqueueBecauseNoShardConsumerFound() throws Exception {
+    void testEnqueueShutdownTransfersLeaseWhenShardConsumerNotFound() throws Exception {
+        // When enqueueShutdown is called for a lease that has shutdownRequested but no
+        // ShardConsumer is registered (e.g., LAM initiated graceful handoff before the
+        // worker started a consumer for this lease, or the consumer has already
+        // completed shutdown), the worker must still perform the DDB lease transfer
+        // to clear the checkpointOwner field. Otherwise the lease becomes a zombie:
+        // the new owner can't take over and no consumer is processing records.
         when(mockShardConsumer.isShutdown()).thenReturn(true);
         handler.enqueueShutdown(lease);
-        verify(mockLeaseRefresher, never()).assignLease(any(Lease.class), any((String.class)));
+        verify(mockLeaseRefresher).assignLease(lease, lease.leaseOwner());
     }
 
     @Test
@@ -185,18 +229,23 @@ class LeaseGracefulShutdownHandlerTest {
     }
 
     @Test
-    void testRemoveLeaseFromPendingShutdownMapBecauseLeaseCoordinatorDontOwnItAnymore() throws Exception {
+    void testTransferLeaseWhenLeaseCoordinatorNoLongerHoldsItInMemory() throws Exception {
         final ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
         shardConsumerMap.put(shardInfo, mockShardConsumer);
         when(mockShardConsumer.isShutdown()).thenReturn(false);
-        // fast-forward and time out the shutdown lease. This should ideally trigger an assignLease call.
+        // fast-forward and time out the shutdown lease.
         when(mockTimeSupplier.get()).thenReturn(SHUTDOWN_TIMEOUT + 1000);
-        // but now we pretend we don't own the lease anymore. This should avoid the assignLease call after all.
+        // The lease coordinator no longer holds this lease in its in-memory map
+        // (e.g., the lease was dropped locally). However, the DDB record still has
+        // checkpointOwner=self because the previous code path silently removed the
+        // pending-shutdown entry without performing the transfer. The fix performs
+        // the transfer so the DDB state is cleaned up and the next owner can pick
+        // up the lease.
         when(mockLeaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenReturn(null);
         handler.enqueueShutdown(lease);
 
         gracefulShutdownRunnable.run();
-        verify(mockLeaseRefresher, never()).assignLease(lease, lease.leaseOwner());
+        verify(mockLeaseRefresher).assignLease(lease, lease.leaseOwner());
     }
 
     @Test

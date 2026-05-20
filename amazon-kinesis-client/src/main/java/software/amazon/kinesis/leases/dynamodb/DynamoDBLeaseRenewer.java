@@ -493,12 +493,28 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
             for (Lease lease : response.getKey()) {
                 if (workerIdentifier.equals(lease.leaseOwner())) {
-                    // Skip leases in pending checkpoint state - they're still being shut down by previous owner
-                    // If previous owner is unable to shutdown the lease, the leader will reassign it. If leaseTaker
-                    // is running instead, it will remove the checkpoint owner and aqcuire the lease.
+                    // If lease has checkpointOwner set, the previous owner was supposed to complete
+                    // the handoff but never did (zombie handoff). Since this worker is the assigned
+                    // leaseOwner, clear checkpointOwner via assignLease to unblock the lease.
+                    // Without this, neither old owner nor new owner will process the shard:
+                    // - Old owner (checkpointOwner) has no consumer for it in ownedLeases
+                    // - New owner (leaseOwner) skips it, leaving it permanently stuck
                     if (lease.checkpointOwner() != null) {
-                        log.info("Worker {} skipping lease {} in pending checkpoint state", workerIdentifier, lease);
-                        continue;
+                        log.info(
+                                "[KCL_ZOMBIE_HANDOFF_FIX_v3] Worker {} clearing stuck checkpointOwner on lease {} (was {})",
+                                workerIdentifier,
+                                lease.leaseKey(),
+                                lease.checkpointOwner());
+                        try {
+                            leaseRefresher.assignLease(lease, workerIdentifier);
+                        } catch (Exception e) {
+                            log.warn(
+                                    "Worker {} failed to clear checkpointOwner on lease {}, skipping",
+                                    workerIdentifier,
+                                    lease.leaseKey(),
+                                    e);
+                            continue;
+                        }
                     }
 
                     log.info(" Worker {} found lease {}", workerIdentifier, lease);
