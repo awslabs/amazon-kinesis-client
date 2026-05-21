@@ -60,6 +60,7 @@ public class DynamoDBLeaseDiscoverer implements LeaseDiscoverer {
     public List<Lease> discoverNewLeases()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, "LeaseDiscovery");
+        MetricsUtil.addWorkerIdentifier(metricsScope, workerIdentifier);
         long startTime = System.currentTimeMillis();
         boolean success = false;
         try {
@@ -98,7 +99,6 @@ public class DynamoDBLeaseDiscoverer implements LeaseDiscoverer {
             MetricsUtil.addCount(metricsScope, "NewLeasesDiscovered", newLeases.size(), MetricsLevel.DETAILED);
             return newLeases;
         } finally {
-            MetricsUtil.addWorkerIdentifier(metricsScope, workerIdentifier);
             MetricsUtil.addSuccessAndLatency(metricsScope, success, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(metricsScope);
         }

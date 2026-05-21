@@ -1,0 +1,5 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Mon May 18 22:07:39 IST 2026
+amazon-kinesis-client-3.4.3-SNAPSHOT.pom>=
+amazon-kinesis-client-3.4.3-SNAPSHOT.jar>=
+amazon-kinesis-client-3.4.3-SNAPSHOT-sources.jar>=

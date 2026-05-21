@@ -181,6 +181,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         Map<String, Lease> takenLeases = new HashMap<>();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
+        MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
 
         long startTime = System.currentTimeMillis();
         long updateAllLeasesTotalTimeMillis;
@@ -205,7 +206,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 }
             } finally {
                 updateAllLeasesTotalTimeMillis = System.currentTimeMillis() - startTime;
-                MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
                 MetricsUtil.addSuccessAndLatency(scope, "ListLeases", success, startTime, MetricsLevel.DETAILED);
             }
 

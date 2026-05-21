@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>software.amazon.kinesis</groupId>
+  <artifactId>amazon-kinesis-client</artifactId>
+  <versioning>
+    <versions>
+      <version>3.4.3-SNAPSHOT</version>
+    </versions>
+    <lastUpdated>20260518210733</lastUpdated>
+  </versioning>
+</metadata>

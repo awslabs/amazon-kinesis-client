@@ -207,6 +207,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         String leaseKey = lease.leaseKey();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, RENEW_ALL_LEASES_DIMENSION);
+        MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
 
         boolean success = false;
         boolean renewedLease = false;
@@ -269,7 +270,6 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                 }
             }
         } finally {
-            MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
             MetricsUtil.addSuccessAndLatency(scope, "RenewLease", success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
         }
