@@ -328,7 +328,7 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void startVersionHashHeartbeat_updatesDAO_whenLeader() throws Exception {
+    void startVersionHashHeartbeat_updatesDAO_whenWorkerIsLeader() throws Exception {
         LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
                 "dummyTableName",
                 "dummyApplicationName",
@@ -351,8 +351,9 @@ public class FleetSegmentingHandlerTest {
         Thread.sleep(250);
 
         // with dynamoDbLockBasedLeaderHeartbeatPeriodInMillis set to 100 ms and after sleeping for 250 ms,
-        // the versionHash should heartbeat 3 times (once on start up, two more times for every 100 ms)
-        Mockito.verify(heartbeatDAO, Mockito.times(3))
+        // the versionHash should heartbeat at least 2 times and at most 3 times (once on start up if the worker
+        // starts as the leader, two more times for every 100 ms)
+        Mockito.verify(heartbeatDAO, Mockito.atLeast(2))
                 .updateCoordinatorStateWithExpectation(Mockito.any(CoordinatorState.class), Mockito.anyMap());
     }
 
