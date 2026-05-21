@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
@@ -107,7 +108,36 @@ public class WorkerMetricStatsDAO {
 
         if (usingLeaseTable) {
             this.workerStatsTableDAO = new WorkerMetricStatsDAO(leaseManagementConfig, false);
+
+            // delete own worker's metrics from worker stats table
+            tryRequestWithBackoff(
+                    () -> workerStatsTableDAO.deleteMetrics(leaseManagementConfig.workerIdentifier()), 3, 1000, 2);
         }
+    }
+
+    private boolean tryRequestWithBackoff(BooleanSupplier request, int attempts, int waitMillis, int backoffFactor) {
+        boolean success = false;
+        try {
+            success = request.getAsBoolean();
+        } catch (Exception e) {
+            // catch unchecked exceptions from request and count as failure
+            log.info("Caught unchecked exception while making DAO request attempt.", e);
+        }
+        return success || retryRequestWithBackoff(request, attempts, waitMillis, backoffFactor);
+    }
+
+    private boolean retryRequestWithBackoff(BooleanSupplier request, int attempts, int waitMillis, int backoffFactor) {
+        if (--attempts <= 0) {
+            log.warn("Exhausted all attempts with backoff to complete worker stats DAO request.");
+            return false;
+        }
+        try {
+            Thread.sleep(waitMillis);
+        } catch (InterruptedException e) {
+            log.info("Thread sleep was interrupted while backing off between worker stats DAO requests.", e);
+            Thread.currentThread().interrupt();
+        }
+        return tryRequestWithBackoff(request, attempts, waitMillis * backoffFactor, backoffFactor);
     }
 
     /**
@@ -192,6 +222,28 @@ public class WorkerMetricStatsDAO {
                     "Failed to delete the WorkerMetricStats due to conditional failure for worker : {}",
                     workerMetrics,
                     e);
+            return false;
+        }
+    }
+
+    /**
+     * Deletes the metrics entry for a worker unconditionally, without checking existence and last update time.
+     * @param workerId - the worker identifier, which is used as the partition key attribute value
+     * @return whether the delete request was successful
+     */
+    public boolean deleteMetrics(String workerId) {
+        // construct request to delete item that has this worker identifier as the key
+        DeleteItemEnhancedRequest request = DeleteItemEnhancedRequest.builder()
+                .key(Key.builder().partitionValue(workerId).build())
+                .build();
+
+        try {
+            // if request future does not throw exception, count as success
+            unwrappingFuture(() -> table.deleteItem(request));
+            return true;
+        } catch (Exception e) {
+            // all unchecked exceptions count as failure
+            log.info("Caught exception while trying to delete worker stats for worker ID: {}", workerId, e);
             return false;
         }
     }

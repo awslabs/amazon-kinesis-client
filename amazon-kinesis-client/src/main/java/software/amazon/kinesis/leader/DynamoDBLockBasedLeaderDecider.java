@@ -81,7 +81,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     // while table migration is PENDING, need to grab both locks from respective tables (boolean=usingLeaseTable)
     private Map<Boolean, AmazonDynamoDBLockClient> lockClientMap = new HashMap<>();
-    private boolean[] lockAcquisitionOrder;
+    private boolean[] lockAcquisitionOrder = getLockAcquisitionOrder();
 
     // used to check if additional attributes are in sync, and call raw UpdateItem request if not
     private LockItem latestLeaderLockSnapshot;

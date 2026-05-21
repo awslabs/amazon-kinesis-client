@@ -647,5 +647,9 @@ public class LeaseManagementConfig {
         }
 
         private final Formats format;
+
+        public TableFormatConfig(String format) {
+            this(Formats.valueOf(format));
+        }
     }
 }

@@ -603,6 +603,8 @@ public class CoordinatorStateDAO {
         return true;
     }
 
+    // TODO: fix bug where sync job creates items and MutationTracker thinks they need to be deleted
+    // TODO: (probably has something to do with modified timestamp being updated constantly)
     public boolean copyCoordinatorStatesToLeaseTable() {
         // should be using the lease table already at this point
         setUsingLeaseTable(true);
