@@ -59,7 +59,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
     private final boolean allowThroughputOvershoot;
     private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
     private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
-    private int targetLeasePerWorker;
+    private final int targetLeasePerWorker;
 
     public VarianceBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
@@ -75,11 +75,13 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                 workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
         this.assignableWorkerSortedByAvailableCapacity = new PriorityQueue<>(comparator.reversed());
         this.assignableWorkerSortedByAvailableCapacity.addAll(
-                getAvailableWorkersForAssignment(inMemoryStorageView.getActiveWorkerMetrics()));
+                getAvailableWorkersForAssignment(inMemoryStorageView.getAssignableWorkers()));
+
+        this.targetLeasePerWorker = getTargetLeasePerWorker();
     }
 
     private void initialize() {
-        final Map<String, Double> workerMetricsNameToAverage = inMemoryStorageView.getActiveWorkerMetrics().stream()
+        final Map<String, Double> workerMetricsNameToAverage = inMemoryStorageView.getAssignableWorkers().stream()
                 .flatMap(workerMetrics -> workerMetrics.getMetricStats().keySet().stream()
                         .map(workerMetricsName ->
                                 new SimpleEntry<>(workerMetricsName, workerMetrics.getMetricStat(workerMetricsName))))
@@ -87,10 +89,6 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                         SimpleEntry::getKey, HashMap::new, Collectors.averagingDouble(SimpleEntry::getValue)));
 
         workerMetricsToFleetLevelAverageMap.putAll(workerMetricsNameToAverage);
-
-        final int totalWorkers =
-                Math.max(inMemoryStorageView.getActiveWorkerMetrics().size(), 1);
-        this.targetLeasePerWorker = Math.max(inMemoryStorageView.getLeaseList().size() / totalWorkers, 1);
     }
 
     private List<WorkerMetricStats> getAvailableWorkersForAssignment(final List<WorkerMetricStats> workerMetricsList) {
@@ -102,6 +100,12 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                                 workerMetrics.getWorkerId())
                         && inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(workerMetrics.getWorkerId()))
                 .collect(Collectors.toList());
+    }
+
+    private int getTargetLeasePerWorker() {
+        final int totalWorkers =
+                Math.max(inMemoryStorageView.getAssignableWorkers().size(), 1);
+        return Math.max(inMemoryStorageView.getLeaseList().size() / totalWorkers, 1);
     }
 
     @Override
@@ -184,10 +188,8 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
      */
     @Override
     public void balanceWorkerVariance() {
-        final List<WorkerMetricStats> activeWorkerMetrics = inMemoryStorageView.getActiveWorkerMetrics();
-
         log.info("WorkerMetricStats to corresponding fleet level average : {}", workerMetricsToFleetLevelAverageMap);
-        log.info("Active WorkerMetricStats : {}", activeWorkerMetrics);
+        log.info("Assignable workers : {}", inMemoryStorageView.getAssignableWorkers());
 
         final Map<String, Double> workerIdToThroughputToTakeMap = new HashMap<>();
         String largestOutlierWorkerMetricsName = "";
@@ -199,18 +201,21 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
             // new WorkerMetricStats and currently in phase of deployment.
-            final List<WorkerMetricStats> currentWorkerMetrics = activeWorkerMetrics.stream()
+            final List<WorkerMetricStats> workersOnVersion = inMemoryStorageView.getWorkersOnVersionHash().stream()
                     .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
                     .collect(Collectors.toList());
 
             final double fleetAverageForWorkerMetrics = workerMetricsToFleetLevelAverageEntry.getValue();
 
-            final List<WorkerMetricStats> workerToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
-                    currentWorkerMetrics, workerMetricsName, fleetAverageForWorkerMetrics);
+            // Only workers on the leader's version hash will be considered when taking leases if segmenting
+            // is enabled
+            final List<WorkerMetricStats> workersToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
+                    workersOnVersion, workerMetricsName, fleetAverageForWorkerMetrics);
+            log.info("Workers to take from : {}", workersToTakeLeasesFrom);
 
             final Map<String, Double> workerIdToThroughputToTakeForCurrentWorkerMetrics = new HashMap<>();
             double totalThroughputToTakeForCurrentWorkerMetrics = 0D;
-            for (final WorkerMetricStats workerToTakeLease : workerToTakeLeasesFrom) {
+            for (final WorkerMetricStats workerToTakeLease : workersToTakeLeasesFrom) {
                 final double workerMetricsValueForWorker = workerToTakeLease.getMetricStat(workerMetricsName);
                 // Load to take based on the difference compared to the fleet level average
                 final double loadPercentageToTake =

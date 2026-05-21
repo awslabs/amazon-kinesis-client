@@ -12,6 +12,7 @@ import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal
 import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -21,12 +22,15 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class DynamoDBLockBasedLeaderDeciderTest {
 
@@ -37,17 +41,25 @@ class DynamoDBLockBasedLeaderDeciderTest {
     private final DynamoDbClient dynamoDBSyncClient = dynamoDBEmbedded.dynamoDbClient();
     private final Map<String, DynamoDBLockBasedLeaderDecider> workerIdToLeaderDeciderMap = new HashMap<>();
 
+    private FleetSegmentingHandler mockSegmentingHandler;
+
     @BeforeEach
     void setup() throws DependencyException {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
         c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
         final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateTableConfig());
         dao.initialize();
+        mockSegmentingHandler = mock(FleetSegmentingHandler.class);
+        Mockito.when(mockSegmentingHandler.getVersionHash())
+                .thenReturn(String.valueOf(
+                        LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode()));
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(
                     workerId,
-                    DynamoDBLockBasedLeaderDecider.create(dao, workerId, 100L, 10L, new NullMetricsFactory()));
+                    DynamoDBLockBasedLeaderDecider.create(
+                            dao, workerId, 100L, 10L, new NullMetricsFactory(), mockSegmentingHandler));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
@@ -88,7 +100,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 .build();
         final GetItemResponse getItemResult = dynamoDBSyncClient.getItem(getItemRequest);
         // assert that after shutdown the lockItem is no longer present.
-        assertFalse(getItemResult.hasItem());
+        assertTrue(getItemResult.item().containsKey("isReleased")
+                && getItemResult.item().get("isReleased").s().equals("1"));
 
         // After shutdown, assert that leaderDecider returns false.
         assertFalse(decider.isLeader(workerId), "LeaderDecider did not return false after shutdown.");
@@ -125,5 +138,22 @@ class DynamoDBLockBasedLeaderDeciderTest {
                         AttributeValue.builder().s(UUID.randomUUID().toString()).build()))
                 .build();
         dynamoDBSyncClient.putItem(putItemRequest);
+    }
+
+    @Test
+    void isLeader_doesNotReleaseExistingLockWithMatchingVersionHash() {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        // Worker acquires the lock first
+        assertTrue(decider.isLeader(workerId));
+
+        // Another worker with the same version hash should not release the lock
+        final String otherWorkerId = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider otherDecider = workerIdToLeaderDeciderMap.get(otherWorkerId);
+        assertFalse(otherDecider.isLeader(otherWorkerId));
+
+        // Original worker should still be leader
+        assertTrue(decider.isLeader(workerId));
     }
 }

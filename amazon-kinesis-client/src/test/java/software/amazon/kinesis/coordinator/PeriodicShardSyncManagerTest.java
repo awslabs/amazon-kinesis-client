@@ -33,6 +33,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -45,8 +46,10 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
+import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
@@ -82,8 +85,12 @@ public class PeriodicShardSyncManagerTest {
     @Mock
     ScheduledExecutorService mockScheduledExecutor;
 
+    @Mock
+    FleetSegmentingHandler mockSegmentingHandler;
+
     @Before
     public void setup() {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
@@ -96,7 +103,8 @@ public class PeriodicShardSyncManagerTest {
                 new NullMetricsFactory(),
                 2 * 60 * 1000,
                 3,
-                new AtomicBoolean(true));
+                new AtomicBoolean(true),
+                mockSegmentingHandler);
         periodicShardSyncManager.start(leaderDecider);
     }
 
@@ -604,6 +612,54 @@ public class PeriodicShardSyncManagerTest {
                     .hasHoleInLeases(streamIdentifier, leases)
                     .isPresent());
         }
+    }
+
+    @Test
+    public void start_onCurrentVersion_startsShardSync() {
+        PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                currentStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                streamToShardSyncTaskManagerMap,
+                mockScheduledExecutor,
+                true,
+                new NullMetricsFactory(),
+                2 * 60 * 1000,
+                3,
+                new AtomicBoolean(true),
+                mockSegmentingHandler);
+
+        manager.start(leaderDecider);
+
+        Assert.assertTrue(manager.isRunning());
+    }
+
+    @Test
+    public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+
+        periodicShardSyncManager.syncShardsOnce();
+
+        // shardSyncTaskManagerProvider should never be called
+        Mockito.verify(shardSyncTaskManagerProvider, Mockito.never()).apply(any());
+    }
+
+    @Test
+    public void syncShardsOnce_onCurrentVersion_syncsAllStreams() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+
+        StreamConfig mockStreamConfig = mock(StreamConfig.class);
+        when(currentStreamConfigMap.values()).thenReturn(Collections.singletonList(mockStreamConfig));
+
+        ShardSyncTaskManager mockTaskManager = mock(ShardSyncTaskManager.class);
+        when(shardSyncTaskManagerProvider.apply(mockStreamConfig)).thenReturn(mockTaskManager);
+        when(mockTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
+
+        periodicShardSyncManager.syncShardsOnce();
+
+        Mockito.verify(shardSyncTaskManagerProvider).apply(mockStreamConfig);
+        Mockito.verify(mockTaskManager).callShardSyncTask();
     }
 
     private List<Lease> generateInitialLeases(int initialShardCount) {
