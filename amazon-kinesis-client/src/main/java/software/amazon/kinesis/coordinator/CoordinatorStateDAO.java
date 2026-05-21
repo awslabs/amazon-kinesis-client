@@ -169,7 +169,7 @@ public class CoordinatorStateDAO {
         return leaderLock != null && (leaderLockItemSnapshot = leaderLock.getAttributes()) != null;
     }
 
-    public void respondToTableMigrationStatus(@NonNull final String tableMigrationStatus) {
+    public void respondToTableMigrationStatus(String tableMigrationStatus) {
         setUsingLeaseTable(false); // default setting
 
         if (tableMigrationStatus == null) {

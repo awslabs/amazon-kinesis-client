@@ -457,7 +457,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         Long ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
         String tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
 
-        // check if table migration status is different than what's already saved in-memory (could be null)
+        // check if table migration status is different than what's already saved in-memory (default=INIT)
         boolean updated = tms != String.valueOf(tableMigrationStatus);
 
         // save values to instance variables
@@ -466,10 +466,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 tms == null ? TableMigrationMachine.States.INIT : TableMigrationMachine.States.valueOf(tms);
 
         if (updated) {
-            // update the order in which we grab leader lock items from tables, in case migration status changed
             setLockAcquisitionOrder();
 
-            // have coordinator state DAO use lease table and/or track mutations if necessary based on String status
+            // have coordinator state DAO decide to use lease table and/or track mutations based on status
             coordinatorStateDao.respondToTableMigrationStatus(tms);
             // worker metric stats DAO, on the other hand, bases its decision only on state read at startup
         }

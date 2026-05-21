@@ -851,7 +851,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 return StreamInfo.deserialize(item.get(LEASE_KEY_KEY).s(), item);
             }
             case DynamoDBLockBasedLeaderDecider.LEADER_LOCK_ENTITY_TYPE: {
-                // no-op; don't copy, let leader decider grab other lock if it gets one of them
+                // no-op; don't copy to coordinator table, let leader decider grab other lock if it gets one of them
                 return null;
             }
             default: {
