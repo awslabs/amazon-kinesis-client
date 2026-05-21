@@ -15,17 +15,24 @@
 package software.amazon.kinesis.coordinator;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonDynamoDBLockClientOptionsBuilder;
 import com.google.common.collect.ImmutableMap;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
 import software.amazon.awssdk.core.waiters.WaiterResponse;
@@ -64,8 +71,10 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
 import software.amazon.kinesis.coordinator.migration.MigrationState;
+import software.amazon.kinesis.coordinator.migration.TableMigrationMachine;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.DynamoUtils;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -74,6 +83,10 @@ import software.amazon.kinesis.utils.DdbUtil;
 import static java.util.Objects.nonNull;
 import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
+import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
+import static software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider.STEADY_SINCE_ATTRIBUTE_NAME;
+import static software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME;
+import static software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer.LEASE_KEY_KEY;
 
 /**
  * Data Access Object to abstract accessing {@link CoordinatorState} from
@@ -85,9 +98,24 @@ public class CoordinatorStateDAO {
     private final DynamoDbAsyncClient dynamoDbAsyncClient;
     private final DynamoDbClient dynamoDbSyncClient;
 
+    /** the config object stores the DdbTableConfig for the coordinator table, whether we're using it or the lease table */
     private final CoordinatorStateTableConfig config;
 
+    private String tableName;
+    private String partitionKeyName;
+    private LeaseManagementConfig leaseManagementConfig;
+
+    @Getter
+    private Map<String, AttributeValue> leaderLockItemSnapshot;
+
+    @Getter
+    private boolean usingLeaseTable;
+
+    private CoordinatorStateDAO coordinatorTableDAO;
+
+    /** entityType field may not exist for all coordinator states in coordinator table, but should exist in lease table */
     private static final String ENTITY_TYPE = "entityType";
+
     private static final String DDB_ENTITY_TYPE = ":entityType";
 
     public CoordinatorStateDAO(
@@ -95,19 +123,265 @@ public class CoordinatorStateDAO {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.config = config;
         this.dynamoDbSyncClient = createDelegateClient();
+        setUsingLeaseTable(false);
+    }
+
+    // TODO: create constructor that just takes LeaseManagementConfig and builds CoordinatorStateTableConfig on its own?
+    public CoordinatorStateDAO(
+            final DynamoDbAsyncClient dynamoDbAsyncClient,
+            final CoordinatorStateTableConfig config,
+            final LeaseManagementConfig leaseManagementConfig) {
+        this(dynamoDbAsyncClient, config);
+        this.leaseManagementConfig = leaseManagementConfig;
+
+        // if item found, respond to table migration status; else, don't use lease table
+        if (getLeaderLockSnapshotFromLeaseTable()) {
+            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
+        } else {
+            setUsingLeaseTable(false);
+        }
+
+        this.coordinatorTableDAO = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
     }
 
     public void initialize() throws DependencyException {
-        createTableIfNotExists();
+        if (!usingLeaseTable) {
+            // don't create lease table, let existing lease management lifecycle handle; only create coordinator table
+            createTableIfNotExists();
+        }
     }
 
     private DynamoDbClient createDelegateClient() {
         return new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient);
     }
 
+    private void setUsingLeaseTable(boolean using) {
+        usingLeaseTable = using;
+        tableName = using ? leaseManagementConfig.tableName() : config.tableName();
+        partitionKeyName = using ? LEASE_KEY_KEY : COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
+    }
+
+    private boolean getLeaderLockSnapshotFromLeaseTable() {
+        setUsingLeaseTable(true);
+        return getLeaderLockSnapshot();
+    }
+
+    private boolean getLeaderLockSnapshot() {
+        CoordinatorState leaderLock = tryGetCoordinatorState(CoordinatorState.LEADER_HASH_KEY, 3);
+        return leaderLock != null && (leaderLockItemSnapshot = leaderLock.getAttributes()) != null;
+    }
+
+    public void respondToTableMigrationStatus(String tableMigrationStatus) {
+        setUsingLeaseTable(false);
+
+        if (tableMigrationStatus == null) {
+            return;
+        }
+        switch (tableMigrationStatus) {
+            case "DEPLOYED": {
+                if (leaseManagementConfig.tableFormatConfig().format()
+                        != LeaseManagementConfig.TableFormatConfig.Formats.SINGLE_TABLE) {
+                    return;
+                }
+                // should be on second phase deployment based on config -> start table migration now that it's safe
+                updateTableMigrationStatus("PENDING");
+                // fall through because the new state will be PENDING
+            }
+            case "PENDING": {
+                // sync coordinator states to coordinator table and fall through to use lease table
+                MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
+            }
+            case "COMPLETE": {
+                setUsingLeaseTable(true);
+            }
+        }
+    }
+
+    public static String getTableMigrationStatus(Map<String, AttributeValue> attributes) {
+        return attributes == null
+                ? null
+                : DynamoUtils.safeGetString(
+                        attributes.get(TableMigrationMachine.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME));
+    }
+
     public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder() {
-        return AmazonDynamoDBLockClientOptions.builder(dynamoDbSyncClient, config.tableName())
-                .withPartitionKeyName(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME);
+        return getDDBLockClientOptionsBuilder(usingLeaseTable);
+    }
+
+    public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder(boolean usingLeaseTable) {
+        String tableName = config.tableName();
+        String partitionKeyName = COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
+
+        if (usingLeaseTable) {
+            tableName = leaseManagementConfig.tableName();
+            partitionKeyName = LEASE_KEY_KEY;
+        }
+
+        return AmazonDynamoDBLockClientOptions.builder(dynamoDbSyncClient, tableName)
+                .withPartitionKeyName(partitionKeyName);
+    }
+
+    static class MutationTracker {
+        @Getter
+        private static MutationTracker instance;
+
+        @Setter
+        private boolean scanning = true; // wait until first scan completes before first sync
+
+        private final CoordinatorStateDAO coordinatorTableDAO;
+        private final Map<String, Long> lastSeenTimestamps = new HashMap<>();
+        private final Set<String> justScanned = new HashSet<>();
+        private final EnumMap<Mutations, Set<String>> mutations = new EnumMap<>(Mutations.class);
+        private final Map<String, CoordinatorState> states = new HashMap<>();
+
+        /**
+         * The different possible changes to sync from the lease table to the coordinator table.
+         *  CREATE - recorded when the scanned key isn't recognized from before (could be due to leader change)
+         *  UPDATE - recorded when the scanned timestamp is higher than what we have in-memory from before
+         *  DELETE - recorded when a key from before wasn't scanned this time (possible to miss due to leader change)
+         */
+        enum Mutations {
+            CREATE,
+            UPDATE,
+            DELETE
+        }
+
+        MutationTracker(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
+            this.coordinatorTableDAO = new CoordinatorStateDAO(client, config);
+
+            for (Mutations mutation : Mutations.values()) {
+                this.mutations.put(mutation, new HashSet<>());
+            }
+        }
+
+        static MutationTracker createInstanceIfNull(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
+            return (instance = instance != null ? instance : new MutationTracker(client, config));
+        }
+
+        /**
+         * Processes a single passed deserialized CoordinatorState by comparing its modified timestamp against memory.
+         * @param state - the constructed CoordinatorState object
+         */
+        synchronized void process(CoordinatorState state) {
+            // process() and sync() are synchronized; if received new state, must wait for caller to reset flag
+            scanning = true;
+
+            String key = state.getKey();
+            states.put(key, state);
+            justScanned.add(key);
+
+            long modifiedTimestamp = state.getModifiedTimestamp();
+            Long previousTimestamp = lastSeenTimestamps.get(key);
+
+            if (previousTimestamp == null) {
+                // unrecognized key; either due to leader change or due to creation, we don't know yet
+                mutations.get(Mutations.CREATE).add(key);
+            } else if (modifiedTimestamp > previousTimestamp) {
+                // state was modified since last seen -> queue for sync
+                mutations.get(Mutations.UPDATE).add(key);
+            }
+
+            // record/update seen modified timestamp
+            lastSeenTimestamps.put(key, modifiedTimestamp);
+        }
+
+        synchronized void sync() {
+            if (scanning) {
+                // wait or lease table scan to finish; check again on next scheduled attempt
+                return;
+            }
+
+            // detect deletions by comparing all seen keys with the set from the latest lease table scan
+            for (String seen : new HashSet<>(lastSeenTimestamps.keySet())) {
+                if (!justScanned.contains(seen)) {
+                    mutations.get(Mutations.DELETE).add(seen);
+                    lastSeenTimestamps.remove(seen);
+                }
+            }
+
+            // process the queue and perform the corresponding actions
+            for (Mutations mutation : Mutations.values()) {
+                final Iterator<String> iterator = mutations.get(mutation).iterator();
+
+                while (iterator.hasNext()) {
+                    final String key = iterator.next();
+                    try {
+                        boolean success = false;
+                        switch (mutation) { // can't use cleaner "switch expression" with Java 8 target release version
+                            case DELETE: {
+                                success = coordinatorTableDAO.deleteCoordinatorState(key);
+                                break;
+                            }
+                            case CREATE: {
+                                success = coordinatorTableDAO.createCoordinatorStateIfNotExists(states.get(key));
+                                // intentional fallthrough; state might actually exist, and we need to do update instead
+                            }
+                            case UPDATE: {
+                                success = success
+                                        || coordinatorTableDAO.updateCoordinatorStateWithExpectation(
+                                                states.get(key), null);
+                            }
+                        }
+                        if (success) {
+                            iterator.remove(); // use iterator to avoid ConcurrentModificationException or reprocessing
+                            states.remove(key);
+                        }
+                    } catch (Exception e) {
+                        // most exceptions already handled in create, update, and delete methods
+                        log.warn(
+                                "Caught exception while trying to copy coordinator state from lease table into coordinator table: "
+                                        + e);
+                    }
+                }
+            }
+            // reset just scanned keys for next scan to populate again
+            justScanned.clear();
+        }
+    }
+
+    public static void markScanComplete() {
+        MutationTracker mutationTracker = MutationTracker.getInstance();
+        if (mutationTracker != null) {
+            mutationTracker.setScanning(false);
+        }
+    }
+
+    public static void processScannedItem(final @NonNull CoordinatorState state) {
+        MutationTracker mutationTracker = MutationTracker.getInstance();
+        if (mutationTracker != null) {
+            mutationTracker.process(state);
+        }
+    }
+
+    public static void syncCoordinatorStates() {
+        MutationTracker mutationTracker = MutationTracker.getInstance();
+        if (mutationTracker != null) {
+            mutationTracker.sync();
+        }
+    }
+
+    public CoordinatorState tryGetCoordinatorState(String key, int maxAttempts) {
+        for (int waitMillisBeforeRetry = 0, retries = maxAttempts - 1;
+                retries >= 0;
+                retries--, waitMillisBeforeRetry = Math.max(1000, waitMillisBeforeRetry * 2)) {
+            try {
+                if (waitMillisBeforeRetry > 0) {
+                    Thread.sleep(waitMillisBeforeRetry);
+                }
+                return getCoordinatorState(key);
+            } catch (InterruptedException ie) {
+                log.warn("Thread sleep was interrupted while waiting to retry fetching coordinator state: " + ie);
+                retries++; // don't count attempt; add back to retry stock
+            } catch (ResourceNotFoundException rnfe) {
+                // (probably) table does not exist; exception is expected -> do not retry
+                log.warn("Could not find DynamoDB resource while trying to fetch coordinator state: " + rnfe);
+                return null;
+            } catch (Exception e) {
+                log.warn("Exception caught while trying to fetch coordinator state: " + e);
+            }
+        }
+        log.error("Exhausted all retries while trying to read coordinator state from table " + tableName);
+        return null;
     }
 
     /**
@@ -123,8 +397,7 @@ public class CoordinatorStateDAO {
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         log.debug("Listing coordinatorState");
 
-        final ScanRequest request =
-                ScanRequest.builder().tableName(config.tableName()).build();
+        final ScanRequest request = ScanRequest.builder().tableName(tableName).build();
 
         try {
             ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(request));
@@ -149,11 +422,11 @@ public class CoordinatorStateDAO {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
                             + " on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(
-                    String.format("Cannot list coordinatorState, because table %s does not exist", config.tableName()));
+                    String.format("Cannot list coordinatorState, because table %s does not exist", tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
@@ -176,7 +449,7 @@ public class CoordinatorStateDAO {
                 DDB_ENTITY_TYPE, AttributeValue.builder().s(entityType).build());
 
         ScanRequest scanRequest = ScanRequest.builder()
-                .tableName(config.tableName())
+                .tableName(tableName)
                 .filterExpression(ENTITY_TYPE + " = " + DDB_ENTITY_TYPE)
                 .expressionAttributeValues(expressionAttributeValues)
                 .build();
@@ -204,11 +477,11 @@ public class CoordinatorStateDAO {
         } catch (final ProvisionedThroughputExceededException e) {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(
-                    String.format("Cannot list coordinatorState, because table %s does not exist", config.tableName()));
+                    String.format("Cannot list coordinatorState, because table %s does not exist", tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
@@ -228,7 +501,7 @@ public class CoordinatorStateDAO {
         log.debug("Creating coordinatorState {}", state);
 
         final PutItemRequest request = PutItemRequest.builder()
-                .tableName(config.tableName())
+                .tableName(tableName)
                 .item(toDynamoRecord(state))
                 .expected(getDynamoNonExistentExpectation())
                 .build();
@@ -242,11 +515,11 @@ public class CoordinatorStateDAO {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
                             + " on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(String.format(
-                    "Cannot create coordinatorState %s, because table %s does not exist", state, config.tableName()));
+                    "Cannot create coordinatorState %s, because table %s does not exist", state, tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
@@ -269,7 +542,7 @@ public class CoordinatorStateDAO {
         log.debug("Getting coordinatorState with key {}", key);
 
         final GetItemRequest request = GetItemRequest.builder()
-                .tableName(config.tableName())
+                .tableName(tableName)
                 .key(getCoordinatorStateKey(key))
                 .consistentRead(true)
                 .build();
@@ -287,12 +560,11 @@ public class CoordinatorStateDAO {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
                             + " on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(String.format(
-                    "Cannot get coordinatorState for key %s, because table %s does not exist",
-                    key, config.tableName()));
+                    "Cannot get coordinatorState for key %s, because table %s does not exist", key, tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
@@ -311,7 +583,7 @@ public class CoordinatorStateDAO {
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         log.debug("Deleting item with key {}", key);
         final DeleteItemRequest request = DeleteItemRequest.builder()
-                .tableName(config.tableName())
+                .tableName(tableName)
                 .key(getCoordinatorStateKey(key))
                 .build();
         try {
@@ -320,16 +592,116 @@ public class CoordinatorStateDAO {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
                             + " on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(String.format(
-                    "Cannot delete coordinatorState for key %s, because table %s does not exist",
-                    key, config.tableName()));
+                    "Cannot delete coordinatorState for key %s, because table %s does not exist", key, tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
         log.debug("Coordinator state deleted {}", key);
+        return true;
+    }
+
+    public boolean copyCoordinatorStatesToLeaseTable() {
+        // should be using the lease table already at this point
+        setUsingLeaseTable(true);
+
+        List<CoordinatorState> states;
+        try {
+            states = coordinatorTableDAO.listCoordinatorState();
+        } catch (Exception e) {
+            // try again later to get full scan
+            log.warn("Caught exception while trying to copy coordinator states to lease table", e);
+            return false;
+        }
+
+        for (CoordinatorState state : states) {
+            // go through deserialize/serialize to make sure map/object is formatted for the lease table
+            CoordinatorState itemForLeaseTable = fromDynamoRecord(toDynamoRecord(state));
+
+            try {
+                // if the item exists already, we assume it's up-to-date
+                createCoordinatorStateIfNotExists(itemForLeaseTable);
+            } catch (Exception e) {
+                // if any update fails, try again on next scheduled attempt
+                log.warn("Caught exception while trying to copy coordinator states to lease table", e);
+                return false;
+            }
+        }
+        log.info("Copied all coordinator states from coordinator table to lease table successfully");
+        return true;
+    }
+
+    /**
+     * Writes the additional attributes values for the leader lock item into the item in the coordinator table
+     * @param updates - the attributes that need to be updated and their values
+     */
+    public void syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
+    }
+
+    /**
+     * Updates the additional attributes in the leader lock item in the instance's tableName with the new values
+     * @param updates - the attributes that need to be updated and their values
+     * @return whether the update succeeded
+     */
+    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final UpdateItemRequest request = UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(getCoordinatorStateKey(LEADER_HASH_KEY))
+                .attributeUpdates(updates)
+                .build();
+        try {
+            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
+        } catch (final ProvisionedThroughputExceededException e) {
+            log.warn(
+                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
+                            + " on the table.",
+                    tableName);
+            throw new ProvisionedThroughputException(e);
+        } catch (final ResourceNotFoundException e) {
+            throw new InvalidStateException(String.format(
+                    "Cannot update leader lock additional attributes because table %s does not exist.", tableName));
+        } catch (final DynamoDbException e) {
+            throw new DependencyException(e);
+        }
+        log.info("Leader lock additional attributes updated: {}", updates);
+        return true;
+    }
+
+    public boolean updateTableMigrationStatus(String tableMigrationStatus) {
+        Map<String, AttributeValueUpdate> updates = new HashMap<>();
+
+        // table migration status update; leader decider will pick up the new value
+        updates.put(
+                TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
+                AttributeValueUpdate.builder()
+                        .value(AttributeValue.builder().s(tableMigrationStatus).build())
+                        .action(AttributeAction.PUT)
+                        .build());
+
+        // since table migration status changed, reset steady since epoch; leader decider will pick up the new value
+        updates.put(
+                STEADY_SINCE_ATTRIBUTE_NAME,
+                AttributeValueUpdate.builder()
+                        .value(AttributeValue.builder()
+                                .n(String.valueOf(Instant.now().getEpochSecond()))
+                                .build())
+                        .action(AttributeAction.PUT)
+                        .build());
+
+        try {
+            updateLeaderLockAdditionalAttributes(updates);
+        } catch (Exception e) {
+            // no need to retry; if the fields aren't updated, other workers will come online and try also
+            log.warn("Caught exception while trying to update the table migration status in DynamoDB", e);
+            return false;
+        }
+        log.info("Updated table migration status in the leader lock item");
         return true;
     }
 
@@ -351,7 +723,7 @@ public class CoordinatorStateDAO {
         final Map<String, AttributeValueUpdate> updateMap = getDynamoCoordinatorStateUpdate(state);
 
         final UpdateItemRequest request = UpdateItemRequest.builder()
-                .tableName(config.tableName())
+                .tableName(tableName)
                 .key(getCoordinatorStateKey(state.getKey()))
                 .expected(expectationMap)
                 .attributeUpdates(updateMap)
@@ -366,20 +738,25 @@ public class CoordinatorStateDAO {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
                             + " on the table.",
-                    config.tableName());
+                    tableName);
             throw new ProvisionedThroughputException(e);
         } catch (final ResourceNotFoundException e) {
             throw new InvalidStateException(String.format(
                     "Cannot update coordinatorState for key %s, because table %s does not exist",
-                    state.getKey(), config.tableName()));
+                    state.getKey(), tableName));
         } catch (final DynamoDbException e) {
             throw new DependencyException(e);
         }
 
         log.info("Coordinator state updated {}", state);
+
         return true;
     }
 
+    /**
+     * Creates the coordinator table (config.tableName()) if it does not exist; called when not using lease table
+     * @throws DependencyException
+     */
     private void createTableIfNotExists() throws DependencyException {
         TableDescription tableDescription = getTableDescription();
         if (tableDescription == null) {
@@ -441,14 +818,12 @@ public class CoordinatorStateDAO {
     }
 
     private Map<String, AttributeValue> getCoordinatorStateKey(@NonNull final String key) {
-        return Collections.singletonMap(
-                COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(key));
+        return Collections.singletonMap(partitionKeyName, DynamoUtils.createAttributeValue(key));
     }
 
     private CoordinatorState fromDynamoRecord(final Map<String, AttributeValue> dynamoRecord) {
         final HashMap<String, AttributeValue> attributes = new HashMap<>(dynamoRecord);
-        final String keyValue =
-                DynamoUtils.safeGetString(attributes.remove(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME));
+        final String keyValue = DynamoUtils.safeGetString(attributes.remove(partitionKeyName));
 
         final MigrationState migrationState = MigrationState.deserialize(keyValue, attributes);
         if (migrationState != null) {
@@ -465,13 +840,19 @@ public class CoordinatorStateDAO {
 
     private Map<String, AttributeValue> toDynamoRecord(final CoordinatorState state) {
         final Map<String, AttributeValue> result = new HashMap<>();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(state.getKey()));
+
+        // add partition key (different depending on which table we're writing to)
+        result.putAll(getCoordinatorStateKey(state.getKey()));
+
+        // use different serializer depending on which subclass of CoordinatorState this is
         if (state instanceof MigrationState) {
             result.putAll(((MigrationState) state).serialize());
         }
         if (state instanceof StreamInfo) {
             result.putAll(((StreamInfo) state).serialize());
         }
+
+        // add all other attributes besides entityType and partition key to the map and return it
         if (!CollectionUtils.isNullOrEmpty(state.getAttributes())) {
             result.putAll(state.getAttributes());
         }

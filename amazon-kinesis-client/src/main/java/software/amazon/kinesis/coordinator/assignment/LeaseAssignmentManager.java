@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -47,9 +48,12 @@ import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.migration.TableMigrationMachine;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
+import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -126,6 +130,7 @@ public final class LeaseAssignmentManager {
     private final StreamIdCacheManager streamIdCacheManager;
 
     private Future<?> managerFuture;
+    private TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
 
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
@@ -473,6 +478,56 @@ public final class LeaseAssignmentManager {
     private void prepareAfterLeaderSwitch() {
         prevRunLeasesState.clear();
         noOfContinuousFailedAttempts = 0;
+
+        // this is the leaderDecider impl used in v3; should always return true (for now) after v3 migration
+        if (leaderDecider instanceof DynamoDBLockBasedLeaderDecider) {
+            initScheduledUpdateQueue((DynamoDBLockBasedLeaderDecider) leaderDecider);
+        }
+    }
+
+    /**
+     * Run on leader change -> populates leader decider's priority queue where update tasks can run on target schedule/frequency.
+     */
+    private void initScheduledUpdateQueue(DynamoDBLockBasedLeaderDecider lockClientLeaderDecider) {
+        // schedule table migration machine state update with same frequency as lease assignment interval
+        lockClientLeaderDecider.createScheduledUpdate(
+                leaseAssignmentIntervalMillis, () -> tableMigrationMachine.update(lockClientLeaderDecider));
+        // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
+        lockClientLeaderDecider.createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
+        // scheduled update to sync additional attributes from leader lock item if changed with frequent interval (10s)
+        lockClientLeaderDecider.syncAdditionalAttributes(10000L);
+    }
+
+    /**
+     * Computes the minimum support code across the fleet, given the list of worker metric stats.
+     * @param workerMetricStats - the list of active worker metric stats from the load
+     */
+    private void computeMinSupport(List<WorkerMetricStats> workerMetricStats) {
+        int minSupport = Integer.MAX_VALUE;
+
+        final long expiryThreshold = config.workerMetricsReporterFreqInMillis() * 3;
+        final long currentEpoch = Instant.now().getEpochSecond();
+
+        for (WorkerMetricStats stat : workerMetricStats) {
+            Integer supportCode = stat.getSupportCode();
+            Long supportLut = stat.getSupportLastUpdateTime();
+
+            if (supportCode == null || supportLut == null) {
+                // support code or support lut missing entirely; worker must be on older version
+                minSupport = 0;
+                break;
+            } else if ((supportLut + expiryThreshold) > currentEpoch) {
+                // support code is non-expired; if less than accumulated min support, update it
+                minSupport = Math.min(minSupport, supportCode);
+            } else if (!isWorkerMetricsEntryStale(stat)) {
+                // worker has been reporting and yet support code is expired; that means it's persisted after rollback
+                minSupport = 0;
+                break;
+            }
+        }
+        if (minSupport != Integer.MAX_VALUE) {
+            tableMigrationMachine.setMinSupportCode(minSupport);
+        }
     }
 
     // Resolves and caches the stream ID for a given lease during lease acquisition.
@@ -565,10 +620,24 @@ public final class LeaseAssignmentManager {
             final List<WorkerMetricStats> workerMetricsFromStorage =
                     loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats);
 
-            final List<String> listOfWorkerIdOfInvalidWorkerMetricsEntry = workerMetricsFromStorage.stream()
-                    .filter(workerMetrics -> !workerMetrics.isValidWorkerMetric())
+            tableMigrationMachine.setWorkerStatsTableFoundEmpty(workerMetricsFromStorage.isEmpty());
+
+            // wait until lease table scan finishes before processing worker metrics
+            leaseListFuture.join();
+
+            // mark scan complete so coordinator states can be synced between tables if table migration pending
+            CoordinatorStateDAO.markScanComplete();
+
+            // merge worker stats from worker stats table and from lease table into single stream
+            // then partition worker stats by isValidWorkerMetric method
+            final Map<Boolean, List<WorkerMetricStats>> partitioned = Stream.concat(
+                            workerMetricsFromStorage.stream(), leaseRefresher.getWorkerMetrics().stream())
+                    .collect(Collectors.partitioningBy(WorkerMetricStats::isValidWorkerMetric));
+
+            final List<String> listOfWorkerIdOfInvalidWorkerMetricsEntry = partitioned.get(false).stream()
                     .map(WorkerMetricStats::getWorkerId)
                     .collect(Collectors.toList());
+
             if (!listOfWorkerIdOfInvalidWorkerMetricsEntry.isEmpty()) {
                 log.warn("List of workerIds with invalid entries : {}", listOfWorkerIdOfInvalidWorkerMetricsEntry);
                 metricsScope.addData(
@@ -579,9 +648,10 @@ public final class LeaseAssignmentManager {
             }
 
             // Valid entries are considered further, for validity of entry refer WorkerMetricStats#isValidWorkerMetrics
-            this.workerMetricsList = workerMetricsFromStorage.stream()
-                    .filter(WorkerMetricStats::isValidWorkerMetric)
-                    .collect(Collectors.toList());
+            this.workerMetricsList = partitioned.get(true);
+
+            // recompute minimum support code across fleet
+            computeMinSupport(workerMetricsList);
 
             log.info("Total WorkerMetricStats available : {}", workerMetricsList.size());
             final long workerExpiryThreshold = computeWorkerExpiryThresholdInSecond();

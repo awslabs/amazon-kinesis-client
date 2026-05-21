@@ -24,6 +24,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
  * Supports basic CRUD operations for Leases.
@@ -354,4 +355,6 @@ public interface LeaseRefresher {
     default String getLeaseTableIdentifier() throws DependencyException {
         return "";
     }
+
+    List<WorkerMetricStats> getWorkerMetrics();
 }

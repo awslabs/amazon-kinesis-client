@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.waiters.WaiterResponse;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbAsyncTable;
@@ -43,6 +44,7 @@ import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.utils.DdbUtil;
@@ -56,11 +58,22 @@ import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.KEY_W
 @KinesisClientInternalApi
 public class WorkerMetricStatsDAO {
     private final DynamoDbEnhancedAsyncClient dynamoDbEnhancedAsyncClient;
-    private final DynamoDbAsyncTable<WorkerMetricStats> table;
     private final DynamoDbAsyncClient dynamoDbAsyncClient;
     private final WorkerMetricsTableConfig tableConfig;
     private final Long workerMetricsReporterFrequencyMillis;
 
+    /** constructed using leaseManagementConfig as backup for leader to scan worker stats table with */
+    private WorkerMetricStatsDAO workerStatsTableDAO;
+
+    @Getter
+    private final boolean usingLeaseTable;
+
+    private final DynamoDbAsyncTable<WorkerMetricStats> table;
+
+    @Getter
+    private static TableSchema<WorkerMetricStats> schema;
+
+    @Deprecated // preferred to pass in LeaseManagementConfig, which has all three params plus lease table name
     public WorkerMetricStatsDAO(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final WorkerMetricsTableConfig tableConfig,
@@ -69,10 +82,52 @@ public class WorkerMetricStatsDAO {
         this.dynamoDbEnhancedAsyncClient = DynamoDbEnhancedAsyncClient.builder()
                 .dynamoDbClient(dynamoDbAsyncClient)
                 .build();
-        this.table = dynamoDbEnhancedAsyncClient.table(
-                tableConfig.tableName(), TableSchema.fromBean(WorkerMetricStats.class));
+        this.table =
+                dynamoDbEnhancedAsyncClient.table(tableConfig.tableName(), decideSchema(this.usingLeaseTable = false));
         this.tableConfig = tableConfig;
         this.workerMetricsReporterFrequencyMillis = workerMetricsReporterFrequencyMillis;
+    }
+
+    public WorkerMetricStatsDAO(final LeaseManagementConfig leaseManagementConfig) {
+        this(leaseManagementConfig, false);
+    }
+
+    public WorkerMetricStatsDAO(final LeaseManagementConfig leaseManagementConfig, boolean usingLeaseTable) {
+        this.dynamoDbAsyncClient = leaseManagementConfig.dynamoDBClient();
+        this.dynamoDbEnhancedAsyncClient = DynamoDbEnhancedAsyncClient.builder()
+                .dynamoDbClient(dynamoDbAsyncClient)
+                .build();
+        this.tableConfig =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig();
+        this.table = dynamoDbEnhancedAsyncClient.table(
+                usingLeaseTable ? leaseManagementConfig.tableName() : tableConfig.tableName(),
+                decideSchema(this.usingLeaseTable = usingLeaseTable));
+        this.workerMetricsReporterFrequencyMillis =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis();
+
+        if (usingLeaseTable) {
+            this.workerStatsTableDAO = new WorkerMetricStatsDAO(leaseManagementConfig, false);
+        }
+    }
+
+    /**
+     * Returns the correct table schema based on whether we're using the lease table or worker stats table.
+     *
+     * <p>This is safe, but the compiler doesn't know it, hence we suppress warnings for unchecked casts.
+     * TableSchema needs a concrete type like T or ?, not ? extends WorkerMetricStats.
+     * We know both these subclasses extend WorkerMetricStats, i.e. they *are* WorkerMetricStats by polymorphism.</p>
+     * @param usingLeaseTable - the computed decision whether to write worker stats into the lease table
+     * @return the TableSchema we should use
+     */
+    @SuppressWarnings("unchecked")
+    private TableSchema<WorkerMetricStats> decideSchema(boolean usingLeaseTable) {
+        TableSchema<WorkerMetricStats> s = (TableSchema<WorkerMetricStats>)
+                (usingLeaseTable
+                        ? TableSchema.fromBean(WorkerMetricStats.WorkerMetricStatsForLeaseTable.class)
+                        : TableSchema.fromBean(WorkerMetricStats.WorkerMetricStatsForWorkerTable.class));
+
+        // static schema field is used by DynamoDBLeaseRefresher during lease table scan, never for worker table scan
+        return usingLeaseTable ? schema = s : s;
     }
 
     /**
@@ -90,14 +145,23 @@ public class WorkerMetricStatsDAO {
      * @param workerMetrics : Updated WorkerMetricStats object, resourceStats, workerId and lastUpdateTime are
      *                      required fields from {@param workerMetrics}
      */
+    @SuppressWarnings("unchecked")
     public void updateMetrics(final WorkerMetricStats workerMetrics) {
         validateWorkerMetrics(workerMetrics);
-        final UpdateItemEnhancedRequest<WorkerMetricStats> request = UpdateItemEnhancedRequest.builder(
-                        WorkerMetricStats.class)
-                .item(workerMetrics)
-                .ignoreNulls(true)
-                .build();
-        unwrappingFuture(() -> table.updateItem(request));
+
+        UpdateItemEnhancedRequest<? extends WorkerMetricStats> request;
+        if (usingLeaseTable) {
+            request = UpdateItemEnhancedRequest.builder(WorkerMetricStats.WorkerMetricStatsForLeaseTable.class)
+                    .item((WorkerMetricStats.WorkerMetricStatsForLeaseTable) workerMetrics)
+                    .ignoreNulls(true)
+                    .build();
+        } else {
+            request = UpdateItemEnhancedRequest.builder(WorkerMetricStats.WorkerMetricStatsForWorkerTable.class)
+                    .item((WorkerMetricStats.WorkerMetricStatsForWorkerTable) workerMetrics)
+                    .ignoreNulls(true)
+                    .build();
+        }
+        unwrappingFuture(() -> ((DynamoDbAsyncTable) table).updateItem(request));
     }
 
     /**
@@ -159,6 +223,11 @@ public class WorkerMetricStatsDAO {
      * @return : List of all worker metric stats
      */
     public List<WorkerMetricStats> getAllWorkerMetricStats() {
+        if (usingLeaseTable) {
+            // defer to pre-constructed instance that does not use lease table
+            return workerStatsTableDAO.getAllWorkerMetricStats();
+        }
+
         log.debug("Scanning DDB table {}", table.tableName());
         final List<WorkerMetricStats> workerMetricStats = new ArrayList<>();
         unwrappingFuture(() -> table.scan().items().subscribe(workerMetricStats::add));

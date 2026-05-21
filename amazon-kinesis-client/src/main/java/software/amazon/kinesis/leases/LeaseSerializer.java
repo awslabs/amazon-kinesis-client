@@ -155,4 +155,6 @@ public interface LeaseSerializer {
      * @return the attribute value map that includes lease throughput
      */
     Map<String, AttributeValueUpdate> getDynamoLeaseThroughputKbpsUpdate(Lease lease);
+
+    String getEntityType(Map<String, AttributeValue> item);
 }
