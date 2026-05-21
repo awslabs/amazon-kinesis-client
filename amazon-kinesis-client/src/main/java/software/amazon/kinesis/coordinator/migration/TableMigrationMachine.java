@@ -79,12 +79,13 @@ public class TableMigrationMachine {
     }
 
     private boolean copyFromLeaderDecider(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        boolean updated = tableMigrationStatus != leaderDecider.tableMigrationStatus;
-        if (updated) {
-            steadySinceEpoch = leaderDecider.steadySinceEpoch;
+        steadySinceEpoch = leaderDecider.steadySinceEpoch;
+
+        if (tableMigrationStatus != leaderDecider.tableMigrationStatus) {
             tableMigrationStatus = leaderDecider.tableMigrationStatus;
+            return true;
         }
-        return updated;
+        return false;
     }
 
     public void update(DynamoDBLockBasedLeaderDecider leaderDecider) {

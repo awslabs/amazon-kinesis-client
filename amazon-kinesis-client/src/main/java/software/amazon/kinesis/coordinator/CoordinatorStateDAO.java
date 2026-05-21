@@ -133,15 +133,13 @@ public class CoordinatorStateDAO {
             final LeaseManagementConfig leaseManagementConfig) {
         this(dynamoDbAsyncClient, config);
         this.leaseManagementConfig = leaseManagementConfig;
-
-        // if item found, respond to table migration status; else, don't use lease table
-        if (getLeaderLockSnapshotFromLeaseTable()) {
-            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
-        } else {
-            setUsingLeaseTable(false);
-        }
-
         this.coordinatorTableDAO = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
+
+        // try to find leader lock item in lease table; if not exists, fallback to coordinator table
+        if (getLeaderLockSnapshot(true) || getLeaderLockSnapshot(false)) {
+            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
+        }
+        // else, continue to not use lease table
     }
 
     public void initialize() throws DependencyException {
@@ -161,8 +159,8 @@ public class CoordinatorStateDAO {
         partitionKeyName = using ? LEASE_KEY_KEY : COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
     }
 
-    private boolean getLeaderLockSnapshotFromLeaseTable() {
-        setUsingLeaseTable(true);
+    private boolean getLeaderLockSnapshot(boolean usingLeaseTable) {
+        setUsingLeaseTable(usingLeaseTable);
         return getLeaderLockSnapshot();
     }
 
@@ -171,8 +169,8 @@ public class CoordinatorStateDAO {
         return leaderLock != null && (leaderLockItemSnapshot = leaderLock.getAttributes()) != null;
     }
 
-    public void respondToTableMigrationStatus(String tableMigrationStatus) {
-        setUsingLeaseTable(false);
+    public void respondToTableMigrationStatus(@NonNull final String tableMigrationStatus) {
+        setUsingLeaseTable(false); // default setting
 
         if (tableMigrationStatus == null) {
             return;
@@ -183,6 +181,7 @@ public class CoordinatorStateDAO {
                         != LeaseManagementConfig.TableFormatConfig.Formats.SINGLE_TABLE) {
                     return;
                 }
+                // TODO: do we need to check client version config as well here?
                 // should be on second phase deployment based on config -> start table migration now that it's safe
                 updateTableMigrationStatus("PENDING");
                 // fall through because the new state will be PENDING
@@ -263,7 +262,7 @@ public class CoordinatorStateDAO {
          * @param state - the constructed CoordinatorState object
          */
         synchronized void process(CoordinatorState state) {
-            // process() and sync() are synchronized; if received new state, must wait for caller to reset flag
+            // if received new state through process(), sync() must wait for caller to reset flag
             scanning = true;
 
             String key = state.getKey();
@@ -287,7 +286,7 @@ public class CoordinatorStateDAO {
 
         synchronized void sync() {
             if (scanning) {
-                // wait or lease table scan to finish; check again on next scheduled attempt
+                log.info("Need to wait for lease table scan to finish before syncing to coordinator table.");
                 return;
             }
 
@@ -608,27 +607,16 @@ public class CoordinatorStateDAO {
         // should be using the lease table already at this point
         setUsingLeaseTable(true);
 
-        List<CoordinatorState> states;
         try {
-            states = coordinatorTableDAO.listCoordinatorState();
+            for (CoordinatorState state : coordinatorTableDAO.listCoordinatorState()) {
+                // go through deserialize/serialize to make sure map/object is formatted for the lease table
+                // if the item exists already, we assume it's up-to-date
+                createCoordinatorStateIfNotExists(fromDynamoRecord(toDynamoRecord(state)));
+            }
         } catch (Exception e) {
-            // try again later to get full scan
+            // try again later to get full scan or to complete all updates
             log.warn("Caught exception while trying to copy coordinator states to lease table", e);
             return false;
-        }
-
-        for (CoordinatorState state : states) {
-            // go through deserialize/serialize to make sure map/object is formatted for the lease table
-            CoordinatorState itemForLeaseTable = fromDynamoRecord(toDynamoRecord(state));
-
-            try {
-                // if the item exists already, we assume it's up-to-date
-                createCoordinatorStateIfNotExists(itemForLeaseTable);
-            } catch (Exception e) {
-                // if any update fails, try again on next scheduled attempt
-                log.warn("Caught exception while trying to copy coordinator states to lease table", e);
-                return false;
-            }
         }
         log.info("Copied all coordinator states from coordinator table to lease table successfully");
         return true;
