@@ -4,3 +4,4 @@ AwsCredentials.properties
 *.iml
 *.swp
 .DS_Store
+sample-app/

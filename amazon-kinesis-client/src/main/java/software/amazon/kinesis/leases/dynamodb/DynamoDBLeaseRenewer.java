@@ -170,7 +170,6 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             }
             success = true;
         } finally {
-            MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
             MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
         }
