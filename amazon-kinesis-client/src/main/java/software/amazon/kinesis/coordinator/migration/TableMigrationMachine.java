@@ -78,20 +78,22 @@ public class TableMigrationMachine {
         leaderDecider.steadySinceEpoch = steadySinceEpoch = Instant.now().getEpochSecond();
     }
 
-    private void copyFromLeaderDecider(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        steadySinceEpoch = leaderDecider.steadySinceEpoch;
-        tableMigrationStatus = leaderDecider.tableMigrationStatus;
+    private boolean copyFromLeaderDecider(DynamoDBLockBasedLeaderDecider leaderDecider) {
+        boolean updated = tableMigrationStatus != leaderDecider.tableMigrationStatus;
+        if (updated) {
+            steadySinceEpoch = leaderDecider.steadySinceEpoch;
+            tableMigrationStatus = leaderDecider.tableMigrationStatus;
+        }
+        return updated;
     }
 
     public void update(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        copyFromLeaderDecider(leaderDecider);
-
+        boolean updated = copyFromLeaderDecider(leaderDecider);
         long epochSecond = Instant.now().getEpochSecond();
 
         switch (tableMigrationStatus) {
             default:
             case INIT: {
-                // TODO: add logic for non-leaders to jump to PENDING based on migration state and client version config
                 if (minSupportCode >= TABLE_MIGRATION_FEATURE_INDEX
                         && steadySinceEpoch + INIT_TO_DEPLOYED_BAKE_TIME <= epochSecond) {
                     // all workers support feature and bake time complete -> move to PENDING
@@ -106,6 +108,11 @@ public class TableMigrationMachine {
                 break;
             }
             case PENDING: {
+                if (updated) {
+                    // update was not made by leader -> second-phase deployment must have started
+                    // copy coordinator states from coordinator table to lease table; try every 10s until success
+                    leaderDecider.copyCoordinatorStatesToLeaseTable(10000L);
+                }
                 if (workerStatsTableFoundEmpty && (steadySinceEpoch + PENDING_TO_COMPLETE_BAKE_TIME <= epochSecond)) {
                     // worker stats table was empty and bake time complete -> move to COMPLETE
                     log.info("Worker stats table found empty, setting table migration status to complete");

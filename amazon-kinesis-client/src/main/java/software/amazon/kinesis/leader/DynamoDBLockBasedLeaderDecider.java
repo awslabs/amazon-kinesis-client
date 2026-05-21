@@ -150,7 +150,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             default: {
                 log.warn("Unrecognized table migration status name: " + status + ". Using default lock order.");
             }
-            case "DEPLOYING": {
+            case "INIT":
+            case "DEPLOYED": {
                 return new boolean[] {false};
             }
             case "PENDING": {
@@ -342,6 +343,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     /**
+     * Creates scheduled update to copy the coordinator states in the coordinator table to the lease table.
+     * If the method succeeds, the scheduled update will cancel itself. Otherwise, it will try again.
+     * @param interval - the interval at which to attempt the update, until successful
+     */
+    public void copyCoordinatorStatesToLeaseTable(long interval) {
+        new ScheduledUpdate(interval, () -> !coordinatorStateDao.copyCoordinatorStatesToLeaseTable());
+    }
+
+    /**
      * Creates scheduled update to sync the additional attributes in the leader lock item to the coordinator table.
      * @param interval - the interval at which to schedule the update
      */
@@ -394,7 +404,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         ScheduledUpdate(long interval, Runnable update) {
             this(interval, () -> {
                 update.run();
-                return true; // update should never cancel itself if created from this constructor
+                return false; // update should never cancel itself if created from this constructor
             });
         }
 
@@ -447,24 +457,28 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         Long ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
         String tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
 
+        // check if table migration status is different than what's already saved in-memory (could be null)
+        boolean updated = tms != String.valueOf(tableMigrationStatus);
+
         // save values to instance variables
         steadySinceEpoch = ss == null ? Instant.now().getEpochSecond() : ss;
         tableMigrationStatus =
                 tms == null ? TableMigrationMachine.States.INIT : TableMigrationMachine.States.valueOf(tms);
 
-        // update the order in which we grab leader lock items from tables, in case migration status changed
-        setLockAcquisitionOrder();
+        if (updated) {
+            // update the order in which we grab leader lock items from tables, in case migration status changed
+            setLockAcquisitionOrder();
 
-        // TODO: if table migration status changed (based on snapshot), have DAOs respond to new status
+            // have coordinator state DAO use lease table and/or track mutations if necessary based on String status
+            coordinatorStateDao.respondToTableMigrationStatus(tms);
+            // worker metric stats DAO, on the other hand, bases its decision only on state read at startup
+        }
     }
 
     /**
      * Adds all additional key-value pairs to the attributes map, besides the standard lock item fields
      * @return the map of attributes for DynamoDB
      */
-
-    // TODO: will cause merge conflict with Vincent's PR where he adds versionHashLut to additionalAttributes
-    // TODO: fix by calling fleetSegmentingHandler.getVersionHashLutForLeaderLockTable() here instead of above
     private Map<String, AttributeValue> leaderLockAdditionalAttributes() {
         Map<String, AttributeValue> attributes = new HashMap<>();
 

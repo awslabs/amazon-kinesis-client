@@ -612,6 +612,9 @@ public final class LeaseAssignmentManager {
             // wait until lease table scan finishes before processing worker metrics
             leaseListFuture.join();
 
+            // mark scan complete so coordinator states can be synced between tables if table migration pending
+            CoordinatorStateDAO.markScanComplete();
+
             // merge worker stats from worker stats table and from lease table into single stream
             // then partition worker stats by isValidWorkerMetric method
             final Map<Boolean, List<WorkerMetricStats>> partitioned = Stream.concat(

@@ -32,6 +32,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonD
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
 import software.amazon.awssdk.core.waiters.WaiterResponse;
@@ -101,6 +102,7 @@ public class CoordinatorStateDAO {
     private final CoordinatorStateTableConfig config;
 
     private String tableName;
+    private String partitionKeyName;
     private LeaseManagementConfig leaseManagementConfig;
 
     @Getter
@@ -156,6 +158,7 @@ public class CoordinatorStateDAO {
     private void setUsingLeaseTable(boolean using) {
         usingLeaseTable = using;
         tableName = using ? leaseManagementConfig.tableName() : config.tableName();
+        partitionKeyName = using ? LEASE_KEY_KEY : COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
     }
 
     private boolean getLeaderLockSnapshotFromLeaseTable() {
@@ -168,15 +171,14 @@ public class CoordinatorStateDAO {
         return leaderLock != null && (leaderLockItemSnapshot = leaderLock.getAttributes()) != null;
     }
 
-    private void respondToTableMigrationStatus(String tableMigrationStatus) {
+    public void respondToTableMigrationStatus(String tableMigrationStatus) {
+        setUsingLeaseTable(false);
+
         if (tableMigrationStatus == null) {
-            setUsingLeaseTable(false);
             return;
         }
-
         switch (tableMigrationStatus) {
             case "DEPLOYED": {
-                setUsingLeaseTable(false);
                 if (leaseManagementConfig.tableFormatConfig().format()
                         != LeaseManagementConfig.TableFormatConfig.Formats.SINGLE_TABLE) {
                     return;
@@ -186,15 +188,13 @@ public class CoordinatorStateDAO {
                 // fall through because the new state will be PENDING
             }
             case "PENDING": {
-                // sync coordinator states to coordinator table and fallthrough to use lease table
+                // sync coordinator states to coordinator table and fall through to use lease table
                 MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
             }
             case "COMPLETE": {
                 setUsingLeaseTable(true);
-                return;
             }
         }
-        setUsingLeaseTable(false);
     }
 
     public static String getTableMigrationStatus(Map<String, AttributeValue> attributes) {
@@ -224,6 +224,9 @@ public class CoordinatorStateDAO {
     static class MutationTracker {
         @Getter
         private static MutationTracker instance;
+
+        @Setter
+        private boolean scanning = true; // wait until first scan completes before first sync
 
         private final CoordinatorStateDAO coordinatorTableDAO;
         private final Map<String, Long> lastSeenTimestamps = new HashMap<>();
@@ -260,6 +263,9 @@ public class CoordinatorStateDAO {
          * @param state - the constructed CoordinatorState object
          */
         synchronized void process(CoordinatorState state) {
+            // process() and sync() are synchronized; if received new state, must wait for caller to reset flag
+            scanning = true;
+
             String key = state.getKey();
             states.put(key, state);
             justScanned.add(key);
@@ -280,6 +286,11 @@ public class CoordinatorStateDAO {
         }
 
         synchronized void sync() {
+            if (scanning) {
+                // wait or lease table scan to finish; check again on next scheduled attempt
+                return;
+            }
+
             // detect deletions by comparing all seen keys with the set from the latest lease table scan
             for (String seen : new HashSet<>(lastSeenTimestamps.keySet())) {
                 if (!justScanned.contains(seen)) {
@@ -325,6 +336,13 @@ public class CoordinatorStateDAO {
             }
             // reset just scanned keys for next scan to populate again
             justScanned.clear();
+        }
+    }
+
+    public static void markScanComplete() {
+        MutationTracker mutationTracker = MutationTracker.getInstance();
+        if (mutationTracker != null) {
+            mutationTracker.setScanning(false);
         }
     }
 
@@ -587,6 +605,9 @@ public class CoordinatorStateDAO {
     }
 
     public boolean copyCoordinatorStatesToLeaseTable() {
+        // should be using the lease table already at this point
+        setUsingLeaseTable(true);
+
         List<CoordinatorState> states;
         try {
             states = coordinatorTableDAO.listCoordinatorState();
@@ -596,29 +617,19 @@ public class CoordinatorStateDAO {
             return false;
         }
 
-        if (!usingLeaseTable) {
-            // should already be using lease table, but must use it to write items next
-            setUsingLeaseTable(true);
-        }
-
         for (CoordinatorState state : states) {
-            Map<String, AttributeValue> item = toDynamoRecord(state);
-
-            // CoordinatorState subclasses going forward *should* have entityType in DDB; MigrationState needs it added
-            String entityType = (state instanceof MigrationState) ? MigrationState.ENTITY_TYPE : state.getEntityType();
-
-            // add entityType so LAM can filter during lease table scan
-            item.putIfAbsent(ENTITY_TYPE, AttributeValue.builder().s(entityType).build());
+            // go through deserialize/serialize to make sure map/object is formatted for the lease table
+            CoordinatorState itemForLeaseTable = fromDynamoRecord(toDynamoRecord(state));
 
             try {
                 // if the item exists already, we assume it's up-to-date
-                createCoordinatorStateIfNotExists(state);
+                createCoordinatorStateIfNotExists(itemForLeaseTable);
             } catch (Exception e) {
+                // if any update fails, try again on next scheduled attempt
                 log.warn("Caught exception while trying to copy coordinator states to lease table", e);
                 return false;
             }
         }
-
         log.info("Copied all coordinator states from coordinator table to lease table successfully");
         return true;
     }
@@ -665,7 +676,7 @@ public class CoordinatorStateDAO {
     public boolean updateTableMigrationStatus(String tableMigrationStatus) {
         Map<String, AttributeValueUpdate> updates = new HashMap<>();
 
-        // table migration status update
+        // table migration status update; leader decider will pick up the new value
         updates.put(
                 TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
                 AttributeValueUpdate.builder()
@@ -673,7 +684,7 @@ public class CoordinatorStateDAO {
                         .action(AttributeAction.PUT)
                         .build());
 
-        // since table migration status changed, also reset steady since epoch
+        // since table migration status changed, reset steady since epoch; leader decider will pick up the new value
         updates.put(
                 STEADY_SINCE_ATTRIBUTE_NAME,
                 AttributeValueUpdate.builder()
@@ -690,7 +701,6 @@ public class CoordinatorStateDAO {
             log.warn("Caught exception while trying to update the table migration status in DynamoDB", e);
             return false;
         }
-
         log.info("Updated table migration status in the leader lock item");
         return true;
     }
@@ -808,18 +818,12 @@ public class CoordinatorStateDAO {
     }
 
     private Map<String, AttributeValue> getCoordinatorStateKey(@NonNull final String key) {
-        if (usingLeaseTable) {
-            return Collections.singletonMap(LEASE_KEY_KEY, DynamoUtils.createAttributeValue(key));
-        } else {
-            return Collections.singletonMap(
-                    COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(key));
-        }
+        return Collections.singletonMap(partitionKeyName, DynamoUtils.createAttributeValue(key));
     }
 
     private CoordinatorState fromDynamoRecord(final Map<String, AttributeValue> dynamoRecord) {
         final HashMap<String, AttributeValue> attributes = new HashMap<>(dynamoRecord);
-        final String keyValue =
-                DynamoUtils.safeGetString(attributes.remove(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME));
+        final String keyValue = DynamoUtils.safeGetString(attributes.remove(partitionKeyName));
 
         final MigrationState migrationState = MigrationState.deserialize(keyValue, attributes);
         if (migrationState != null) {
@@ -836,13 +840,19 @@ public class CoordinatorStateDAO {
 
     private Map<String, AttributeValue> toDynamoRecord(final CoordinatorState state) {
         final Map<String, AttributeValue> result = new HashMap<>();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(state.getKey()));
+
+        // add partition key (different depending on which table we're writing to)
+        result.putAll(getCoordinatorStateKey(state.getKey()));
+
+        // use different serializer depending on which subclass of CoordinatorState this is
         if (state instanceof MigrationState) {
             result.putAll(((MigrationState) state).serialize());
         }
         if (state instanceof StreamInfo) {
             result.putAll(((StreamInfo) state).serialize());
         }
+
+        // add all other attributes besides entityType and partition key to the map and return it
         if (!CollectionUtils.isNullOrEmpty(state.getAttributes())) {
             result.putAll(state.getAttributes());
         }

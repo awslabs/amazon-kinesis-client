@@ -98,7 +98,8 @@ public class MigrationState extends CoordinatorState {
         result.put(CLIENT_VERSION_ATTRIBUTE_NAME, AttributeValue.fromS(clientVersion.name()));
         result.put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(modifiedBy));
         result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));
-        // entityType is always the same for MigrationState entries and is set in constructor, no need to parse
+        // add immutable/constant entityType to all CoordinatorStates going forward so LAM can filter lease table
+        result.put(ENTITY_TYPE_ATTRIBUTE_NAME, AttributeValue.fromS(ENTITY_TYPE));
 
         if (!history.isEmpty()) {
             final List<AttributeValue> historyList = new ArrayList<>();
@@ -127,6 +128,7 @@ public class MigrationState extends CoordinatorState {
             final long modifiedTimestamp = Long.parseLong(
                     mutableAttributes.remove(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME).n());
             // entityType is always the same for MigrationState entries and is set in constructor, no need to parse
+            // TODO: actually do parse it and replace null with the entityType so it doesn't log "unknown attributes"
 
             final List<HistoryEntry> historyList = new ArrayList<>();
             if (attributes.containsKey(HISTORY_ATTRIBUTE_NAME)) {
