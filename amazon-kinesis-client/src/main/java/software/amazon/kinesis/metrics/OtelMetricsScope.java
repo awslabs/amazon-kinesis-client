@@ -175,19 +175,15 @@ public class OtelMetricsScope implements MetricsScope {
         String otelUnit = convertUnit(unit);
 
         if (isGauge) {
-            DoubleGauge gauge =
-                    meter.gaugeBuilder(otelName).setUnit(otelUnit).build();
+            DoubleGauge gauge = meter.gaugeBuilder(otelName).setUnit(otelUnit).build();
             gauge.set(value, attrs);
         } else if (unit == StandardUnit.COUNT) {
-            DoubleCounter counter = meter.counterBuilder(otelName)
-                    .ofDoubles()
-                    .setUnit(otelUnit)
-                    .build();
+            DoubleCounter counter =
+                    meter.counterBuilder(otelName).ofDoubles().setUnit(otelUnit).build();
             counter.add(value, attrs);
         } else {
-            DoubleHistogram histogram = meter.histogramBuilder(otelName)
-                    .setUnit(otelUnit)
-                    .build();
+            DoubleHistogram histogram =
+                    meter.histogramBuilder(otelName).setUnit(otelUnit).build();
             histogram.record(value, attrs);
         }
     }

@@ -71,8 +71,7 @@ public class OtelMetricsConfigTest {
 
         MetricsFactory factory = config.metricsFactory();
 
-        Assert.assertTrue(
-                "OTEL backend should create OtelMetricsFactory", factory instanceof OtelMetricsFactory);
+        Assert.assertTrue("OTEL backend should create OtelMetricsFactory", factory instanceof OtelMetricsFactory);
     }
 
     /**

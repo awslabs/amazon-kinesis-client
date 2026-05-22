@@ -32,8 +32,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(MockitoJUnitRunner.class)
 public class OtelMetricsFactoryTest {
 
-    private static final Set<String> ALL_DIMENSIONS =
-            Collections.singleton(MetricsScope.METRICS_DIMENSIONS_ALL);
+    private static final Set<String> ALL_DIMENSIONS = Collections.singleton(MetricsScope.METRICS_DIMENSIONS_ALL);
 
     // -----------------------------------------------------------------------
     // createMetrics returns OtelMetricsScope
@@ -47,9 +46,7 @@ public class OtelMetricsFactoryTest {
         MetricsScope scope = factory.createMetrics();
 
         assertNotNull("createMetrics should return a non-null scope", scope);
-        assertTrue(
-                "createMetrics should return an OtelMetricsScope instance",
-                scope instanceof OtelMetricsScope);
+        assertTrue("createMetrics should return an OtelMetricsScope instance", scope instanceof OtelMetricsScope);
     }
 
     @Test
@@ -102,15 +99,13 @@ public class OtelMetricsFactoryTest {
 
         // Exercise the scope to verify it works end-to-end with noop
         scope.addDimension("Operation", "GetRecords");
-        scope.addData("RecordsProcessed", 10.0,
-                software.amazon.awssdk.services.cloudwatch.model.StandardUnit.COUNT);
+        scope.addData("RecordsProcessed", 10.0, software.amazon.awssdk.services.cloudwatch.model.StandardUnit.COUNT);
         scope.end();
     }
 
     @Test
     public void testNoopOpenTelemetry_withSummaryLevel() {
-        OtelMetricsFactory factory =
-                new OtelMetricsFactory(OpenTelemetry.noop(), MetricsLevel.SUMMARY, ALL_DIMENSIONS);
+        OtelMetricsFactory factory = new OtelMetricsFactory(OpenTelemetry.noop(), MetricsLevel.SUMMARY, ALL_DIMENSIONS);
 
         MetricsScope scope = factory.createMetrics();
         assertNotNull(scope);
@@ -130,14 +125,15 @@ public class OtelMetricsFactoryTest {
 
     @Test
     public void testNoopOpenTelemetry_withNoneLevel() {
-        OtelMetricsFactory factory =
-                new OtelMetricsFactory(OpenTelemetry.noop(), MetricsLevel.NONE, ALL_DIMENSIONS);
+        OtelMetricsFactory factory = new OtelMetricsFactory(OpenTelemetry.noop(), MetricsLevel.NONE, ALL_DIMENSIONS);
 
         MetricsScope scope = factory.createMetrics();
         assertNotNull(scope);
 
         // With NONE level, all data should be dropped but no exceptions
-        scope.addData("SomeMetric", 1.0,
+        scope.addData(
+                "SomeMetric",
+                1.0,
                 software.amazon.awssdk.services.cloudwatch.model.StandardUnit.COUNT,
                 MetricsLevel.SUMMARY);
         scope.end();

@@ -129,7 +129,6 @@ public class MetricsConfig {
 
     private MetricsFactory metricsFactory;
 
-
     public MetricsFactory metricsFactory() {
         if (metricsFactory == null) {
             switch (metricsBackend) {
@@ -152,5 +151,4 @@ public class MetricsConfig {
         }
         return metricsFactory;
     }
-
 }

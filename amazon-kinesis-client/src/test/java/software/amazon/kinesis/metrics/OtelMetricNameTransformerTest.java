@@ -78,8 +78,7 @@ public class OtelMetricNameTransformerTest {
 
     @Test
     public void testSpecialCase_QueueSize() {
-        assertEquals(
-                PREFIX + "stream_id_cache.queue.size", OtelMetricNameTransformer.transformName("QueueSize"));
+        assertEquals(PREFIX + "stream_id_cache.queue.size", OtelMetricNameTransformer.transformName("QueueSize"));
     }
 
     @Test

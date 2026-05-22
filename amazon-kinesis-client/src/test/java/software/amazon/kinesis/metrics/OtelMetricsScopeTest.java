@@ -35,7 +35,6 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyDouble;
 import static org.mockito.Matchers.anyString;
