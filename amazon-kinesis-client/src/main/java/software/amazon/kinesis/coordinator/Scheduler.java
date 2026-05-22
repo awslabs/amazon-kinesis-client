@@ -334,7 +334,8 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
-        this.segmentingHandler = new FleetSegmentingHandler(leaseManagementConfig, coordinatorStateDAO);
+        this.segmentingHandler = new FleetSegmentingHandler(
+                leaseManagementConfig, coordinatorStateDAO, Executors.newSingleThreadScheduledExecutor());
 
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
         this.migrationStateMachine = new MigrationStateMachineImpl(

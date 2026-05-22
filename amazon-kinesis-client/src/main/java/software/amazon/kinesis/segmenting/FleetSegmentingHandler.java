@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -54,7 +53,10 @@ public class FleetSegmentingHandler {
     private final long versionHashExpiryMillis;
     private final String workerId;
 
-    public FleetSegmentingHandler(final LeaseManagementConfig config, final CoordinatorStateDAO coordinatorStateDAO) {
+    public FleetSegmentingHandler(
+            final LeaseManagementConfig config,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final ScheduledExecutorService versionHeartbeatExecutor) {
         this.coordinatorStateDAO = coordinatorStateDAO;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
         isEnabled = config.enableRollingDeploymentSystem();
@@ -66,7 +68,12 @@ public class FleetSegmentingHandler {
                 2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
-        startVersionHashHeartbeat(config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis());
+        // start a thread to update the leader's version hash
+        versionHeartbeatExecutor.scheduleAtFixedRate(
+                this::updateLeaderVersionHashLut,
+                0,
+                config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
+                TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -156,11 +163,6 @@ public class FleetSegmentingHandler {
                                 .equals(getVersionHash())
                         && !isWorkerVersionHashStale(workerMetricStats))
                 .collect(Collectors.toList());
-    }
-
-    private void startVersionHashHeartbeat(final long leaderHeartbeatMillis) {
-        final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-        executor.scheduleAtFixedRate(this::updateLeaderVersionHashLut, 0, leaderHeartbeatMillis, TimeUnit.MILLISECONDS);
     }
 
     private void updateLeaderVersionHashLut() {
