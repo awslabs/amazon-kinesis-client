@@ -340,7 +340,7 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void startVersionHashHeartbeat_updatesDAO_whenWorkerIsLeader() throws Exception {
+    void startVersionHashHeartbeat_updatesDAO_whenWorkerIsNotLeader() throws Exception {
         LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
                 "dummyTableName",
                 "dummyApplicationName",
@@ -376,7 +376,7 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void startVersionHashHeartbeat_doesNotUpdateDAO_whenWorkerIsNotLeader() throws Exception {
+    void startVersionHashHeartbeat_doesNotUpdateDAO_whenWorkerIsLeader() throws Exception {
         LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
                 "dummyTableName",
                 "dummyApplicationName",
