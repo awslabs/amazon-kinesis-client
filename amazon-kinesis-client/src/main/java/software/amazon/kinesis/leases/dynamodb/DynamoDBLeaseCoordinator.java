@@ -322,6 +322,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     @Override
     public void runLeaseTaker() throws DependencyException, InvalidStateException {
         MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, "TakeLeases");
+        MetricsUtil.addWorkerIdentifier(scope, workerIdentifier());
         long startTime = System.currentTimeMillis();
         boolean success = false;
 
@@ -337,7 +338,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
             success = true;
         } finally {
-            MetricsUtil.addWorkerIdentifier(scope, workerIdentifier());
             MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
         }

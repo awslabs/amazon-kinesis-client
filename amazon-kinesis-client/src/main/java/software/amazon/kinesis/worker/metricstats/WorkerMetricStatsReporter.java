@@ -42,6 +42,7 @@ public class WorkerMetricStatsReporter implements Runnable {
     @Override
     public void run() {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, "WorkerMetricStatsReporter");
+        MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
         final long startTime = System.currentTimeMillis();
         boolean success = false;
         try {
@@ -63,7 +64,6 @@ public class WorkerMetricStatsReporter implements Runnable {
         } catch (final Exception e) {
             log.error("Failed to update worker metric stats for worker : {}", workerIdentifier, e);
         } finally {
-            MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
             MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
         }
