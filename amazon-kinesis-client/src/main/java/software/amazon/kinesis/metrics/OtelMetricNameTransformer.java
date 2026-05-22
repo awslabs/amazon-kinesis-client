@@ -164,8 +164,8 @@ class OtelMetricNameTransformer {
         char[] chars = segment.toCharArray();
         for (int i = 0; i < chars.length; i++) {
             if (i > 0 && Character.isUpperCase(chars[i])) {
-                // Insert '_' at lowercase→uppercase transition
-                if (Character.isLowerCase(chars[i - 1])) {
+                // Insert '_' at lowercase→uppercase or digit→uppercase transition
+                if (Character.isLowerCase(chars[i - 1]) || Character.isDigit(chars[i - 1])) {
                     sb.append('_');
                 }
                 // Insert '_' before the last uppercase in a run followed by lowercase
