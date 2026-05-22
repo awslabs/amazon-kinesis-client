@@ -6,9 +6,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -22,14 +25,18 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 public class FleetSegmentingHandlerTest {
 
     private CoordinatorStateDAO mockCoordinatorStateDAO;
+    private ScheduledExecutorService mockVersionHeartbeatExecutor;
     private FleetSegmentingHandler handler;
     private String sampleVersionHash;
     private LeaseManagementConfig config;
@@ -38,6 +45,7 @@ public class FleetSegmentingHandlerTest {
     void setup() {
         clearInvocations();
         mockCoordinatorStateDAO = mock(CoordinatorStateDAO.class);
+        mockVersionHeartbeatExecutor = mock(ScheduledExecutorService.class);
         sampleVersionHash = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionNum());
         config = new LeaseManagementConfig(
                 "dummyTableName",
@@ -46,7 +54,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
         config.enableRollingDeploymentSystem(true);
-        handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
+        handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
     }
 
     @Test
@@ -57,7 +65,8 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getVersionHash_isSameAcrossInstancesForSameConfig() {
-        FleetSegmentingHandler handler2 = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
+        FleetSegmentingHandler handler2 =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertEquals(handler.getVersionHash(), handler2.getVersionHash());
     }
 
@@ -153,7 +162,8 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isOnCurrentVersion_returnsTrue_whenDisabled() {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertTrue(disabledHandler.isOnCurrentVersion());
     }
 
@@ -311,14 +321,16 @@ public class FleetSegmentingHandlerTest {
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertFalse(disabledHandler.isEnabled());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() throws Exception {
         config.enableRollingDeploymentSystem(false);
-        FleetSegmentingHandler disabledHandler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO);
+        FleetSegmentingHandler disabledHandler =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
 
         // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader
         mockCoordinatorState(
@@ -345,20 +357,26 @@ public class FleetSegmentingHandlerTest {
                 sampleVersionHash,
                 Instant.now().getEpochSecond());
 
-        FleetSegmentingHandler leaderHandler = new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO);
-        leaderHandler.setLeader(true);
+        FleetSegmentingHandler handler =
+                new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO, mockVersionHeartbeatExecutor);
+        handler.setLeader(false);
 
-        Thread.sleep(250);
+        // Capture the scheduled runnable
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(
+                        runnableCaptor.capture(),
+                        eq(0L),
+                        eq(heartbeatConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()),
+                        eq(TimeUnit.MILLISECONDS));
 
-        // with dynamoDbLockBasedLeaderHeartbeatPeriodInMillis set to 100 ms and after sleeping for 250 ms,
-        // the versionHash should heartbeat at least 2 times and at most 3 times (once on start up if the worker
-        // starts as the leader, two more times for every 100 ms)
-        Mockito.verify(heartbeatDAO, Mockito.atLeast(2))
-                .updateCoordinatorStateWithExpectation(Mockito.any(CoordinatorState.class), Mockito.anyMap());
+        runnableCaptor.getValue().run();
+
+        Mockito.verify(heartbeatDAO, times(0)).updateCoordinatorStateWithExpectation(any(), anyMap());
     }
 
     @Test
-    void startVersionHashHeartbeat_doesNotUpdateDAO_whenNotLeader() throws Exception {
+    void startVersionHashHeartbeat_doesNotUpdateDAO_whenWorkerIsNotLeader() throws Exception {
         LeaseManagementConfig heartbeatConfig = new LeaseManagementConfig(
                 "dummyTableName",
                 "dummyApplicationName",
@@ -369,13 +387,28 @@ public class FleetSegmentingHandlerTest {
         heartbeatConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(100);
 
         CoordinatorStateDAO heartbeatDAO = mock(CoordinatorStateDAO.class);
-        FleetSegmentingHandler nonLeaderHandler = new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO);
-        nonLeaderHandler.setLeader(false);
+        mockCoordinatorState(
+                heartbeatDAO,
+                CoordinatorState.LEADER_HASH_KEY,
+                sampleVersionHash,
+                Instant.now().getEpochSecond());
 
-        Thread.sleep(250);
+        FleetSegmentingHandler handler =
+                new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO, mockVersionHeartbeatExecutor);
+        handler.setLeader(true);
 
-        Mockito.verify(heartbeatDAO, Mockito.never())
-                .updateCoordinatorStateWithExpectation(Mockito.any(CoordinatorState.class), Mockito.anyMap());
+        // Capture the scheduled runnable
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(
+                        runnableCaptor.capture(),
+                        eq(0L),
+                        eq(heartbeatConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()),
+                        eq(TimeUnit.MILLISECONDS));
+
+        runnableCaptor.getValue().run();
+
+        Mockito.verify(heartbeatDAO, times(1)).updateCoordinatorStateWithExpectation(any(), anyMap());
     }
 
     private void mockCoordinatorState(CoordinatorStateDAO dao, String key, String versionHash, long lut)
