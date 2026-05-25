@@ -355,10 +355,36 @@ public class MultiLangDaemonConfiguration {
         }
     }
 
+    private void setRegionForClient(String name, BuilderDynaBean client, Region region, boolean override) {
+        if(override) {
+            setRegionForClient(name, client, region);
+        } else {
+            String propertyValue;
+            try {
+                propertyValue = utilsBean.getProperty(client,"region");
+                //Check if property is already set. If not, set region for client
+                if(propertyValue == null || propertyValue.isEmpty()) {
+                    setRegionForClient(name, client, region);
+                }
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                log.error("Failed to get region on {}", name, e);
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
     public void setRegionName(Region region) {
-        setRegionForClient("kinesisClient", kinesisClient, region);
-        setRegionForClient("dynamoDbClient", dynamoDbClient, region);
-        setRegionForClient("cloudWatchClient", cloudWatchClient, region);
+        setRegionForClient("kinesisClient", kinesisClient, region, false);
+        setRegionForClient("dynamoDbClient", dynamoDbClient, region, false);
+        setRegionForClient("cloudWatchClient", cloudWatchClient, region, false);
+    }
+
+    public void setDynamoDBRegionName(Region region) {
+        setRegionForClient("dynamoDbClient", dynamoDbClient, region, true);
+    }
+
+    public void setCloudWatchRegionName(Region region) {
+        setRegionForClient("cloudWatchClient", cloudWatchClient, region, true);
     }
 
     private void setEndpointForClient(String name, BuilderDynaBean client, String endpoint) {
