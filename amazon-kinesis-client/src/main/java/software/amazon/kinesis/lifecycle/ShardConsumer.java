@@ -32,6 +32,7 @@ import org.reactivestreams.Subscription;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -438,6 +439,18 @@ public class ShardConsumer {
             log.debug("{} : Shutdown({}): Subscriber cancelled.", streamIdentifier, shardInfo.shardId());
         }
         markForShutdown(ShutdownReason.LEASE_LOST);
+        if (isShutdown()) {
+            // State machine already terminal — ShutdownTask may not have run, so the
+            // processor may never have received leaseLost(). Notify it directly to ensure
+            // it can clean up resources (e.g., background threads). This is idempotent.
+            try {
+                shardConsumerArgument.shardRecordProcessor()
+                        .leaseLost(LeaseLostInput.builder().build());
+            } catch (Exception e) {
+                log.warn("{} : Shutdown({}): Failed to notify processor of lease loss",
+                        streamIdentifier, shardInfo.shardId(), e);
+            }
+        }
         return isShutdown();
     }
 
