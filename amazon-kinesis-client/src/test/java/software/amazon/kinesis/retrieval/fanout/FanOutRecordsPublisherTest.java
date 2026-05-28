@@ -1748,7 +1748,6 @@ public class FanOutRecordsPublisherTest {
                         ProcessRecordsInput.builder().build(),
                         ExtendedSequenceNumber.SHARD_END,
                         recordFlow.getSubscribeToShardId());
-        final int[] totalRecordsRetrieved = {0};
         source.restartFrom(shardEndRecordsRetrieved);
         source.subscribe(subscriber);
 

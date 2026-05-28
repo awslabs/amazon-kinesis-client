@@ -322,7 +322,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
             // Clear the delivery queue so that any stale entries from previous subscription are discarded.
             resetRecordsDeliveryStateOnSubscriptionOnInit();
-            log.info("ShardId: {}, consumrArn: {}", shardId, consumerArn);
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId)
                     .consumerARN(consumerArn);
@@ -814,7 +813,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     @Accessors(fluent = true)
     @Data
-    public static class FanoutRecordsRetrieved implements RecordsRetrieved {
+    static class FanoutRecordsRetrieved implements RecordsRetrieved {
 
         private final ProcessRecordsInput processRecordsInput;
         private final ExtendedSequenceNumber continuationSequenceNumber;
