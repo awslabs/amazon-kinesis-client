@@ -38,7 +38,6 @@ import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwa
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsReporter;
@@ -116,8 +115,6 @@ public final class DynamicMigrationComponentsInitializer {
     private boolean dualMode;
     private boolean initialized;
 
-    private final FleetSegmentingHandler segmentingHandler;
-
     @Builder(access = AccessLevel.PACKAGE)
     DynamicMigrationComponentsInitializer(
             final MetricsFactory metricsFactory,
@@ -133,8 +130,7 @@ public final class DynamicMigrationComponentsInitializer {
             final Supplier<DynamoDBLockBasedLeaderDecider> ddbLockBasedLeaderDeciderCreator,
             final String workerIdentifier,
             final WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider,
-            final FleetSegmentingHandler segmentingHandler) {
+            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider) {
         this.metricsFactory = metricsFactory;
         this.leaseRefresher = leaseRefresher;
         this.coordinatorStateDAO = coordinatorStateDAO;
@@ -152,7 +148,6 @@ public final class DynamicMigrationComponentsInitializer {
         this.deterministicLeaderDeciderCreator = deterministicLeaderDeciderCreator;
         this.ddbLockBasedLeaderDeciderCreator = ddbLockBasedLeaderDeciderCreator;
         this.leaseModeChangeConsumer = leaseAssignmentModeProvider;
-        this.segmentingHandler = segmentingHandler;
     }
 
     public void initialize(final ClientVersion migrationStateMachineStartingClientVersion) throws DependencyException {
@@ -258,8 +253,7 @@ public final class DynamicMigrationComponentsInitializer {
         log.info("Starting worker metrics reporter");
         // Start with a delay for workerStatsManager to capture some values and start reporting.
         workerMetricsReporterFuture = workerMetricsThreadPool.scheduleAtFixedRate(
-                new WorkerMetricStatsReporter(
-                        metricsFactory, workerIdentifier, workerMetricsManager, workerMetricsDAO, segmentingHandler),
+                new WorkerMetricStatsReporter(metricsFactory, workerIdentifier, workerMetricsManager, workerMetricsDAO),
                 workerUtilizationAwareAssignmentConfig.inMemoryWorkerMetricsCaptureFrequencyMillis() * 2L,
                 workerUtilizationAwareAssignmentConfig.workerMetricsReporterFreqInMillis(),
                 TimeUnit.MILLISECONDS);
