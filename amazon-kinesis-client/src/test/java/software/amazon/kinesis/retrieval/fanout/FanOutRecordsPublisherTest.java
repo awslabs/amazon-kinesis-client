@@ -69,7 +69,6 @@ import software.amazon.kinesis.utils.SubscribeToShardRequestMatcher;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -343,7 +342,7 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo("3000"));
+        assertThat(source.getCurrentSequenceNumber(), equalTo(new ExtendedSequenceNumber("3000")));
     }
 
     @Test
@@ -427,7 +426,7 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo("1000"));
+        assertThat(source.getCurrentSequenceNumber(), equalTo(new ExtendedSequenceNumber("1000")));
     }
 
     @Test
@@ -482,7 +481,7 @@ public class FanOutRecordsPublisherTest {
                     public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         assertEquals(
-                                "" + ++lastSeenSeqNum,
+                                new ExtendedSequenceNumber("" + ++lastSeenSeqNum),
                                 ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
@@ -532,7 +531,9 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
+        assertThat(
+                source.getCurrentSequenceNumber(),
+                equalTo(new ExtendedSequenceNumber(totalServicePublisherEvents + "")));
     }
 
     @Test
@@ -603,7 +604,7 @@ public class FanOutRecordsPublisherTest {
                     public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         assertEquals(
-                                "" + ++lastSeenSeqNum,
+                                new ExtendedSequenceNumber("" + ++lastSeenSeqNum),
                                 ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
@@ -654,7 +655,8 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo(triggerCompleteAtNthEvent + ""));
+        assertThat(
+                source.getCurrentSequenceNumber(), equalTo(new ExtendedSequenceNumber(triggerCompleteAtNthEvent + "")));
         // In non-shard end cases, upon successful completion, the publisher would re-subscribe to service.
         // Let's wait for sometime to allow the publisher to re-subscribe
         onS2SCallLatch.await(5000, TimeUnit.MILLISECONDS);
@@ -793,7 +795,7 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertNull(source.getCurrentSequenceNumber());
+        assertEquals(source.getCurrentSequenceNumber(), ExtendedSequenceNumber.SHARD_END);
         // With shard end event, onComplete must be propagated to the subscriber.
         onCompleteLatch.await(5000, TimeUnit.MILLISECONDS);
         assertTrue("OnComplete should be triggered", isOnCompleteTriggered[0]);
@@ -859,7 +861,7 @@ public class FanOutRecordsPublisherTest {
                     public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         assertEquals(
-                                "" + ++lastSeenSeqNum,
+                                new ExtendedSequenceNumber("" + ++lastSeenSeqNum),
                                 ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
@@ -910,7 +912,7 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo(triggerErrorAtNthEvent + ""));
+        assertThat(source.getCurrentSequenceNumber(), equalTo(new ExtendedSequenceNumber(triggerErrorAtNthEvent + "")));
         onErrorReceiveLatch.await(5000, TimeUnit.MILLISECONDS);
         assertTrue("OnError should have been thrown", isOnErrorThrown[0]);
     }
@@ -969,7 +971,7 @@ public class FanOutRecordsPublisherTest {
                     public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         assertEquals(
-                                "" + ++lastSeenSeqNum,
+                                new ExtendedSequenceNumber("" + ++lastSeenSeqNum),
                                 ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
@@ -1019,7 +1021,9 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
+        assertThat(
+                source.getCurrentSequenceNumber(),
+                equalTo(new ExtendedSequenceNumber(totalServicePublisherEvents + "")));
     }
 
     @Test
@@ -1077,7 +1081,7 @@ public class FanOutRecordsPublisherTest {
                     public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         assertEquals(
-                                "" + ++lastSeenSeqNum,
+                                new ExtendedSequenceNumber("" + ++lastSeenSeqNum),
                                 ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
@@ -1260,7 +1264,9 @@ public class FanOutRecordsPublisherTest {
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);
         ArgumentCaptor<RecordsRetrieved> inputCaptor = ArgumentCaptor.forClass(RecordsRetrieved.class);
-
+        source.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         source.subscribe(subscriber);
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
@@ -1284,7 +1290,9 @@ public class FanOutRecordsPublisherTest {
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);
-
+        source.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         source.subscribe(subscriber);
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
@@ -1396,6 +1404,9 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001-001");
         final int[] totalRecordsRetrieved = {0};
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1425,6 +1436,9 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1458,6 +1472,9 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1480,7 +1497,9 @@ public class FanOutRecordsPublisherTest {
         IntStream.rangeClosed(1, 137)
                 .forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
                         new FanOutRecordsPublisher.FanoutRecordsRetrieved(
-                                ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                                ProcessRecordsInput.builder().build(),
+                                new ExtendedSequenceNumber(i + ""),
+                                recordFlow.getSubscribeToShardId()),
                         recordFlow));
         assertEquals(137, totalRecordsRetrieved[0]);
     }
@@ -1492,6 +1511,9 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1519,7 +1541,9 @@ public class FanOutRecordsPublisherTest {
         IntStream.rangeClosed(1, 100)
                 .forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
                         new FanOutRecordsPublisher.FanoutRecordsRetrieved(
-                                ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                                ProcessRecordsInput.builder().build(),
+                                new ExtendedSequenceNumber(i + ""),
+                                recordFlow.getSubscribeToShardId()),
                         recordFlow));
         assertEquals(100, totalRecordsRetrieved[0]);
     }
@@ -1533,6 +1557,9 @@ public class FanOutRecordsPublisherTest {
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = {0};
         BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1554,7 +1581,9 @@ public class FanOutRecordsPublisherTest {
         IntStream.rangeClosed(1, 10)
                 .forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
                         new FanOutRecordsPublisher.FanoutRecordsRetrieved(
-                                ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                                ProcessRecordsInput.builder().build(),
+                                new ExtendedSequenceNumber(i + ""),
+                                recordFlow.getSubscribeToShardId()),
                         recordFlow));
         BatchUniqueIdentifier batchUniqueIdentifierQueued;
         int count = 0;
@@ -1577,6 +1606,9 @@ public class FanOutRecordsPublisherTest {
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "Shard-001-1");
         final int[] totalRecordsRetrieved = {0};
         BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
+        fanOutRecordsPublisher.start(
+                ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
         fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override
             public void onSubscribe(Subscription subscription) {}
@@ -1598,7 +1630,9 @@ public class FanOutRecordsPublisherTest {
         IntStream.rangeClosed(1, 10)
                 .forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
                         new FanOutRecordsPublisher.FanoutRecordsRetrieved(
-                                ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                                ProcessRecordsInput.builder().build(),
+                                new ExtendedSequenceNumber(i + ""),
+                                recordFlow.getSubscribeToShardId()),
                         recordFlow));
         BatchUniqueIdentifier batchUniqueIdentifierQueued;
         int count = 0;
@@ -1668,6 +1702,32 @@ public class FanOutRecordsPublisherTest {
 
         assertThat(onErrorEvent, equalTo(Optional.of(new OnErrorEvent(exception))));
         assertThat(acquireTimeoutLogged.get(), equalTo(true));
+    }
+
+    @Test
+    public void restartFromShardEndCallsSubscribeToShardAtLatest() {
+        final FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(source, Instant.now(), "shard-001");
+        final FanOutRecordsPublisher.FanoutRecordsRetrieved shardEndRecordsRetrieved =
+                new FanOutRecordsPublisher.FanoutRecordsRetrieved(
+                        ProcessRecordsInput.builder().build(),
+                        ExtendedSequenceNumber.SHARD_END,
+                        recordFlow.getSubscribeToShardId());
+        source.restartFrom(shardEndRecordsRetrieved);
+        source.subscribe(subscriber);
+
+        final SubscribeToShardRequest expectedRequest = SubscribeToShardRequest.builder()
+                .shardId(SHARD_ID)
+                .consumerARN(CONSUMER_ARN)
+                .startingPosition(StartingPosition.builder()
+                        .type(ShardIteratorType.LATEST)
+                        .build())
+                .build();
+        verify(kinesisClient)
+                .subscribeToShard(
+                        argThat(new SubscribeToShardRequestMatcher(expectedRequest)),
+                        any(FanOutRecordsPublisher.RecordFlow.class));
     }
 
     private void verifyRecords(List<KinesisClientRecord> clientRecordsList, List<KinesisClientRecordMatcher> matchers) {
