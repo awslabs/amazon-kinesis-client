@@ -23,19 +23,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
@@ -53,24 +50,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
     private LeaseCountBasedLeaseAssignmentDecider decider;
     private static final int MAX_LEASES_FOR_WORKER = 10;
 
-    private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
-        List<WorkerMetricStats> workerMetrics = workerIds.stream()
-                .map(id -> {
-                    WorkerMetricStats stats = new WorkerMetricStats();
-                    stats.setWorkerId(id);
-                    stats.setMetricStats(new HashMap<>());
-                    return stats;
-                })
-                .collect(Collectors.toList());
-        when(inMemoryStorageView.getAssignableWorkers()).thenReturn(workerMetrics);
-        when(inMemoryStorageView.getWorkersOnVersionHash()).thenReturn(workerMetrics);
-        when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
-                .thenReturn(true);
-        when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))
-                .thenReturn(true);
-        return new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER);
-    }
-
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -84,7 +63,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>());
         when(inMemoryStorageView.getLeaseList()).thenReturn(new ArrayList<>());
 
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(new HashSet<>());
         decider.assignExpiredOrUnassignedLeases(emptyList);
 
         verify(inMemoryStorageView, never()).performLeaseAssignment(any(), any());
@@ -103,8 +81,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(Collections.singleton("worker1"));
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(lease1, lease2));
-
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(Collections.singleton("worker1"));
 
         // Execute
         decider.assignExpiredOrUnassignedLeases(unassignedLeases);
@@ -134,8 +110,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(lease1, lease2, lease3));
-
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
 
         // Execute
         decider.assignExpiredOrUnassignedLeases(unassignedLeases);
@@ -167,8 +141,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(lease1, lease2));
 
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
-
         // Execute
         decider.balanceWorkerVariance();
 
@@ -196,8 +168,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(lease1, lease2));
-
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
 
         // Execute
         decider.balanceWorkerVariance();
@@ -233,8 +203,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getLeaseList())
                 .thenReturn(Arrays.asList(existingLease1, existingLease2, expiredLease1, expiredLease2, expiredLease3));
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(initialWorkerToLeasesMap);
-
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
 
         // Simulate performLeaseAssignment updating the map
         doAnswer(invocation -> {
@@ -282,8 +250,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(normalLease, handoffLease));
 
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
-
         // Execute
         decider.balanceWorkerVariance();
 
@@ -316,8 +282,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
 
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
-
         // Execute
         decider.balanceWorkerVariance();
 
@@ -339,8 +303,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(Collections.singleton("worker1"));
         when(inMemoryStorageView.getLeaseList()).thenReturn(unassignedLeases);
-
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(Collections.singleton("worker1"));
 
         // Execute
         decider.assignExpiredOrUnassignedLeases(unassignedLeases);
@@ -366,16 +328,9 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         workerToLeasesMap.put("worker1", new HashSet<>());
         workerToLeasesMap.put("worker2", new HashSet<>());
 
-        List<WorkerMetricStats> activeWorkerMetrics = Arrays.asList("worker1", "worker2").stream()
-                .map(id -> {
-                    WorkerMetricStats stats = new WorkerMetricStats();
-                    stats.setWorkerId(id);
-                    stats.setMetricStats(new HashMap<>());
-                    return stats;
-                })
-                .collect(Collectors.toList());
+        Set<String> activeWorkers = new HashSet<>(Arrays.asList("worker1", "worker2"));
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
-        when(inMemoryStorageView.getAssignableWorkers()).thenReturn(activeWorkerMetrics);
+        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(activeWorkers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(deadLease1, deadLease2, deadLease3));
 
         decider.assignExpiredOrUnassignedLeases(expiredLeases);
