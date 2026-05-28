@@ -159,9 +159,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 throw new IllegalArgumentException(
                         "Provided ProcessRecordsInput not created from the FanOutRecordsPublisher");
             }
-            ExtendedSequenceNumber continuationSeqNum =
-                    ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
-            currentSequenceNumber = continuationSeqNum;
+            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();;
         }
     }
 
