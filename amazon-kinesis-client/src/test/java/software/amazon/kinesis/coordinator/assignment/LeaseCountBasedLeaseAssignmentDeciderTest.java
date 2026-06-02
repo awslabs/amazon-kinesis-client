@@ -23,6 +23,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,11 +52,32 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
 
     private LeaseCountBasedLeaseAssignmentDecider decider;
     private static final int MAX_LEASES_FOR_WORKER = 10;
+    private static final long CURRENT_TIME_NANOS = TimeUnit.MILLISECONDS.toNanos(10000L);
+    private final Supplier<Long> nanoTimeProvider = () -> CURRENT_TIME_NANOS;
+
+    private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
+        List<WorkerMetricStats> workerMetrics = workerIds.stream()
+                .map(id -> {
+                    WorkerMetricStats stats = new WorkerMetricStats();
+                    stats.setWorkerId(id);
+                    stats.setMetricStats(new HashMap<>());
+                    return stats;
+                })
+                .collect(Collectors.toList());
+        when(inMemoryStorageView.getAssignableWorkers()).thenReturn(workerMetrics);
+        when(inMemoryStorageView.getWorkersOnVersionHash()).thenReturn(workerMetrics);
+        when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
+                .thenReturn(true);
+        when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))
+                .thenReturn(true);
+        return new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
+    }
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        decider = new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER);
+        decider =
+                new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
     }
 
     @Test
@@ -258,6 +282,44 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
     }
 
     @Test
+    void balanceWorkerVariance_expiredHandoffLease_treatedAsAvailable() {
+        // Setup - worker1 has 2 leases (1 normal + 1 expired handoff), worker2 has 0
+        Lease normalLease = createLease("lease1", "worker1", 100L);
+        Lease expiredHandoffLease = mock(Lease.class);
+        when(expiredHandoffLease.leaseKey()).thenReturn("lease2");
+        when(expiredHandoffLease.leaseOwner()).thenReturn("worker1");
+        when(expiredHandoffLease.actualOwner()).thenReturn("worker1");
+        when(expiredHandoffLease.lastCounterIncrementNanos()).thenReturn(200L);
+        when(expiredHandoffLease.shutdownRequested()).thenReturn(true);
+        // Handoff expired - blockedOnPendingCheckpoint returns false
+        when(expiredHandoffLease.blockedOnPendingCheckpoint(TimeUnit.NANOSECONDS.toMillis(CURRENT_TIME_NANOS)))
+                .thenReturn(false);
+
+        Map<String, Set<Lease>> workerToLeasesMap = new HashMap<>();
+        Set<Lease> worker1Leases = new HashSet<>();
+        worker1Leases.add(normalLease);
+        worker1Leases.add(expiredHandoffLease);
+        workerToLeasesMap.put("worker1", worker1Leases);
+        workerToLeasesMap.put("worker2", new HashSet<>());
+
+        Set<String> workers = new HashSet<>();
+        workers.add("worker1");
+        workers.add("worker2");
+
+        when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
+        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
+        when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(normalLease, expiredHandoffLease));
+
+        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
+
+        // Execute
+        decider.balanceWorkerVariance();
+
+        // Verify expired handoff lease CAN be stolen for rebalancing
+        verify(inMemoryStorageView).performLeaseAssignment(any(), eq("worker2"));
+    }
+
+    @Test
     void balanceWorkerVariance_maxLeasesForWorkerLimitReached_stopsRebalancing() {
         // Setup - both workers have 12 leases (above max), no rebalancing should occur
         Map<String, Set<Lease>> workerToLeasesMap = new HashMap<>();
@@ -348,6 +410,8 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(lease.actualOwner()).thenReturn(owner);
         when(lease.lastCounterIncrementNanos()).thenReturn(lastCounterIncrement);
         when(lease.shutdownRequested()).thenReturn(false);
+        when(lease.blockedOnPendingCheckpoint(TimeUnit.NANOSECONDS.toMillis(CURRENT_TIME_NANOS)))
+                .thenReturn(false);
         return lease;
     }
 
@@ -360,6 +424,8 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(lease.actualOwner()).thenReturn(checkpointOwner); // During handoff, checkpointOwner is actual owner
         when(lease.lastCounterIncrementNanos()).thenReturn(lastCounterIncrement);
         when(lease.shutdownRequested()).thenReturn(true);
+        when(lease.blockedOnPendingCheckpoint(TimeUnit.NANOSECONDS.toMillis(CURRENT_TIME_NANOS)))
+                .thenReturn(true);
         return lease;
     }
 }

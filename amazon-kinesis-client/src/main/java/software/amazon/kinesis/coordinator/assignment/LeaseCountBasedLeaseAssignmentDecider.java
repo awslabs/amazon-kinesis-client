@@ -21,6 +21,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
@@ -46,6 +48,7 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
 
     private final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
     private final int maxLeasesForWorker;
+    private final Supplier<Long> nanoTimeProvider;
 
     /**
      * Assigns expired or unassigned leases to workers with the fewest current leases.
@@ -222,12 +225,16 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
      */
     private Map<String, List<Lease>> computeAvailableLeases() {
         final Map<String, List<Lease>> availableLeases = new HashMap<>();
+        final Set<String> workersWithAvailableLeases = inMemoryStorageView.getWorkersOnVersionHash().stream()
+                .map(WorkerMetricStats::getWorkerId)
+                .collect(Collectors.toSet());
+        final long currentTimeMillis = TimeUnit.NANOSECONDS.toMillis(nanoTimeProvider.get());
 
         for (final Map.Entry<String, Set<Lease>> entry :
                 inMemoryStorageView.getWorkerToLeasesMap().entrySet()) {
             final String workerId = entry.getKey();
             final List<Lease> workerAvailableLeases = entry.getValue().stream()
-                    .filter(lease -> !lease.shutdownRequested()) // Avoid leases pending handoff
+                    .filter(lease -> !lease.blockedOnPendingCheckpoint(currentTimeMillis))
                     .collect(Collectors.toList());
 
             if (!workerAvailableLeases.isEmpty()) {
