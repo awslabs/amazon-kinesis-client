@@ -300,7 +300,8 @@ public final class LeaseAssignmentManager {
     private LeaseAssignmentDecider getLeaseAssignmentDecider(InMemoryStorageView inMemoryStorageView) {
         final LeaseAssignmentDecider leaseAssignmentDecider;
         if (leaseAssignmentStrategy == LeaseAssignmentStrategy.LEASE_COUNT_BASED) {
-            leaseAssignmentDecider = new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, maxLeasesForWorker);
+            leaseAssignmentDecider = new LeaseCountBasedLeaseAssignmentDecider(
+                    inMemoryStorageView, maxLeasesForWorker, nanoTimeProvider);
         } else {
             leaseAssignmentDecider = new VarianceBasedLeaseAssignmentDecider(
                     inMemoryStorageView,
