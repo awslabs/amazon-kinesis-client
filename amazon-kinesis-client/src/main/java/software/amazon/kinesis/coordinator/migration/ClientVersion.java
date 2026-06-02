@@ -54,5 +54,14 @@ public enum ClientVersion {
      * A new application starting KCLv3.x or an upgraded application from KCLv2.x after upgrade is successful
      * can use this version to default all KCLv3.x algorithms without any monitor to rollback.
      */
-    CLIENT_VERSION_3X;
+    CLIENT_VERSION_3X,
+    /**
+     * This version is used to deploy the KCLv3.x code without enabling any of the KCLv3.x functionality yet. It
+     * is useful for two-phase deployments, for example migrating directly to the single table format, where
+     * the entity types (lease, worker stats, coordinator states) are consolidated into the lease table, as
+     * opposed to creating the tables through the existing KCLv3.x migration process and merging the tables after. To
+     * enable the rest of the KCLv3.x functionality after deploying the code, the client version should be set o
+     * CLIENT_VERSION_UPGRADE_FROM_2X on the second-phase deployment, to proceed with the normal KCLv3.x migration.
+     */
+    CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
 }

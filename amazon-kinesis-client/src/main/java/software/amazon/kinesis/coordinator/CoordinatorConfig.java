@@ -132,6 +132,14 @@ public class CoordinatorConfig {
          * with prior versions. And once in this version, rollback to 2.x is not supported.
          */
         CLIENT_VERSION_CONFIG_3X,
+        /**
+         * Applications upgrading from KCLv2.x to KCLv3.x should follow a two-phase deployment
+         * process by setting CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X on the first deployment
+         * and setting this value on the second deployment. This config value will actually start
+         * the upgrade process by initializing the v3 components, with the expectation that the v3
+         * code has already been fully deployed.
+         */
+        CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE2,
     }
 
     /**

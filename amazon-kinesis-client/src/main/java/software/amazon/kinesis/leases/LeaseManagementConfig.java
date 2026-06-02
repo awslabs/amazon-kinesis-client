@@ -29,9 +29,7 @@ import java.util.function.Function;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
@@ -316,8 +314,10 @@ public class LeaseManagementConfig {
 
     /**
      * Controls whether we should consolidate worker stats and coordinator states into the lease table. Default=false
+     * This is used for existing v3 customers running the legacy multi-table format. This config value should
+     * be set on the second deployment, once the code to parse the single table format has been deployed everywhere.
      */
-    private TableFormatConfig tableFormatConfig = new TableFormatConfig(TableFormatConfig.Formats.MULTI_TABLE);
+    private boolean migrateAllEntityTypesToLeaseTable = false;
 
     @Deprecated
     public LeaseManagementConfig(
@@ -535,8 +535,7 @@ public class LeaseManagementConfig {
                     leaseCleanupConfig(),
                     workerUtilizationAwareAssignmentConfig(),
                     gracefulLeaseHandoffConfig,
-                    leaseAssignmentIntervalMillis(),
-                    tableFormatConfig());
+                    leaseAssignmentIntervalMillis());
         }
         return leaseManagementFactory;
     }
@@ -635,21 +634,6 @@ public class LeaseManagementConfig {
     public static class WorkerMetricsTableConfig extends DdbTableConfig {
         public WorkerMetricsTableConfig(final String applicationName) {
             super(applicationName, "WorkerMetricStats");
-        }
-    }
-
-    @Getter
-    @RequiredArgsConstructor
-    public static class TableFormatConfig {
-        public enum Formats {
-            MULTI_TABLE,
-            SINGLE_TABLE
-        }
-
-        private final Formats format;
-
-        public TableFormatConfig(String format) {
-            this(Formats.valueOf(format));
         }
     }
 }

@@ -37,6 +37,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -447,7 +448,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * Saves the values found in the additional attributes of the leader lock item in DynamoDB to instance variables
      * @param attributes - the map of key-value pairs from the leader lock item in DynamoDB
      */
-    private void saveAdditionalAttributes(final Map<String, AttributeValue> attributes) {
+    private synchronized void saveAdditionalAttributes(final Map<String, AttributeValue> attributes) {
         if (attributes == null) {
             // nothing to save; default or latest in-memory values will be written
             return;
@@ -462,16 +463,26 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         // save values to instance variables
         steadySinceEpoch = ss == null ? Instant.now().getEpochSecond() : ss;
-        tableMigrationStatus =
-                tms == null ? TableMigrationMachine.States.INIT : TableMigrationMachine.States.valueOf(tms);
+        tableMigrationStatus = StringUtils.isEmpty(tms)
+                ? TableMigrationMachine.States.INIT
+                : TableMigrationMachine.States.valueOf(tms);
 
         if (updated) {
-            setLockAcquisitionOrder();
-
-            // have coordinator state DAO decide to use lease table and/or track mutations based on status
-            coordinatorStateDao.respondToTableMigrationStatus(tms);
-            // worker metric stats DAO, on the other hand, bases its decision only on state read at startup
+            respondToTableMigrationStatus();
         }
+    }
+
+    public synchronized void setTableMigrationStatus(TableMigrationMachine.States status) {
+        tableMigrationStatus = status;
+        respondToTableMigrationStatus();
+    }
+
+    private synchronized void respondToTableMigrationStatus() {
+        setLockAcquisitionOrder();
+
+        // have coordinator state DAO decide to use lease table and/or track mutations based on status
+        coordinatorStateDao.respondToTableMigrationStatus(String.valueOf(tableMigrationStatus));
+        // worker metric stats DAO, on the other hand, bases its decision only on state read at startup
     }
 
     /**

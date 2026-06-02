@@ -34,6 +34,7 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRATION_HASH_KEY;
 
@@ -75,10 +76,20 @@ public class MigrationClientVersionStateInitializer {
 
         try {
             MigrationState migrationState = getMigrationStateFromDynamo();
+            // if migration state not found in DDB, defaults to CLIENT_VERSION_INIT
+            // so need to check client version config and see what the state should be
+            // if client version config is CLIENT_VERSION_CONFIG_DEPLOYING_3X, do not write to DDB
+            // because leader will likely not be on 3x, so we cannot write non-leases into lease table yet
             int retryCount = 0;
             while (retryCount++ < MAX_INITIALIZATION_RETRY) {
                 final ClientVersion initialClientVersion = getClientVersionForInitialization(migrationState);
                 if (migrationState.getClientVersion() != initialClientVersion) {
+                    if (migrationState.getClientVersion() == CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X) {
+                        // do not write CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X to DDB
+                        // the state is used internally to let the code deploy first
+                        // writing into the lease table before the leader is ready could cause errors/failures
+                        break;
+                    }
                     // If update fails, the value represents current state in dynamo
                     migrationState = updateMigrationStateInDynamo(migrationState, initialClientVersion);
                     if (migrationState.getClientVersion() == initialClientVersion) {
@@ -181,6 +192,8 @@ public class MigrationClientVersionStateInitializer {
     private ClientVersion getNextClientVersionBasedOnConfigVersion() {
         switch (clientVersionConfig) {
             case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X:
+                return CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
+            case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE2:
                 return CLIENT_VERSION_UPGRADE_FROM_2X;
             case CLIENT_VERSION_CONFIG_3X:
                 return CLIENT_VERSION_3X;

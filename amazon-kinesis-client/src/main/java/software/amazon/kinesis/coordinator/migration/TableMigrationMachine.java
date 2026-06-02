@@ -63,7 +63,8 @@ public class TableMigrationMachine {
 
     private synchronized boolean setTableMigrationStatus(States status, DynamoDBLockBasedLeaderDecider leaderDecider) {
         if (tableMigrationStatus != status) {
-            leaderDecider.tableMigrationStatus = tableMigrationStatus = status;
+            tableMigrationStatus = status;
+            leaderDecider.setTableMigrationStatus(status);
             resetSteadySinceEpoch(leaderDecider);
             return true;
         }

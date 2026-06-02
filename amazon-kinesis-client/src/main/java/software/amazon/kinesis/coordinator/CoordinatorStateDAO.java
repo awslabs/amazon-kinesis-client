@@ -138,8 +138,10 @@ public class CoordinatorStateDAO {
         // try to find leader lock item in lease table; if not exists, fallback to coordinator table
         if (getLeaderLockSnapshot(true) || getLeaderLockSnapshot(false)) {
             respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
+        } else {
+            // if leader lock item can't be found in either table, we must be upgrading from v2
+            setUsingLeaseTable(true);
         }
-        // else, continue to not use lease table
     }
 
     public void initialize() throws DependencyException {
@@ -177,16 +179,19 @@ public class CoordinatorStateDAO {
         }
         switch (tableMigrationStatus) {
             case "DEPLOYED": {
-                if (leaseManagementConfig.tableFormatConfig().format()
-                        != LeaseManagementConfig.TableFormatConfig.Formats.SINGLE_TABLE) {
+                if (!leaseManagementConfig.migrateAllEntityTypesToLeaseTable()) {
+                    // must wait for config value to signal second-phase deployment
                     return;
                 }
-                // TODO: do we need to check client version config as well here?
                 // should be on second phase deployment based on config -> start table migration now that it's safe
                 updateTableMigrationStatus("PENDING");
                 // fall through because the new state will be PENDING
             }
             case "PENDING": {
+                if (!leaseManagementConfig.migrateAllEntityTypesToLeaseTable()) {
+                    // must wait for config value to signal we are part of second-phase deployment
+                    return;
+                }
                 // sync coordinator states to coordinator table and fall through to use lease table
                 MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
             }
@@ -263,7 +268,11 @@ public class CoordinatorStateDAO {
          */
         synchronized void process(CoordinatorState state) {
             // if received new state through process(), sync() must wait for caller to reset flag
-            scanning = true;
+            // if beginning new scan, clear scanned set from previous scan
+            if (!scanning) {
+                scanning = true;
+                justScanned.clear();
+            }
 
             String key = state.getKey();
             states.put(key, state);
@@ -333,8 +342,6 @@ public class CoordinatorStateDAO {
                     }
                 }
             }
-            // reset just scanned keys for next scan to populate again
-            justScanned.clear();
         }
     }
 
