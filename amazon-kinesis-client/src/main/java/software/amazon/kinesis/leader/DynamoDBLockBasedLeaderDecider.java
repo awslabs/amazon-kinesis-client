@@ -77,6 +77,10 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     public volatile long steadySinceEpoch = Instant.now().getEpochSecond();
     public volatile TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
 
+    // this field is set to false when local updates have not been written to DDB yet
+    // this prevents us overwriting the pending changes with the stale values from DDB
+    private volatile boolean additionalAttributesSynced = true;
+
     @Getter
     private PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
 
@@ -250,15 +254,16 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         processScheduledUpdateQueue(response);
         if (lock.get() != null) {
             // save the additional attributes from read lock item, leader or not
-            saveAdditionalAttributes(lock.get().getAdditionalAttributes());
+            // although if local changes have not been written yet, don't overwrite with stale values from DDB
+            if (additionalAttributesSynced) {
+                // most changes are written by the leader, but some new values need to be picked up from DDB
+                saveAdditionalAttributes(lock.get().getAdditionalAttributes());
+            }
             // save snapshot of leader lock item so we can frequently check if additional attributes are in sync
             latestLeaderLockSnapshot = lock.get();
         }
         return response;
     }
-
-    // TODO: fix merge conflicts with Vincent's PR for fleet segmenting handler
-    // TODO: check if trying to acquire expired lock that says your own workerId as the owner is special case
 
     /**
      * Calls client's tryAcquireLock method. Uses AtomicReference to also return the LockItem read or acquired.
@@ -311,6 +316,10 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             // must read item from DynamoDB first so we can compare; will retry on next scheduled attempt
             return;
         }
+        if (additionalAttributesSynced) {
+            // nothing to do; don't even compare to get diff
+            return;
+        }
 
         // get values that should be in DynamoDB and values last seen in DynamoDB
         Map<String, AttributeValue> desired = leaderLockAdditionalAttributes();
@@ -334,8 +343,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         if (!updates.isEmpty()) {
             try {
-                // apply partial update; pass attribute updates map to DAO
-                coordinatorStateDao.syncLeaderLockAdditionalAttributes(updates);
+                // apply partial update; pass attribute updates map to DAO; if method throws, field is not updated
+                additionalAttributesSynced = coordinatorStateDao.syncLeaderLockAdditionalAttributes(updates);
             } catch (Exception e) {
                 // all exceptions retry on next scheduled attempt
                 log.warn("Caught exception while trying to update leader lock additional attributes: ", e);
@@ -458,23 +467,23 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         Long ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
         String tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
 
-        // check if table migration status is different than what's already saved in-memory (default=INIT)
-        boolean updated = tms != String.valueOf(tableMigrationStatus);
-
         // save values to instance variables
         steadySinceEpoch = ss == null ? Instant.now().getEpochSecond() : ss;
         tableMigrationStatus = StringUtils.isEmpty(tms)
                 ? TableMigrationMachine.States.INIT
                 : TableMigrationMachine.States.valueOf(tms);
 
-        if (updated) {
-            respondToTableMigrationStatus();
-        }
+        // respond to whatever was just read from DDB, even if same as current value
+        // because we do not want to respond to the table migration status until it is written to DDB
+        respondToTableMigrationStatus();
     }
 
     public synchronized void setTableMigrationStatus(TableMigrationMachine.States status) {
-        tableMigrationStatus = status;
-        respondToTableMigrationStatus();
+        if (tableMigrationStatus != status) {
+            tableMigrationStatus = status;
+            additionalAttributesSynced = false;
+            // don't call respondToTableMigrationStatus() here; wait until DDB update succeeds, then re-read and respond
+        }
     }
 
     private synchronized void respondToTableMigrationStatus() {

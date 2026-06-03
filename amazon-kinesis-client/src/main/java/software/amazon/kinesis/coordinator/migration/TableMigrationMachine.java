@@ -65,6 +65,8 @@ public class TableMigrationMachine {
         if (tableMigrationStatus != status) {
             tableMigrationStatus = status;
             leaderDecider.setTableMigrationStatus(status);
+            // TODO: sync leader lock additional attributes here with conditional expectation
+            // TODO: that table migration status is same as before the update
             resetSteadySinceEpoch(leaderDecider);
             return true;
         }

@@ -634,10 +634,11 @@ public class CoordinatorStateDAO {
     /**
      * Writes the additional attributes values for the leader lock item into the item in the coordinator table
      * @param updates - the attributes that need to be updated and their values
+     * @return whether the sync operation succeeded
      */
-    public void syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+    public boolean syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
+        return coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
     }
 
     /**
