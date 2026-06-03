@@ -61,18 +61,6 @@ public class TableMigrationMachine {
         return false;
     }
 
-    private synchronized boolean setTableMigrationStatus(States status, DynamoDBLockBasedLeaderDecider leaderDecider) {
-        if (tableMigrationStatus != status) {
-            tableMigrationStatus = status;
-            leaderDecider.setTableMigrationStatus(status);
-            // TODO: sync leader lock additional attributes here with conditional expectation
-            // TODO: that table migration status is same as before the update
-            resetSteadySinceEpoch(leaderDecider);
-            return true;
-        }
-        return false;
-    }
-
     private synchronized void resetSteadySinceEpoch() {
         steadySinceEpoch = Instant.now().getEpochSecond();
     }
@@ -81,20 +69,10 @@ public class TableMigrationMachine {
         leaderDecider.steadySinceEpoch = steadySinceEpoch = Instant.now().getEpochSecond();
     }
 
-    private boolean copyFromLeaderDecider(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        steadySinceEpoch = leaderDecider.steadySinceEpoch;
-
-        if (tableMigrationStatus != leaderDecider.tableMigrationStatus) {
-            tableMigrationStatus = leaderDecider.tableMigrationStatus;
-            return true;
-        }
-        return false;
-    }
-
-    public void update(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        boolean updated = copyFromLeaderDecider(leaderDecider);
+    public States update(States tableMigrationStatus, long steadySinceEpoch) {
         long epochSecond = Instant.now().getEpochSecond();
 
+        States newTableMigrationStatus = tableMigrationStatus;
         switch (tableMigrationStatus) {
             default:
             case INIT: {
@@ -102,7 +80,7 @@ public class TableMigrationMachine {
                         && steadySinceEpoch + INIT_TO_DEPLOYED_BAKE_TIME <= epochSecond) {
                     // all workers support feature and bake time complete -> move to PENDING
                     log.info("All workers have table migration support deployed, setting status to deployed");
-                    setTableMigrationStatus(States.DEPLOYED, leaderDecider);
+                    newTableMigrationStatus = States.DEPLOYED;
                 }
                 break;
             }
@@ -112,15 +90,10 @@ public class TableMigrationMachine {
                 break;
             }
             case PENDING: {
-                if (updated) {
-                    // update was not made by leader -> second-phase deployment must have started
-                    // copy coordinator states from coordinator table to lease table; try every 10s until success
-                    leaderDecider.copyCoordinatorStatesToLeaseTable(10000L);
-                }
                 if (workerStatsTableFoundEmpty && (steadySinceEpoch + PENDING_TO_COMPLETE_BAKE_TIME <= epochSecond)) {
                     // worker stats table was empty and bake time complete -> move to COMPLETE
                     log.info("Worker stats table found empty, setting table migration status to complete");
-                    setTableMigrationStatus(States.COMPLETE, leaderDecider);
+                    newTableMigrationStatus = States.COMPLETE;
                     // TODO: cancel sync to coordinator table scheduled update here
                 }
                 break;
@@ -130,5 +103,6 @@ public class TableMigrationMachine {
                 break;
             }
         }
+        return newTableMigrationStatus;
     }
 }

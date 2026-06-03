@@ -610,8 +610,6 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    // TODO: fix bug where sync job creates items and MutationTracker thinks they need to be deleted
-    // TODO: (probably has something to do with modified timestamp being updated constantly)
     public boolean copyCoordinatorStatesToLeaseTable() {
         // should be using the lease table already at this point
         setUsingLeaseTable(true);
@@ -641,12 +639,16 @@ public class CoordinatorStateDAO {
         return coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
     }
 
+    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        return updateLeaderLockAdditionalAttributesWithExpectation(updates, getDynamoExistentExpectation(LEADER_HASH_KEY));
+    }
+
     /**
      * Updates the additional attributes in the leader lock item in the instance's tableName with the new values
      * @param updates - the attributes that need to be updated and their values
      * @return whether the update succeeded
      */
-    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+    public boolean updateLeaderLockAdditionalAttributesWithExpectation(@NonNull final Map<String, AttributeValueUpdate> updates, @NonNull final Map<String, ExpectedAttributeValue> expectations)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         final UpdateItemRequest request = UpdateItemRequest.builder()
                 .tableName(tableName)
@@ -857,23 +859,23 @@ public class CoordinatorStateDAO {
         return result;
     }
 
-    private Map<String, ExpectedAttributeValue> getDynamoNonExistentExpectation() {
+    public Map<String, ExpectedAttributeValue> getDynamoNonExistentExpectation() {
         final Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
         final ExpectedAttributeValue expectedAV =
                 ExpectedAttributeValue.builder().exists(false).build();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, expectedAV);
+        result.put(partitionKeyName, expectedAV);
 
         return result;
     }
 
-    private Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String keyValue) {
+    public Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String keyValue) {
         final Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
         final ExpectedAttributeValue expectedAV = ExpectedAttributeValue.builder()
                 .value(AttributeValue.fromS(keyValue))
                 .build();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, expectedAV);
+        result.put(partitionKeyName, expectedAV);
 
         return result;
     }

@@ -42,11 +42,15 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
+import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.migration.TableMigrationMachine;
 import software.amazon.kinesis.leases.DynamoUtils;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -80,6 +84,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     // this field is set to false when local updates have not been written to DDB yet
     // this prevents us overwriting the pending changes with the stale values from DDB
     private volatile boolean additionalAttributesSynced = true;
+
+    private final TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
 
     @Getter
     private PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
@@ -247,6 +253,11 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         AtomicReference<LockItem> lock = new AtomicReference<>();
         boolean response = tryAcquireAllLocks(lock);
 
+        // if starting leadership streak, do extra leader responsibilities on schedule
+        if (response && !lastIsLeaderResult) {
+            initScheduledUpdateQueue();
+        }
+
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
@@ -378,6 +389,17 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         new ScheduledUpdate(interval, update);
     }
 
+    private void initScheduledUpdateQueue() {
+        // schedule table migration machine state update with same frequency as lease assignment interval
+        createScheduledUpdate(10000L, this::updateTableMigrationStatus);
+        // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
+        createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
+        // scheduled update to sync additional attributes from leader lock item if changed with frequent interval (10s)
+        // EDIT: don't use async scheduled update, synchronously sync just the table migration attributes
+        // EDIT: (for now) at the end of table migration machine update scheduled update
+        // syncAdditionalAttributes(10000L);
+    }
+
     /**
      * Processes the scheduled update queue with the option to not reschedule any of the scheduled updates.
      * This allows the leader to finish up upon leader change, without missing the already queued updates.
@@ -478,12 +500,86 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         respondToTableMigrationStatus();
     }
 
-    public synchronized void setTableMigrationStatus(TableMigrationMachine.States status) {
-        if (tableMigrationStatus != status) {
-            tableMigrationStatus = status;
-            additionalAttributesSynced = false;
-            // don't call respondToTableMigrationStatus() here; wait until DDB update succeeds, then re-read and respond
+    private boolean updateTableMigrationStatus() {
+        TableMigrationMachine.States newStatus = tableMigrationMachine.update(tableMigrationStatus, steadySinceEpoch);
+
+        if (tableMigrationStatus != newStatus) {
+            long newSteadySinceEpoch = Instant.now().getEpochSecond();
+            boolean success = false;
+
+            try {
+                success = updateTableMigrationStatusInDynamo(newStatus, newSteadySinceEpoch);
+            } catch (Exception e) {
+                log.warn("Caught exception while trying to write new table migration state {} to DynamoDB!", newStatus);
+                // success will still be false
+            }
+
+            if (!success) {
+                // wait until next table migration machine update to try again
+                // machine should deterministically produce same result
+                log.warn("Failed to write new table migration state {} to DynamoDB!", newStatus);
+                return false;
+            }
+
+            // only update local fields to same values if DDB update has succeeded
+            tableMigrationStatus = newStatus;
+            steadySinceEpoch = newSteadySinceEpoch;
+
+            // if first time in PENDING, copy the coordinator states into the lease table
+            if (newStatus == TableMigrationMachine.States.PENDING) {
+                copyCoordinatorStatesToLeaseTable(10000L);
+            }
         }
+        log.info("Updated table migration state in DynamoDB to {}.", newStatus);
+        return true;
+    }
+
+    private boolean updateTableMigrationStatusInDynamo(TableMigrationMachine.States status, long steadySinceEpoch) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        // get new values updates map and old values expectations map
+        Map<String, AttributeValueUpdate> updates = getTableMigrationStatusUpdate(status, steadySinceEpoch);
+        Map<String, ExpectedAttributeValue> expectations = getTableMigrationStatusExpectation(this.tableMigrationStatus, this.steadySinceEpoch);
+
+        // make the request with expectations; returns false if conditional check fails
+        return coordinatorStateDao.updateLeaderLockAdditionalAttributesWithExpectation(updates, expectations);
+    }
+
+    private Map<String, AttributeValueUpdate> getTableMigrationStatusUpdate(TableMigrationMachine.States status, long steadySinceEpoch) {
+        Map<String, AttributeValueUpdate> updates = new HashMap<>();
+
+        // build the two updates
+        final AttributeValueUpdate tableMigrationStatusUpdate = AttributeValueUpdate.builder()
+                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
+                .action(AttributeAction.PUT)
+                .build();
+        final AttributeValueUpdate steadySinceEpochUpdate = AttributeValueUpdate.builder()
+                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
+                .action(AttributeAction.PUT)
+                .build();
+
+        // add the two updates to the map
+        updates.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusUpdate);
+        updates.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochUpdate);
+
+        return updates;
+    }
+
+    private Map<String, ExpectedAttributeValue> getTableMigrationStatusExpectation(TableMigrationMachine.States status, long steadySinceEpoch) {
+        // start with expectation that leader lock exists
+        Map<String, ExpectedAttributeValue> expectations = coordinatorStateDao.getDynamoExistentExpectation(LEADER_HASH_KEY);
+
+        // build the two expectations that the old values haven't changed since we computed the new values based on them
+        final ExpectedAttributeValue tableMigrationStatusExpectation = ExpectedAttributeValue.builder()
+                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
+                .build();
+        final ExpectedAttributeValue steadySinceEpochExpectation = ExpectedAttributeValue.builder()
+                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
+                .build();
+
+        // add the expectations to the map to pass to the UpdateItemRequest
+        expectations.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusExpectation);
+        expectations.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochExpectation);
+
+        return expectations;
     }
 
     private synchronized void respondToTableMigrationStatus() {
