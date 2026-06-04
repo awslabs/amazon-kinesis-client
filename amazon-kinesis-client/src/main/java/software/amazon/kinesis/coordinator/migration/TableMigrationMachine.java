@@ -76,7 +76,6 @@ public class TableMigrationMachine {
                 if (workerStatsTableFoundEmpty && (steadySinceEpoch + PENDING_TO_COMPLETE_BAKE_TIME <= epochSecond)) {
                     log.info("Worker stats table found empty, setting table migration status to complete");
                     newTableMigrationStatus = States.COMPLETE;
-                    // TODO: cancel sync to coordinator table scheduled update here
                 }
                 break;
             }
