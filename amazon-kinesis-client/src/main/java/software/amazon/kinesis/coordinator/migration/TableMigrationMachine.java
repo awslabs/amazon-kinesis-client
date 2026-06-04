@@ -8,8 +8,10 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
-@Getter
-@Setter
+/**
+ * Static class that stores global variables related to the state of the table migration and exposes
+ * a method to decide and return the next state transition.
+ */
 @Slf4j
 public class TableMigrationMachine {
 
@@ -21,8 +23,17 @@ public class TableMigrationMachine {
     private static final long INIT_TO_DEPLOYED_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
     private static final long PENDING_TO_COMPLETE_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
 
-    private volatile int minSupportCode = 0;
-    private volatile boolean workerStatsTableFoundEmpty = false;
+    @Getter
+    @Setter
+    private static volatile int minSupportCode = 0;
+
+    @Getter
+    @Setter
+    private static volatile boolean workerStatsTableFoundEmpty = false;
+
+    private TableMigrationMachine() {
+        throw new UnsupportedOperationException("Utility class cannot be instantiated!");
+    }
 
     /**
      * The different states the multi-to-single table migration could be in:
@@ -42,7 +53,7 @@ public class TableMigrationMachine {
         private final String name;
     }
 
-    public States update(States tableMigrationStatus, long steadySinceEpoch) {
+    public static synchronized States update(States tableMigrationStatus, long steadySinceEpoch) {
         long epochSecond = Instant.now().getEpochSecond();
 
         States newTableMigrationStatus = tableMigrationStatus;
@@ -70,7 +81,7 @@ public class TableMigrationMachine {
                 break;
             }
             case COMPLETE: {
-                // no-op -> TODO: maybe implement rollback detection (i.e. check if status manually set back to PENDING)
+                // no-op -> in future could implement rollback detection if status manually set back to PENDING
                 break;
             }
         }

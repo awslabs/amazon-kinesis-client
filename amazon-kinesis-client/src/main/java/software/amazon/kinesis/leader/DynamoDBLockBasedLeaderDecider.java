@@ -39,10 +39,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
-import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
-import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
@@ -80,7 +77,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private long steadySinceEpoch = Instant.now().getEpochSecond();
     private TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
 
-    private final TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
     private final PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
 
     // while table migration is PENDING, need to grab both locks from respective tables (boolean=usingLeaseTable)
@@ -187,30 +183,32 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     private synchronized boolean forEachLockClient(BooleanSupplier action, Runnable undo) {
-        boolean response = true;
-        Stack<AmazonDynamoDBLockClient> clients = new Stack<>();
+        boolean failed = false;
+        int i = 0;
 
-        for (boolean usingLeaseTable : lockAcquisitionOrder) {
-            // set active client before the method call
-            dynamoDBLockClient = lockClientMap.computeIfAbsent(usingLeaseTable, this::createDDBLockClient);
+        // apply actions in order and break if any fails
+        while (i < lockAcquisitionOrder.length) {
+            setActiveLockClient(lockAcquisitionOrder[i++]);
 
-            if (action.getAsBoolean()) {
-                clients.push(dynamoDBLockClient);
-            } else {
-                response = false;
+            if (!action.getAsBoolean()) {
+                failed = true;
                 break;
             }
         }
 
-        // revert in reverse order if needed
-        if (!response && undo != null) {
-            while (!clients.isEmpty()) {
-                dynamoDBLockClient = clients.pop();
+        // if any action failed, revert in reverse order if needed
+        if (failed && undo != null) {
+            while (i > 0) {
+                setActiveLockClient(lockAcquisitionOrder[--i]);
                 undo.run();
             }
         }
 
-        return response;
+        return !failed;
+    }
+
+    private synchronized void setActiveLockClient(boolean usingLeaseTable) {
+        dynamoDBLockClient = lockClientMap.computeIfAbsent(usingLeaseTable, this::createDDBLockClient);
     }
 
     @Override
@@ -430,7 +428,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     public synchronized boolean updateTableMigrationStatus() {
-        TableMigrationMachine.States newStatus = tableMigrationMachine.update(tableMigrationStatus, steadySinceEpoch);
+        TableMigrationMachine.States newStatus = TableMigrationMachine.update(tableMigrationStatus, steadySinceEpoch);
 
         if (tableMigrationStatus != newStatus) {
             long newSteadySinceEpoch = Instant.now().getEpochSecond();

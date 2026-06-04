@@ -53,7 +53,6 @@ import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.migration.TableMigrationMachine;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
-import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -128,7 +127,6 @@ public final class LeaseAssignmentManager {
     private final StreamIdCacheManager streamIdCacheManager;
 
     private Future<?> managerFuture;
-    private TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
 
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
@@ -495,7 +493,7 @@ public final class LeaseAssignmentManager {
             }
         }
         if (minSupport != Integer.MAX_VALUE) {
-            tableMigrationMachine.setMinSupportCode(minSupport);
+            TableMigrationMachine.setMinSupportCode(minSupport);
         }
     }
 
@@ -589,7 +587,7 @@ public final class LeaseAssignmentManager {
             final List<WorkerMetricStats> workerMetricsFromStorage =
                     loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats);
 
-            tableMigrationMachine.setWorkerStatsTableFoundEmpty(workerMetricsFromStorage.isEmpty());
+            TableMigrationMachine.setWorkerStatsTableFoundEmpty(workerMetricsFromStorage.isEmpty());
 
             // wait until lease table scan finishes before processing worker metrics
             leaseListFuture.join();
