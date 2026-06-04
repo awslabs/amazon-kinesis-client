@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -32,7 +31,6 @@ import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.NonNull;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -42,9 +40,6 @@ import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.migration.TableMigrationMachine;
 import software.amazon.kinesis.leases.DynamoUtils;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -73,8 +68,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     private long steadySinceEpoch = Instant.now().getEpochSecond();
     private TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
-
-    private final PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
 
     // while table migration is PENDING, need to grab both locks from respective tables (boolean=usingLeaseTable)
     private Map<Boolean, AmazonDynamoDBLockClient> lockClientMap = new HashMap<>();
@@ -242,22 +235,19 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         AtomicReference<LockItem> lock = new AtomicReference<>();
         boolean response = tryAcquireAllLocks(lock);
 
-        // if starting leadership streak, do extra leader responsibilities on schedule
-        if (response && !lastIsLeaderResult) {
-            initScheduledUpdateQueue();
-        }
-
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
-
-        // if not leader, update queue will be empty; blocks caller of isLeader() unless all updates run async
-        processScheduledUpdateQueue(response);
 
         if (lock.get() != null) {
             // save the additional attributes from read lock item, leader or not
             // most changes are written by the leader, but some new values need to be picked up from DDB
             saveAdditionalAttributes(lock.get().getAdditionalAttributes());
+        }
+
+        // if leader, control table migration state transitions
+        if (response) {
+            updateTableMigrationStatus();
         }
 
         return response;
@@ -310,106 +300,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     /**
-     * Creates scheduled update to copy the coordinator states in the coordinator table to the lease table.
-     * If the method succeeds, the scheduled update will cancel itself. Otherwise, it will try again.
-     * @param interval - the interval at which to attempt the update, until successful
-     */
-    public void copyCoordinatorStatesToLeaseTable(long interval) {
-        new ScheduledUpdate(interval, () -> !coordinatorStateDao.copyCoordinatorStatesToLeaseTable());
-    }
-
-    /**
-     * Convenience method to call ScheduledUpdate constructor given DynamoDBLockBasedLeaderDecider instance.
-     * @param interval - the target frequency of the update, in milliseconds
-     * @param update - the update function (consumes DynamoDBLockBasedLeaderDecider)
-     */
-    public void createScheduledUpdate(long interval, Runnable update) {
-        new ScheduledUpdate(interval, update);
-    }
-
-    private void initScheduledUpdateQueue() {
-        // schedule table migration machine state update with same frequency as lease assignment interval
-        createScheduledUpdate(10000L, this::updateTableMigrationStatus);
-        // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
-        createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
-    }
-
-    /**
-     * Processes the scheduled update queue with the option to not reschedule any of the scheduled updates.
-     * This allows the leader to finish up upon leader change, without missing the already queued updates.
-     * @param shouldReschedule - whether to not cancel all scheduled updates in the queue
-     */
-    private void processScheduledUpdateQueue(boolean shouldReschedule) {
-        if (!shouldReschedule) {
-            for (ScheduledUpdate update : scheduledUpdatePriorityQueue) {
-                update.setCanceled(true);
-            }
-        }
-        processScheduledUpdateQueue();
-    }
-
-    private void processScheduledUpdateQueue() {
-        ScheduledUpdate update;
-        while ((update = scheduledUpdatePriorityQueue.peek()) != null
-                && update.priority <= Instant.now().toEpochMilli()) {
-            scheduledUpdatePriorityQueue.poll().execute();
-        }
-    }
-
-    public class ScheduledUpdate implements Comparable<ScheduledUpdate> {
-
-        long lastRun;
-        long priority;
-        final long interval;
-        final Runnable update;
-        final DynamoDBLockBasedLeaderDecider leaderDecider = DynamoDBLockBasedLeaderDecider.this;
-
-        @Setter
-        boolean canceled;
-
-        ScheduledUpdate(long interval, Runnable update) {
-            this(interval, () -> {
-                update.run();
-                return false; // update should never cancel itself if created from this constructor
-            });
-        }
-
-        ScheduledUpdate(long interval, BooleanSupplier shouldCancel) {
-            this.interval = interval;
-            this.update = () -> {
-                if (shouldCancel.getAsBoolean()) {
-                    this.canceled = true;
-                }
-            };
-            // always execute scheduled update immediately upon instantiation (adds itself to queue when done)
-            execute();
-        }
-
-        /**
-         * Run update and add this to queue with next due instant as priority
-         */
-        private void execute() {
-            try {
-                update.run();
-            } catch (Exception e) {
-                log.error("Current or recent leader failed scheduled update: ", e);
-            } finally {
-                // always (re-)add to queue unless canceled, even if update fails
-                lastRun = Instant.now().toEpochMilli();
-                priority = lastRun + interval;
-                if (!canceled) {
-                    leaderDecider.scheduledUpdatePriorityQueue.add(this);
-                }
-            }
-        }
-
-        @Override
-        public int compareTo(ScheduledUpdate other) {
-            return Long.compare(priority, other.priority);
-        }
-    }
-
-    /**
      * Saves the values found in the additional attributes of the leader lock item in DynamoDB to instance variables
      * @param attributes - the map of key-value pairs from the leader lock item in DynamoDB
      */
@@ -449,11 +339,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             // only update local fields to same values if DDB update has succeeded
             tableMigrationStatus = newStatus;
             steadySinceEpoch = newSteadySinceEpoch;
-
-            // if first time in PENDING, copy the coordinator states into the lease table
-            if (newStatus == TableMigrationMachine.States.PENDING) {
-                copyCoordinatorStatesToLeaseTable(10000L);
-            }
         }
         log.info("Updated table migration state in DynamoDB to {}.", newStatus);
         respondToTableMigrationStatus();
@@ -461,11 +346,10 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     private synchronized boolean updateTableMigrationStatusInDynamo(
-            TableMigrationMachine.States newTableMigrationStatus, long newSteadySinceEpoch)
-            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+            TableMigrationMachine.States newTableMigrationStatus, long newSteadySinceEpoch) {
         // make the request with the expectation that the values we based our decisions on are still there
         return coordinatorStateDao.updateTableMigrationStatusWithExpectation(
-                tableMigrationStatus, newTableMigrationStatus, steadySinceEpoch);
+                tableMigrationStatus, newTableMigrationStatus, steadySinceEpoch, newSteadySinceEpoch);
     }
 
     private synchronized void respondToTableMigrationStatus() {

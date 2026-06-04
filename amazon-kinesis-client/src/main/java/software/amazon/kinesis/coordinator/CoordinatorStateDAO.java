@@ -112,8 +112,6 @@ public class CoordinatorStateDAO {
     @Getter
     private boolean usingLeaseTable;
 
-    private CoordinatorStateDAO coordinatorTableDAO;
-
     /** entityType field may not exist for all coordinator states in coordinator table, but should exist in lease table */
     private static final String ENTITY_TYPE = "entityType";
 
@@ -127,14 +125,12 @@ public class CoordinatorStateDAO {
         setUsingLeaseTable(false);
     }
 
-    // TODO: create constructor that just takes LeaseManagementConfig and builds CoordinatorStateTableConfig on its own?
     public CoordinatorStateDAO(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final CoordinatorStateTableConfig config,
             final LeaseManagementConfig leaseManagementConfig) {
         this(dynamoDbAsyncClient, config);
         this.leaseManagementConfig = leaseManagementConfig;
-        this.coordinatorTableDAO = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
     }
 
     public void initialize() throws DependencyException {
@@ -187,8 +183,10 @@ public class CoordinatorStateDAO {
                     return;
                 }
                 // should be on second phase deployment based on config -> start table migration now that it's safe
-                // no need to retry if fails; other workers should come online and set the state
-                updateTableMigrationStatus(TableMigrationMachine.States.PENDING);
+                // copy migration state before setting to PENDING
+                if (!updateTableMigrationStatus(TableMigrationMachine.States.PENDING)) {
+                    return;
+                }
                 // fall through because the new state will be PENDING
             }
             case "PENDING": {
@@ -196,8 +194,6 @@ public class CoordinatorStateDAO {
                     // must wait for config value to signal we are part of second-phase deployment
                     return;
                 }
-                // sync coordinator states to coordinator table and fall through to use lease table
-                MutationTracker.createInstanceIfNull(dynamoDbAsyncClient, config);
             }
             case "COMPLETE": {
                 setUsingLeaseTable(true);
@@ -227,147 +223,6 @@ public class CoordinatorStateDAO {
 
         return AmazonDynamoDBLockClientOptions.builder(dynamoDbSyncClient, tableName)
                 .withPartitionKeyName(partitionKeyName);
-    }
-
-    static class MutationTracker {
-        @Getter
-        private static MutationTracker instance;
-
-        @Setter
-        private boolean scanning = true; // wait until first scan completes before first sync
-
-        private final CoordinatorStateDAO coordinatorTableDAO;
-        private final Map<String, Long> lastSeenTimestamps = new HashMap<>();
-        private final Set<String> justScanned = new HashSet<>();
-        private final EnumMap<Mutations, Set<String>> mutations = new EnumMap<>(Mutations.class);
-        private final Map<String, CoordinatorState> states = new HashMap<>();
-
-        /**
-         * The different possible changes to sync from the lease table to the coordinator table.
-         *  CREATE - recorded when the scanned key isn't recognized from before (could be due to leader change)
-         *  UPDATE - recorded when the scanned timestamp is higher than what we have in-memory from before
-         *  DELETE - recorded when a key from before wasn't scanned this time (possible to miss due to leader change)
-         */
-        enum Mutations {
-            CREATE,
-            UPDATE,
-            DELETE
-        }
-
-        MutationTracker(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
-            this.coordinatorTableDAO = new CoordinatorStateDAO(client, config);
-
-            for (Mutations mutation : Mutations.values()) {
-                this.mutations.put(mutation, new HashSet<>());
-            }
-        }
-
-        static MutationTracker createInstanceIfNull(DynamoDbAsyncClient client, CoordinatorStateTableConfig config) {
-            return (instance = instance != null ? instance : new MutationTracker(client, config));
-        }
-
-        /**
-         * Processes a single passed deserialized CoordinatorState by comparing its modified timestamp against memory.
-         * @param state - the constructed CoordinatorState object
-         */
-        synchronized void process(CoordinatorState state) {
-            // if received new state through process(), sync() must wait for caller to reset flag
-            // if beginning new scan, clear scanned set from previous scan
-            if (!scanning) {
-                scanning = true;
-                justScanned.clear();
-            }
-
-            String key = state.getKey();
-            states.put(key, state);
-            justScanned.add(key);
-
-            long modifiedTimestamp = state.getModifiedTimestamp();
-            Long previousTimestamp = lastSeenTimestamps.get(key);
-
-            if (previousTimestamp == null) {
-                // unrecognized key; either due to leader change or due to creation, we don't know yet
-                mutations.get(Mutations.CREATE).add(key);
-            } else if (modifiedTimestamp > previousTimestamp) {
-                // state was modified since last seen -> queue for sync
-                mutations.get(Mutations.UPDATE).add(key);
-            }
-
-            // record/update seen modified timestamp
-            lastSeenTimestamps.put(key, modifiedTimestamp);
-        }
-
-        synchronized void sync() {
-            if (scanning) {
-                log.info("Need to wait for lease table scan to finish before syncing to coordinator table.");
-                return;
-            }
-
-            // detect deletions by comparing all seen keys with the set from the latest lease table scan
-            for (String seen : new HashSet<>(lastSeenTimestamps.keySet())) {
-                if (!justScanned.contains(seen)) {
-                    mutations.get(Mutations.DELETE).add(seen);
-                    lastSeenTimestamps.remove(seen);
-                }
-            }
-
-            // process the queue and perform the corresponding actions
-            for (Mutations mutation : Mutations.values()) {
-                final Iterator<String> iterator = mutations.get(mutation).iterator();
-
-                while (iterator.hasNext()) {
-                    final String key = iterator.next();
-                    try {
-                        boolean success = false;
-                        switch (mutation) { // can't use cleaner "switch expression" with Java 8 target release version
-                            case DELETE: {
-                                success = coordinatorTableDAO.deleteCoordinatorState(key);
-                                break;
-                            }
-                            case CREATE: {
-                                success = coordinatorTableDAO.createCoordinatorStateIfNotExists(states.get(key));
-                                // intentional fallthrough; state might actually exist, and we need to do update instead
-                            }
-                            case UPDATE: {
-                                success = success
-                                        || coordinatorTableDAO.updateCoordinatorStateWithExpectation(
-                                                states.get(key), null);
-                            }
-                        }
-                        if (success) {
-                            iterator.remove(); // use iterator to avoid ConcurrentModificationException or reprocessing
-                            states.remove(key);
-                        }
-                    } catch (Exception e) {
-                        // most exceptions already handled in create, update, and delete methods
-                        log.warn(
-                                "Caught exception while trying to copy coordinator state from lease table into coordinator table: "
-                                        + e);
-                    }
-                }
-            }
-        }
-    }
-
-    public static void markScanComplete() {
-        MutationTracker mutationTracker = MutationTracker.getInstance();
-        if (mutationTracker != null) {
-            mutationTracker.setScanning(false);
-        }
-    }
-
-    public static void processScannedItem(final @NonNull CoordinatorState state) {
-        MutationTracker mutationTracker = MutationTracker.getInstance();
-        if (mutationTracker != null) {
-            mutationTracker.process(state);
-        }
-    }
-
-    public static void syncCoordinatorStates() {
-        MutationTracker mutationTracker = MutationTracker.getInstance();
-        if (mutationTracker != null) {
-            mutationTracker.sync();
-        }
     }
 
     public CoordinatorState tryGetCoordinatorState(String key, int maxAttempts) {
@@ -634,28 +489,6 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    public boolean copyCoordinatorStatesToLeaseTable() {
-        if (!initialized) {
-            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
-        }
-        // should be using the lease table already at this point
-        setUsingLeaseTable(true);
-
-        try {
-            for (CoordinatorState state : coordinatorTableDAO.listCoordinatorState()) {
-                // go through deserialize/serialize to make sure map/object is formatted for the lease table
-                // if the item exists already, we assume it's up-to-date
-                createCoordinatorStateIfNotExists(fromDynamoRecord(toDynamoRecord(state)));
-            }
-        } catch (Exception e) {
-            // try again later to get full scan or to complete all updates
-            log.warn("Caught exception while trying to copy coordinator states to lease table", e);
-            return false;
-        }
-        log.info("Copied all coordinator states from coordinator table to lease table successfully");
-        return true;
-    }
-
     public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         if (!initialized) {
@@ -770,7 +603,8 @@ public class CoordinatorStateDAO {
     public boolean updateTableMigrationStatusWithExpectation(
             TableMigrationMachine.States oldTableMigrationStatus,
             TableMigrationMachine.States newTableMigrationStatus,
-            long oldSteadySinceEpoch) {
+            long oldSteadySinceEpoch,
+            long newSteadySinceEpoch) {
         if (!initialized) {
             throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
         }
@@ -778,7 +612,7 @@ public class CoordinatorStateDAO {
         try {
             success = updateLeaderLockAdditionalAttributesWithExpectation(
                     getTableMigrationStatusUpdate(
-                            newTableMigrationStatus, Instant.now().getEpochSecond()),
+                            newTableMigrationStatus, newSteadySinceEpoch),
                     getTableMigrationStatusExpectation(oldTableMigrationStatus, oldSteadySinceEpoch));
         } catch (Exception e) {
             log.warn(

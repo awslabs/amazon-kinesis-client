@@ -819,7 +819,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     /**
      * Deserializes the key-value map to a Lease object if entityType is null, else if it's a worker
      * stats entry, deserializes as worker stats entry and adds to worker metrics list to handoff to LAM,
-     * else deserializes as coordinator state
+     * else must be coordinator state and ignores
      * @param item - the key-value map retrieved from DynamoDB
      * @return a Lease object if entityType is null, else null
      */
@@ -832,33 +832,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             // worker stats entry; use decided upon schema to deserialize -> should be lease table's schema
             scannedWorkerMetrics.get().add(WorkerMetricStatsDAO.getSchema().mapToItem(item));
         } else {
-            // coordinator state; deserialize based on exact entity type
-            CoordinatorState state = deserializeCoordinatorState(entityType, item);
-            if (state != null) {
-                CoordinatorStateDAO.processScannedItem(state);
-            }
+            // ignore coordinator states (for now); may need to sync stream info to legacy table in future
         }
         return null;
-    }
-
-    private CoordinatorState deserializeCoordinatorState(
-            final String entityType, final Map<String, AttributeValue> item) {
-        switch (entityType) {
-            case MigrationState.ENTITY_TYPE: {
-                return MigrationState.deserialize(item.get(LEASE_KEY_KEY).s(), item);
-            }
-            case StreamInfo.ENTITY_TYPE: {
-                return StreamInfo.deserialize(item.get(LEASE_KEY_KEY).s(), item);
-            }
-            case DynamoDBLockBasedLeaderDecider.LEADER_LOCK_ENTITY_TYPE: {
-                // no-op; don't copy to coordinator table, let leader decider grab other lock if it gets one of them
-                return null;
-            }
-            default: {
-                log.warn("Unknown entity type found in lease table thought to be coordinator state: {}", entityType);
-                return null;
-            }
-        }
     }
 
     /**
