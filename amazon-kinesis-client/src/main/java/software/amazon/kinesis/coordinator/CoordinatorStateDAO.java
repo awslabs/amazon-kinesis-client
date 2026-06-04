@@ -899,7 +899,7 @@ public class CoordinatorStateDAO {
         return result;
     }
 
-    public Map<String, ExpectedAttributeValue> getDynamoNonExistentExpectation() {
+    private Map<String, ExpectedAttributeValue> getDynamoNonExistentExpectation() {
         final Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
         final ExpectedAttributeValue expectedAV =
@@ -909,7 +909,7 @@ public class CoordinatorStateDAO {
         return result;
     }
 
-    public Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String keyValue) {
+    private Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String keyValue) {
         final Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
         final ExpectedAttributeValue expectedAV = ExpectedAttributeValue.builder()

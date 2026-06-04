@@ -4,11 +4,12 @@ import java.time.Instant;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 @Getter
+@Setter
 @Slf4j
 public class TableMigrationMachine {
 
@@ -20,10 +21,8 @@ public class TableMigrationMachine {
     private static final long INIT_TO_DEPLOYED_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
     private static final long PENDING_TO_COMPLETE_BAKE_TIME = 60L * 3L; // 1 hour, in seconds (set to 3m for testing)
 
-    private int minSupportCode = 0;
-    private Long steadySinceEpoch = null;
-    private States tableMigrationStatus = null;
-    private boolean workerStatsTableFoundEmpty = false;
+    private volatile int minSupportCode = 0;
+    private volatile boolean workerStatsTableFoundEmpty = false;
 
     /**
      * The different states the multi-to-single table migration could be in:
@@ -43,32 +42,6 @@ public class TableMigrationMachine {
         private final String name;
     }
 
-    public synchronized boolean setMinSupportCode(int minSupport) {
-        if (minSupportCode != minSupport) {
-            minSupportCode = minSupport;
-            resetSteadySinceEpoch();
-            return true;
-        }
-        return false;
-    }
-
-    public synchronized boolean setWorkerStatsTableFoundEmpty(boolean empty) {
-        if (workerStatsTableFoundEmpty != empty) {
-            workerStatsTableFoundEmpty = empty;
-            resetSteadySinceEpoch();
-            return true;
-        }
-        return false;
-    }
-
-    private synchronized void resetSteadySinceEpoch() {
-        steadySinceEpoch = Instant.now().getEpochSecond();
-    }
-
-    private synchronized void resetSteadySinceEpoch(DynamoDBLockBasedLeaderDecider leaderDecider) {
-        leaderDecider.steadySinceEpoch = steadySinceEpoch = Instant.now().getEpochSecond();
-    }
-
     public States update(States tableMigrationStatus, long steadySinceEpoch) {
         long epochSecond = Instant.now().getEpochSecond();
 
@@ -78,7 +51,6 @@ public class TableMigrationMachine {
             case INIT: {
                 if (minSupportCode >= TABLE_MIGRATION_FEATURE_INDEX
                         && steadySinceEpoch + INIT_TO_DEPLOYED_BAKE_TIME <= epochSecond) {
-                    // all workers support feature and bake time complete -> move to PENDING
                     log.info("All workers have table migration support deployed, setting status to deployed");
                     newTableMigrationStatus = States.DEPLOYED;
                 }
@@ -91,7 +63,6 @@ public class TableMigrationMachine {
             }
             case PENDING: {
                 if (workerStatsTableFoundEmpty && (steadySinceEpoch + PENDING_TO_COMPLETE_BAKE_TIME <= epochSecond)) {
-                    // worker stats table was empty and bake time complete -> move to COMPLETE
                     log.info("Worker stats table found empty, setting table migration status to complete");
                     newTableMigrationStatus = States.COMPLETE;
                     // TODO: cancel sync to coordinator table scheduled update here

@@ -465,24 +465,6 @@ public final class LeaseAssignmentManager {
     private void prepareAfterLeaderSwitch() {
         prevRunLeasesState.clear();
         noOfContinuousFailedAttempts = 0;
-
-        // this is the leaderDecider impl used in v3; should always return true (for now) after v3 migration
-        if (leaderDecider instanceof DynamoDBLockBasedLeaderDecider) {
-            initScheduledUpdateQueue((DynamoDBLockBasedLeaderDecider) leaderDecider);
-        }
-    }
-
-    /**
-     * Run on leader change -> populates leader decider's priority queue where update tasks can run on target schedule/frequency.
-     */
-    private void initScheduledUpdateQueue(DynamoDBLockBasedLeaderDecider lockClientLeaderDecider) {
-        // schedule table migration machine state update with same frequency as lease assignment interval
-        lockClientLeaderDecider.createScheduledUpdate(
-                leaseAssignmentIntervalMillis, () -> tableMigrationMachine.update(lockClientLeaderDecider));
-        // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
-        lockClientLeaderDecider.createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
-        // scheduled update to sync additional attributes from leader lock item if changed with frequent interval (10s)
-        lockClientLeaderDecider.syncAdditionalAttributes(10000L);
     }
 
     /**
