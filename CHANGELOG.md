@@ -3,6 +3,9 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+## Release 2.7.3 (2026-06-04)
+* [#1764](https://github.com/awslabs/amazon-kinesis-client/pull/1764) Fix FanoutRecordsPublisher restartFrom behavior at SHARD_END
+
 ## Release 2.7.2 (2025-09-29)
 * [#1626](https://github.com/awslabs/amazon-kinesis-client/pull/1626) Upgrade awssdk from 2.25.64 to 2.33.0 and apache.commons from 3.14.0 to 3.18.0
 * [#1525](https://github.com/awslabs/amazon-kinesis-client/pull/1525) Bump com.google.protobuf:protobuf-java from 4.27.5 to 4.31.1
