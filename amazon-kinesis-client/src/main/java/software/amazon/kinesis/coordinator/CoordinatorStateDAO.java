@@ -18,21 +18,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonDynamoDBLockClientOptionsBuilder;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
 import software.amazon.awssdk.core.waiters.WaiterResponse;
@@ -611,8 +606,7 @@ public class CoordinatorStateDAO {
         boolean success = false;
         try {
             success = updateLeaderLockAdditionalAttributesWithExpectation(
-                    getTableMigrationStatusUpdate(
-                            newTableMigrationStatus, newSteadySinceEpoch),
+                    getTableMigrationStatusUpdate(newTableMigrationStatus, newSteadySinceEpoch),
                     getTableMigrationStatusExpectation(oldTableMigrationStatus, oldSteadySinceEpoch));
         } catch (Exception e) {
             log.warn(

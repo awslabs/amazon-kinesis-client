@@ -169,8 +169,7 @@ public class MigrationClientVersionStateInitializer {
                 }
             }
             return migrationState;
-        }
-        catch (final UnsupportedOperationException e) {
+        } catch (final UnsupportedOperationException e) {
             // coordinatorStateDAO must not be initialized yet; this is fine -> return the state and don't write to DDB
             return migrationState;
         } catch (final ProvisionedThroughputException | DependencyException e) {
