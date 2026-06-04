@@ -77,25 +77,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private boolean lastIsLeaderResult = false;
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
-    // both fields need volatile as we don't know what lambdas might need to set them during scheduled update
-    public volatile long steadySinceEpoch = Instant.now().getEpochSecond();
-    public volatile TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
-
-    // this field is set to false when local updates have not been written to DDB yet
-    // this prevents us overwriting the pending changes with the stale values from DDB
-    private volatile boolean additionalAttributesSynced = true;
+    private long steadySinceEpoch = Instant.now().getEpochSecond();
+    private TableMigrationMachine.States tableMigrationStatus = TableMigrationMachine.States.INIT;
 
     private final TableMigrationMachine tableMigrationMachine = new TableMigrationMachine();
-
-    @Getter
-    private PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
+    private final PriorityQueue<ScheduledUpdate> scheduledUpdatePriorityQueue = new PriorityQueue<>();
 
     // while table migration is PENDING, need to grab both locks from respective tables (boolean=usingLeaseTable)
     private Map<Boolean, AmazonDynamoDBLockClient> lockClientMap = new HashMap<>();
     private boolean[] lockAcquisitionOrder = getLockAcquisitionOrder();
-
-    // used to check if additional attributes are in sync, and call raw UpdateItem request if not
-    private LockItem latestLeaderLockSnapshot;
 
     public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
     public static final String LEADER_LOCK_ENTITY_TYPE = "leaderLock";
@@ -175,7 +165,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     private synchronized void forEachLockClient(Runnable runnable, int maxAttemptsEach) {
-        forEachLockClient(client -> {
+        forEachLockClient(() -> {
             // try up to max attempts and count failure if runnable throws exception
             int retries = maxAttemptsEach - 1;
             while (true) {
@@ -192,31 +182,34 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         });
     }
 
-    private synchronized boolean forEachLockClient(Function<AmazonDynamoDBLockClient, Boolean> action) {
+    private synchronized boolean forEachLockClient(BooleanSupplier action) {
         return forEachLockClient(action, null);
     }
 
-    private synchronized boolean forEachLockClient(Function<AmazonDynamoDBLockClient, Boolean> action, Runnable undo) {
+    private synchronized boolean forEachLockClient(BooleanSupplier action, Runnable undo) {
         boolean response = true;
         Stack<AmazonDynamoDBLockClient> clients = new Stack<>();
 
         for (boolean usingLeaseTable : lockAcquisitionOrder) {
-            AmazonDynamoDBLockClient client =
-                    dynamoDBLockClient = lockClientMap.computeIfAbsent(usingLeaseTable, this::createDDBLockClient);
+            // set active client before the method call
+            dynamoDBLockClient = lockClientMap.computeIfAbsent(usingLeaseTable, this::createDDBLockClient);
 
-            if (action.apply(client)) {
-                clients.push(client);
+            if (action.getAsBoolean()) {
+                clients.push(dynamoDBLockClient);
             } else {
                 response = false;
                 break;
             }
         }
+
+        // revert in reverse order if needed
         if (!response && undo != null) {
             while (!clients.isEmpty()) {
                 dynamoDBLockClient = clients.pop();
                 undo.run();
             }
         }
+
         return response;
     }
 
@@ -261,18 +254,16 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
+
         // if not leader, update queue will be empty; blocks caller of isLeader() unless all updates run async
         processScheduledUpdateQueue(response);
+
         if (lock.get() != null) {
             // save the additional attributes from read lock item, leader or not
-            // although if local changes have not been written yet, don't overwrite with stale values from DDB
-            if (additionalAttributesSynced) {
-                // most changes are written by the leader, but some new values need to be picked up from DDB
-                saveAdditionalAttributes(lock.get().getAdditionalAttributes());
-            }
-            // save snapshot of leader lock item so we can frequently check if additional attributes are in sync
-            latestLeaderLockSnapshot = lock.get();
+            // most changes are written by the leader, but some new values need to be picked up from DDB
+            saveAdditionalAttributes(lock.get().getAdditionalAttributes());
         }
+
         return response;
     }
 
@@ -319,48 +310,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     private synchronized boolean tryAcquireAllLocks(@NonNull final AtomicReference<LockItem> lock) {
         // acquire locks in order -> if any fails, release in reverse order; else, return true with first lock item
-        return forEachLockClient(client -> tryAcquireLock(lock), this::releaseLeadershipIfHeld);
-    }
-
-    private void syncAdditionalAttributes() {
-        if (latestLeaderLockSnapshot == null) {
-            // must read item from DynamoDB first so we can compare; will retry on next scheduled attempt
-            return;
-        }
-        if (additionalAttributesSynced) {
-            // nothing to do; don't even compare to get diff
-            return;
-        }
-
-        // get values that should be in DynamoDB and values last seen in DynamoDB
-        Map<String, AttributeValue> desired = leaderLockAdditionalAttributes();
-        Map<String, AttributeValue> current = latestLeaderLockSnapshot.getAdditionalAttributes();
-
-        // compute diff -> only include attributes that are missing or have a different value
-        Map<String, AttributeValueUpdate> updates = new HashMap<>();
-        for (Map.Entry<String, AttributeValue> entry : desired.entrySet()) {
-            AttributeValue currentValue = current.get(entry.getKey());
-
-            // if value is different than seen before, add attribute and value to updates to create request with
-            if (currentValue == null || !currentValue.equals(entry.getValue())) {
-                updates.put(
-                        entry.getKey(),
-                        AttributeValueUpdate.builder()
-                                .value(entry.getValue())
-                                .action(AttributeAction.PUT)
-                                .build());
-            }
-        }
-
-        if (!updates.isEmpty()) {
-            try {
-                // apply partial update; pass attribute updates map to DAO; if method throws, field is not updated
-                additionalAttributesSynced = coordinatorStateDao.syncLeaderLockAdditionalAttributes(updates);
-            } catch (Exception e) {
-                // all exceptions retry on next scheduled attempt
-                log.warn("Caught exception while trying to update leader lock additional attributes: ", e);
-            }
-        }
+        return forEachLockClient(() -> tryAcquireLock(lock), this::releaseLeadershipIfHeld);
     }
 
     /**
@@ -370,14 +320,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      */
     public void copyCoordinatorStatesToLeaseTable(long interval) {
         new ScheduledUpdate(interval, () -> !coordinatorStateDao.copyCoordinatorStatesToLeaseTable());
-    }
-
-    /**
-     * Creates scheduled update to sync the additional attributes in the leader lock item to the coordinator table.
-     * @param interval - the interval at which to schedule the update
-     */
-    public void syncAdditionalAttributes(long interval) {
-        new ScheduledUpdate(interval, () -> syncAdditionalAttributes());
     }
 
     /**
@@ -394,10 +336,6 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         createScheduledUpdate(10000L, this::updateTableMigrationStatus);
         // schedule coordinator state sync from lease table to coordinator table with frequent interval (10s)
         createScheduledUpdate(10000L, () -> CoordinatorStateDAO.syncCoordinatorStates());
-        // scheduled update to sync additional attributes from leader lock item if changed with frequent interval (10s)
-        // EDIT: don't use async scheduled update, synchronously sync just the table migration attributes
-        // EDIT: (for now) at the end of table migration machine update scheduled update
-        // syncAdditionalAttributes(10000L);
     }
 
     /**
@@ -464,7 +402,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 lastRun = Instant.now().toEpochMilli();
                 priority = lastRun + interval;
                 if (!canceled) {
-                    leaderDecider.getScheduledUpdatePriorityQueue().add(this);
+                    leaderDecider.scheduledUpdatePriorityQueue.add(this);
                 }
             }
         }
@@ -479,12 +417,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
      * Saves the values found in the additional attributes of the leader lock item in DynamoDB to instance variables
      * @param attributes - the map of key-value pairs from the leader lock item in DynamoDB
      */
-    private synchronized void saveAdditionalAttributes(final Map<String, AttributeValue> attributes) {
-        if (attributes == null) {
-            // nothing to save; default or latest in-memory values will be written
-            return;
-        }
-
+    private synchronized void saveAdditionalAttributes(@NonNull final Map<String, AttributeValue> attributes) {
         // get attributes from map
         Long ss = DynamoUtils.safeGetLong(attributes, STEADY_SINCE_ATTRIBUTE_NAME);
         String tms = DynamoUtils.safeGetString(attributes, TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME);
@@ -494,13 +427,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         tableMigrationStatus = StringUtils.isEmpty(tms)
                 ? TableMigrationMachine.States.INIT
                 : TableMigrationMachine.States.valueOf(tms);
-
-        // respond to whatever was just read from DDB, even if same as current value
-        // because we do not want to respond to the table migration status until it is written to DDB
-        respondToTableMigrationStatus();
     }
 
-    private boolean updateTableMigrationStatus() {
+    public synchronized boolean updateTableMigrationStatus() {
         TableMigrationMachine.States newStatus = tableMigrationMachine.update(tableMigrationStatus, steadySinceEpoch);
 
         if (tableMigrationStatus != newStatus) {
@@ -531,55 +460,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             }
         }
         log.info("Updated table migration state in DynamoDB to {}.", newStatus);
+        respondToTableMigrationStatus();
         return true;
     }
 
-    private boolean updateTableMigrationStatusInDynamo(TableMigrationMachine.States status, long steadySinceEpoch) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        // get new values updates map and old values expectations map
-        Map<String, AttributeValueUpdate> updates = getTableMigrationStatusUpdate(status, steadySinceEpoch);
-        Map<String, ExpectedAttributeValue> expectations = getTableMigrationStatusExpectation(this.tableMigrationStatus, this.steadySinceEpoch);
-
-        // make the request with expectations; returns false if conditional check fails
-        return coordinatorStateDao.updateLeaderLockAdditionalAttributesWithExpectation(updates, expectations);
-    }
-
-    private Map<String, AttributeValueUpdate> getTableMigrationStatusUpdate(TableMigrationMachine.States status, long steadySinceEpoch) {
-        Map<String, AttributeValueUpdate> updates = new HashMap<>();
-
-        // build the two updates
-        final AttributeValueUpdate tableMigrationStatusUpdate = AttributeValueUpdate.builder()
-                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
-                .action(AttributeAction.PUT)
-                .build();
-        final AttributeValueUpdate steadySinceEpochUpdate = AttributeValueUpdate.builder()
-                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
-                .action(AttributeAction.PUT)
-                .build();
-
-        // add the two updates to the map
-        updates.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusUpdate);
-        updates.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochUpdate);
-
-        return updates;
-    }
-
-    private Map<String, ExpectedAttributeValue> getTableMigrationStatusExpectation(TableMigrationMachine.States status, long steadySinceEpoch) {
-        // start with expectation that leader lock exists
-        Map<String, ExpectedAttributeValue> expectations = coordinatorStateDao.getDynamoExistentExpectation(LEADER_HASH_KEY);
-
-        // build the two expectations that the old values haven't changed since we computed the new values based on them
-        final ExpectedAttributeValue tableMigrationStatusExpectation = ExpectedAttributeValue.builder()
-                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
-                .build();
-        final ExpectedAttributeValue steadySinceEpochExpectation = ExpectedAttributeValue.builder()
-                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
-                .build();
-
-        // add the expectations to the map to pass to the UpdateItemRequest
-        expectations.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusExpectation);
-        expectations.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochExpectation);
-
-        return expectations;
+    private synchronized boolean updateTableMigrationStatusInDynamo(TableMigrationMachine.States newTableMigrationStatus, long newSteadySinceEpoch) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        // make the request with the expectation that the values we based our decisions on are still there
+        return coordinatorStateDao.updateTableMigrationStatusWithExpectation(tableMigrationStatus, newTableMigrationStatus, steadySinceEpoch);
     }
 
     private synchronized void respondToTableMigrationStatus() {

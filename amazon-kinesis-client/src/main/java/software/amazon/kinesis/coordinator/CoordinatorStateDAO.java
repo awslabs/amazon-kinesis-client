@@ -184,7 +184,7 @@ public class CoordinatorStateDAO {
                     return;
                 }
                 // should be on second phase deployment based on config -> start table migration now that it's safe
-                updateTableMigrationStatus("PENDING");
+                updateTableMigrationStatus(TableMigrationMachine.States.PENDING);
                 // fall through because the new state will be PENDING
             }
             case "PENDING": {
@@ -629,16 +629,6 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    /**
-     * Writes the additional attributes values for the leader lock item into the item in the coordinator table
-     * @param updates - the attributes that need to be updated and their values
-     * @return whether the sync operation succeeded
-     */
-    public boolean syncLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
-            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        return coordinatorTableDAO.updateLeaderLockAdditionalAttributes(updates);
-    }
-
     public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         return updateLeaderLockAdditionalAttributesWithExpectation(updates, getDynamoExistentExpectation(LEADER_HASH_KEY));
     }
@@ -673,36 +663,86 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    public boolean updateTableMigrationStatus(String tableMigrationStatus) {
+    private Map<String, AttributeValueUpdate> getTableMigrationStatusUpdate(TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
         Map<String, AttributeValueUpdate> updates = new HashMap<>();
 
-        // table migration status update; leader decider will pick up the new value
-        updates.put(
-                TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
-                AttributeValueUpdate.builder()
-                        .value(AttributeValue.builder().s(tableMigrationStatus).build())
-                        .action(AttributeAction.PUT)
-                        .build());
+        // build the two updates
+        final AttributeValueUpdate tableMigrationStatusUpdate = AttributeValueUpdate.builder()
+                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
+                .action(AttributeAction.PUT)
+                .build();
+        final AttributeValueUpdate steadySinceEpochUpdate = AttributeValueUpdate.builder()
+                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
+                .action(AttributeAction.PUT)
+                .build();
 
-        // since table migration status changed, reset steady since epoch; leader decider will pick up the new value
-        updates.put(
-                STEADY_SINCE_ATTRIBUTE_NAME,
-                AttributeValueUpdate.builder()
-                        .value(AttributeValue.builder()
-                                .n(String.valueOf(Instant.now().getEpochSecond()))
-                                .build())
-                        .action(AttributeAction.PUT)
-                        .build());
+        // add the two updates to the map
+        updates.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusUpdate);
+        updates.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochUpdate);
 
+        return updates;
+    }
+
+    private Map<String, ExpectedAttributeValue> getTableMigrationStatusExpectation(TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
+        // start with expectation that leader lock exists
+        Map<String, ExpectedAttributeValue> expectations = getDynamoExistentExpectation(LEADER_HASH_KEY);
+
+        // build the two expectations
+        final ExpectedAttributeValue tableMigrationStatusExpectation = ExpectedAttributeValue.builder()
+                .value(AttributeValue.fromS(String.valueOf(tableMigrationStatus)))
+                .build();
+        final ExpectedAttributeValue steadySinceEpochExpectation = ExpectedAttributeValue.builder()
+                .value(AttributeValue.fromN(String.valueOf(steadySinceEpoch)))
+                .build();
+
+        // add the expectations to the map
+        expectations.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, tableMigrationStatusExpectation);
+        expectations.put(STEADY_SINCE_ATTRIBUTE_NAME, steadySinceEpochExpectation);
+
+        return expectations;
+    }
+
+    public boolean updateTableMigrationStatus(TableMigrationMachine.States tableMigrationStatus) {
+        boolean success = false;
         try {
-            updateLeaderLockAdditionalAttributes(updates);
+            success = updateLeaderLockAdditionalAttributes(getTableMigrationStatusUpdate(tableMigrationStatus, Instant.now().getEpochSecond()));
         } catch (Exception e) {
             // no need to retry; if the fields aren't updated, other workers will come online and try also
-            log.warn("Caught exception while trying to update the table migration status in DynamoDB", e);
-            return false;
+            log.warn("Caught exception while trying to update the table migration status in DynamoDB to {}", tableMigrationStatus, e);
+            // success will still be false
         }
-        log.info("Updated table migration status in the leader lock item");
-        return true;
+        if (!success) {
+            // could be false from exception or existent expectation failure
+            log.warn("Failed to update table migration status in DynamoDB to {}.", tableMigrationStatus);
+            return false;
+        } else {
+            log.info("Updated table migration status in the leader lock item to {}.", tableMigrationStatus);
+            return true;
+        }
+    }
+
+    public boolean updateTableMigrationStatusWithExpectation(
+            TableMigrationMachine.States oldTableMigrationStatus,
+            TableMigrationMachine.States newTableMigrationStatus,
+            long oldSteadySinceEpoch) {
+        boolean success = false;
+        try {
+            success = updateLeaderLockAdditionalAttributesWithExpectation(
+                    getTableMigrationStatusUpdate(newTableMigrationStatus, Instant.now().getEpochSecond()),
+                    getTableMigrationStatusExpectation(oldTableMigrationStatus, oldSteadySinceEpoch));
+        } catch (Exception e) {
+            // no need to retry; if the fields aren't updated, other workers will come online and try also
+            log.warn("Caught exception while trying to update the table migration status in DynamoDB to {}", newTableMigrationStatus, e);
+            // success will still be false
+        }
+        if (!success) {
+            // could be false from exception or expectation that old values are still there
+            log.warn("Failed to update table migration status in DynamoDB to {}.", newTableMigrationStatus);
+            return false;
+        } else {
+            log.info("Updated table migration status in the leader lock item to {}.", newTableMigrationStatus);
+            return true;
+        }
     }
 
     /**
