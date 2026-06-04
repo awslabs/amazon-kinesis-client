@@ -104,6 +104,7 @@ public class CoordinatorStateDAO {
     private String tableName;
     private String partitionKeyName;
     private LeaseManagementConfig leaseManagementConfig;
+    private boolean initialized;
 
     @Getter
     private Map<String, AttributeValue> leaderLockItemSnapshot;
@@ -134,21 +135,23 @@ public class CoordinatorStateDAO {
         this(dynamoDbAsyncClient, config);
         this.leaseManagementConfig = leaseManagementConfig;
         this.coordinatorTableDAO = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
-
-        // try to find leader lock item in lease table; if not exists, fallback to coordinator table
-        if (getLeaderLockSnapshot(true) || getLeaderLockSnapshot(false)) {
-            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
-        } else {
-            // if leader lock item can't be found in either table, we must be upgrading from v2
-            setUsingLeaseTable(true);
-        }
     }
 
     public void initialize() throws DependencyException {
-        if (!usingLeaseTable) {
-            // don't create lease table, let existing lease management lifecycle handle; only create coordinator table
-            createTableIfNotExists();
+        // try to find leader lock item in lease table; if not exists, fallback to coordinator table
+        if (getLeaderLockSnapshot(true) || getLeaderLockSnapshot(false)) {
+            respondToTableMigrationStatus(getTableMigrationStatus(leaderLockItemSnapshot));
+            initialized = true;
+        } else {
+            // if leader lock item can't be found in either table, should mean we're upgrading from v2
+            // but just in case caller could use DAO when we're not ready yet, don't set initialized flag
+            initialized = false;
         }
+    }
+
+    public void initialize(boolean usingLeaseTable) {
+        setUsingLeaseTable(usingLeaseTable);
+        initialized = true;
     }
 
     private DynamoDbClient createDelegateClient() {
@@ -184,6 +187,7 @@ public class CoordinatorStateDAO {
                     return;
                 }
                 // should be on second phase deployment based on config -> start table migration now that it's safe
+                // no need to retry if fails; other workers should come online and set the state
                 updateTableMigrationStatus(TableMigrationMachine.States.PENDING);
                 // fall through because the new state will be PENDING
             }
@@ -367,6 +371,10 @@ public class CoordinatorStateDAO {
     }
 
     public CoordinatorState tryGetCoordinatorState(String key, int maxAttempts) {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
+
         for (int waitMillisBeforeRetry = 0, retries = maxAttempts - 1;
                 retries >= 0;
                 retries--, waitMillisBeforeRetry = Math.max(1000, waitMillisBeforeRetry * 2)) {
@@ -377,10 +385,11 @@ public class CoordinatorStateDAO {
                 return getCoordinatorState(key);
             } catch (InterruptedException ie) {
                 log.warn("Thread sleep was interrupted while waiting to retry fetching coordinator state: " + ie);
-                retries++; // don't count attempt; add back to retry stock
-            } catch (ResourceNotFoundException rnfe) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (InvalidStateException ise) {
                 // (probably) table does not exist; exception is expected -> do not retry
-                log.warn("Could not find DynamoDB resource while trying to fetch coordinator state: " + rnfe);
+                log.warn("Could not find DynamoDB resource while trying to fetch coordinator state: " + ise);
                 return null;
             } catch (Exception e) {
                 log.warn("Exception caught while trying to fetch coordinator state: " + e);
@@ -401,6 +410,9 @@ public class CoordinatorStateDAO {
      */
     public List<CoordinatorState> listCoordinatorState()
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         log.debug("Listing coordinatorState");
 
         final ScanRequest request = ScanRequest.builder().tableName(tableName).build();
@@ -449,6 +461,9 @@ public class CoordinatorStateDAO {
      */
     public List<CoordinatorState> listCoordinatorStateByEntityType(String entityType)
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         log.debug("Listing coordinatorState");
 
         final Map<String, AttributeValue> expressionAttributeValues = ImmutableMap.of(
@@ -504,6 +519,9 @@ public class CoordinatorStateDAO {
      */
     public boolean createCoordinatorStateIfNotExists(final CoordinatorState state)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         log.debug("Creating coordinatorState {}", state);
 
         final PutItemRequest request = PutItemRequest.builder()
@@ -545,6 +563,9 @@ public class CoordinatorStateDAO {
      */
     public CoordinatorState getCoordinatorState(@NonNull final String key)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         log.debug("Getting coordinatorState with key {}", key);
 
         final GetItemRequest request = GetItemRequest.builder()
@@ -587,6 +608,9 @@ public class CoordinatorStateDAO {
      */
     public boolean deleteCoordinatorState(@NonNull final String key)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         log.debug("Deleting item with key {}", key);
         final DeleteItemRequest request = DeleteItemRequest.builder()
                 .tableName(tableName)
@@ -611,6 +635,9 @@ public class CoordinatorStateDAO {
     }
 
     public boolean copyCoordinatorStatesToLeaseTable() {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         // should be using the lease table already at this point
         setUsingLeaseTable(true);
 
@@ -629,8 +656,13 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        return updateLeaderLockAdditionalAttributesWithExpectation(updates, getDynamoExistentExpectation(LEADER_HASH_KEY));
+    public boolean updateLeaderLockAdditionalAttributes(@NonNull final Map<String, AttributeValueUpdate> updates)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
+        return updateLeaderLockAdditionalAttributesWithExpectation(
+                updates, getDynamoExistentExpectation(LEADER_HASH_KEY));
     }
 
     /**
@@ -638,12 +670,18 @@ public class CoordinatorStateDAO {
      * @param updates - the attributes that need to be updated and their values
      * @return whether the update succeeded
      */
-    public boolean updateLeaderLockAdditionalAttributesWithExpectation(@NonNull final Map<String, AttributeValueUpdate> updates, @NonNull final Map<String, ExpectedAttributeValue> expectations)
+    public boolean updateLeaderLockAdditionalAttributesWithExpectation(
+            @NonNull final Map<String, AttributeValueUpdate> updates,
+            @NonNull final Map<String, ExpectedAttributeValue> expectations)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         final UpdateItemRequest request = UpdateItemRequest.builder()
                 .tableName(tableName)
                 .key(getCoordinatorStateKey(LEADER_HASH_KEY))
                 .attributeUpdates(updates)
+                .expected(expectations)
                 .build();
         try {
             FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
@@ -663,7 +701,8 @@ public class CoordinatorStateDAO {
         return true;
     }
 
-    private Map<String, AttributeValueUpdate> getTableMigrationStatusUpdate(TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
+    private Map<String, AttributeValueUpdate> getTableMigrationStatusUpdate(
+            TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
         Map<String, AttributeValueUpdate> updates = new HashMap<>();
 
         // build the two updates
@@ -683,7 +722,8 @@ public class CoordinatorStateDAO {
         return updates;
     }
 
-    private Map<String, ExpectedAttributeValue> getTableMigrationStatusExpectation(TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
+    private Map<String, ExpectedAttributeValue> getTableMigrationStatusExpectation(
+            TableMigrationMachine.States tableMigrationStatus, long steadySinceEpoch) {
         // start with expectation that leader lock exists
         Map<String, ExpectedAttributeValue> expectations = getDynamoExistentExpectation(LEADER_HASH_KEY);
 
@@ -703,12 +743,18 @@ public class CoordinatorStateDAO {
     }
 
     public boolean updateTableMigrationStatus(TableMigrationMachine.States tableMigrationStatus) {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         boolean success = false;
         try {
-            success = updateLeaderLockAdditionalAttributes(getTableMigrationStatusUpdate(tableMigrationStatus, Instant.now().getEpochSecond()));
+            success = updateLeaderLockAdditionalAttributes(getTableMigrationStatusUpdate(
+                    tableMigrationStatus, Instant.now().getEpochSecond()));
         } catch (Exception e) {
-            // no need to retry; if the fields aren't updated, other workers will come online and try also
-            log.warn("Caught exception while trying to update the table migration status in DynamoDB to {}", tableMigrationStatus, e);
+            log.warn(
+                    "Caught exception while trying to update the table migration status in DynamoDB to {}",
+                    tableMigrationStatus,
+                    e);
             // success will still be false
         }
         if (!success) {
@@ -725,14 +771,20 @@ public class CoordinatorStateDAO {
             TableMigrationMachine.States oldTableMigrationStatus,
             TableMigrationMachine.States newTableMigrationStatus,
             long oldSteadySinceEpoch) {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         boolean success = false;
         try {
             success = updateLeaderLockAdditionalAttributesWithExpectation(
-                    getTableMigrationStatusUpdate(newTableMigrationStatus, Instant.now().getEpochSecond()),
+                    getTableMigrationStatusUpdate(
+                            newTableMigrationStatus, Instant.now().getEpochSecond()),
                     getTableMigrationStatusExpectation(oldTableMigrationStatus, oldSteadySinceEpoch));
         } catch (Exception e) {
-            // no need to retry; if the fields aren't updated, other workers will come online and try also
-            log.warn("Caught exception while trying to update the table migration status in DynamoDB to {}", newTableMigrationStatus, e);
+            log.warn(
+                    "Caught exception while trying to update the table migration status in DynamoDB to {}",
+                    newTableMigrationStatus,
+                    e);
             // success will still be false
         }
         if (!success) {
@@ -757,6 +809,9 @@ public class CoordinatorStateDAO {
     public boolean updateCoordinatorStateWithExpectation(
             @NonNull final CoordinatorState state, final Map<String, ExpectedAttributeValue> expectations)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         final Map<String, ExpectedAttributeValue> expectationMap = getDynamoExistentExpectation(state.getKey());
         expectationMap.putAll(MapUtils.emptyIfNull(expectations));
 
@@ -798,6 +853,9 @@ public class CoordinatorStateDAO {
      * @throws DependencyException
      */
     private void createTableIfNotExists() throws DependencyException {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         TableDescription tableDescription = getTableDescription();
         if (tableDescription == null) {
             final CreateTableResponse response = unwrappingFuture(() -> dynamoDbAsyncClient.createTable(getRequest()));
@@ -936,6 +994,9 @@ public class CoordinatorStateDAO {
     }
 
     private TableDescription getTableDescription() {
+        if (!initialized) {
+            throw new UnsupportedOperationException("DAO is not initialized, we do not know if it is safe to use yet!");
+        }
         try {
             final DescribeTableResponse response = unwrappingFuture(() -> dynamoDbAsyncClient.describeTable(
                     DescribeTableRequest.builder().tableName(config.tableName()).build()));

@@ -21,19 +21,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
-import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
-import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -188,15 +185,16 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         // apply actions in order and break if any fails
         while (i < lockAcquisitionOrder.length) {
-            setActiveLockClient(lockAcquisitionOrder[i++]);
+            setActiveLockClient(lockAcquisitionOrder[i]);
 
             if (!action.getAsBoolean()) {
                 failed = true;
                 break;
             }
+            i++;
         }
 
-        // if any action failed, revert in reverse order if needed
+        // if any action failed, revert all successful actions in reverse order if needed
         if (failed && undo != null) {
             while (i > 0) {
                 setActiveLockClient(lockAcquisitionOrder[--i]);
@@ -462,9 +460,12 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         return true;
     }
 
-    private synchronized boolean updateTableMigrationStatusInDynamo(TableMigrationMachine.States newTableMigrationStatus, long newSteadySinceEpoch) throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+    private synchronized boolean updateTableMigrationStatusInDynamo(
+            TableMigrationMachine.States newTableMigrationStatus, long newSteadySinceEpoch)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         // make the request with the expectation that the values we based our decisions on are still there
-        return coordinatorStateDao.updateTableMigrationStatusWithExpectation(tableMigrationStatus, newTableMigrationStatus, steadySinceEpoch);
+        return coordinatorStateDao.updateTableMigrationStatusWithExpectation(
+                tableMigrationStatus, newTableMigrationStatus, steadySinceEpoch);
     }
 
     private synchronized void respondToTableMigrationStatus() {

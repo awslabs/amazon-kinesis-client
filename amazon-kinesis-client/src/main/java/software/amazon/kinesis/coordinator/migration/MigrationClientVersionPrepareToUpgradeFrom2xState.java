@@ -13,7 +13,7 @@ import software.amazon.kinesis.coordinator.DynamicMigrationComponentsInitializer
 @KinesisClientInternalApi
 @RequiredArgsConstructor
 @ThreadSafe
-public class MigrationClientVersionPrepareForUpgradeFrom2xState implements MigrationClientVersionState {
+public class MigrationClientVersionPrepareToUpgradeFrom2xState implements MigrationClientVersionState {
 
     private final MigrationStateMachine stateMachine;
     private final ScheduledExecutorService stateMachineThreadPool;
@@ -32,7 +32,7 @@ public class MigrationClientVersionPrepareForUpgradeFrom2xState implements Migra
     public synchronized void enter(final ClientVersion fromClientVersion) {
         if (!entered) {
             log.info("Entering {} from {}", this, fromClientVersion);
-            initializer.initializeClientVersionForPrepareForUpgradeFrom2x(fromClientVersion);
+            initializer.initializeClientVersionForPrepareToUpgradeFrom2x(fromClientVersion);
             entered = true;
         } else {
             log.info("Not entering {}", left ? "already exited state" : "already entered state");

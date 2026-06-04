@@ -368,7 +368,7 @@ public final class DynamicMigrationComponentsInitializer {
      * rollforward monitor like that for CLIENT_VERSION_2X (so that on the second deployment, workers move
      * to v3 compatible functionality progressively as more are deployed, rather than all at once).
      */
-    public synchronized void initializeClientVersionForPrepareForUpgradeFrom2x(final ClientVersion fromClientVersion) {
+    public synchronized void initializeClientVersionForPrepareToUpgradeFrom2x(final ClientVersion fromClientVersion) {
         log.info("Initializing KCL components for prepare for upgrade from 2x from {}", fromClientVersion);
 
         if (fromClientVersion != ClientVersion.CLIENT_VERSION_INIT) {

@@ -76,20 +76,10 @@ public class MigrationClientVersionStateInitializer {
 
         try {
             MigrationState migrationState = getMigrationStateFromDynamo();
-            // if migration state not found in DDB, defaults to CLIENT_VERSION_INIT
-            // so need to check client version config and see what the state should be
-            // if client version config is CLIENT_VERSION_CONFIG_DEPLOYING_3X, do not write to DDB
-            // because leader will likely not be on 3x, so we cannot write non-leases into lease table yet
             int retryCount = 0;
             while (retryCount++ < MAX_INITIALIZATION_RETRY) {
                 final ClientVersion initialClientVersion = getClientVersionForInitialization(migrationState);
                 if (migrationState.getClientVersion() != initialClientVersion) {
-                    if (migrationState.getClientVersion() == CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X) {
-                        // do not write CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X to DDB
-                        // the state is used internally to let the code deploy first
-                        // writing into the lease table before the leader is ready could cause errors/failures
-                        break;
-                    }
                     // If update fails, the value represents current state in dynamo
                     migrationState = updateMigrationStateInDynamo(migrationState, initialClientVersion);
                     if (migrationState.getClientVersion() == initialClientVersion) {
@@ -179,6 +169,10 @@ public class MigrationClientVersionStateInitializer {
                 }
             }
             return migrationState;
+        }
+        catch (final UnsupportedOperationException e) {
+            // coordinatorStateDAO must not be initialized yet; this is fine -> return the state and don't write to DDB
+            return migrationState;
         } catch (final ProvisionedThroughputException | DependencyException e) {
             log.debug(
                     "Failed to update migration state {} with {}, return previous value to trigger a retry",
@@ -194,6 +188,7 @@ public class MigrationClientVersionStateInitializer {
             case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X:
                 return CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
             case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE2:
+                coordinatorStateDAO.initialize(true);
                 return CLIENT_VERSION_UPGRADE_FROM_2X;
             case CLIENT_VERSION_CONFIG_3X:
                 return CLIENT_VERSION_3X;
