@@ -124,6 +124,10 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
             // Update consumer arn, if describe was successful.
             if (response != null) {
                 streamConsumerArn(response.consumerDescription().consumerARN());
+                // Skip waitForActive if consumer is already ACTIVE from the initial describe
+                if (ConsumerStatus.ACTIVE.equals(response.consumerDescription().consumerStatus())) {
+                    return streamConsumerArn;
+                }
             }
 
             // Check if consumer is active before proceeding
@@ -179,8 +183,15 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         try {
             while (!ConsumerStatus.ACTIVE.equals(status) && retries > 0) {
                 status = describeStreamConsumer().consumerDescription().consumerStatus();
+                if (ConsumerStatus.ACTIVE.equals(status)) {
+                    break;
+                }
                 retries--;
-                log.info("{} : Waiting for StreamConsumer {} to have ACTIVE status...", streamName, streamConsumerName);
+                log.info(
+                        "{} : Waiting for StreamConsumer {} to have ACTIVE status, current status: {}",
+                        streamName,
+                        streamConsumerName,
+                        status);
                 Thread.sleep(retryBackoffMillis);
             }
         } catch (InterruptedException ie) {
