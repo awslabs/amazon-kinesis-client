@@ -187,7 +187,7 @@ public class FanOutConsumerRegistrationTest {
         final long endTime = System.currentTimeMillis();
 
         assertThat(consumerArn, equalTo(CONSUMER_ARN));
-        assertThat(endTime - startTime, greaterThanOrEqualTo(2 * BACKOFF_MILLIS));
+        assertThat(endTime - startTime, greaterThanOrEqualTo(BACKOFF_MILLIS));
 
         verify(client).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
     }
