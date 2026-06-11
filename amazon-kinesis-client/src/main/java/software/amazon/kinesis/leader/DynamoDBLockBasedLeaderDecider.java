@@ -35,6 +35,9 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -53,6 +56,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private final Long heartbeatPeriodMillis;
     private final String workerId;
     private final MetricsFactory metricsFactory;
+    private final TableMigrationStateMachine tableMigrationStateMachine;
 
     private long lastCheckTimeInMillis = 0L;
     private boolean lastIsLeaderResult = false;
@@ -64,7 +68,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final String workerId,
             final Long leaseDuration,
             final Long heartbeatPeriod,
-            final MetricsFactory metricsFactory) {
+            final MetricsFactory metricsFactory,
+            final TableMigrationStateMachine tableMigrationStateMachine) {
         final AmazonDynamoDBLockClient dynamoDBLockClient = new AmazonDynamoDBLockClient(coordinatorStateDao
                 .getDDBLockClientOptionsBuilder()
                 .withTimeUnit(TimeUnit.MILLISECONDS)
@@ -75,7 +80,11 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 .build());
 
         return new DynamoDBLockBasedLeaderDecider(
-                dynamoDBLockClient, heartbeatPeriod, workerId, metricsFactory);
+                dynamoDBLockClient,
+                heartbeatPeriod,
+                workerId,
+                metricsFactory,
+                tableMigrationStateMachine);
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
@@ -83,8 +92,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final String workerId,
             final MetricsFactory metricsFactory,
             long leaseDurationInMillis,
-            long heartbeatPeriodInMillis) {
-        return create(coordinatorStateDao, workerId, leaseDurationInMillis, heartbeatPeriodInMillis, metricsFactory);
+            long heartbeatPeriodInMillis,
+            final TableMigrationStateMachine tableMigrationStateMachine) {
+        return create(
+                coordinatorStateDao,
+                workerId,
+                leaseDurationInMillis,
+                heartbeatPeriodInMillis,
+                metricsFactory,
+                tableMigrationStateMachine);
     }
 
     @Override
@@ -149,6 +165,14 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         } else {
             response = lockItem.get().getOwnerName().equals(workerId);
+        }
+
+        try {
+            tableMigrationStateMachine.handleLeaderLockResult(response);
+        } catch (final DependencyException | InvalidStateException e) {
+            log.warn("handleLeaderLockResult failed, releasing lock and returning false", e);
+            releaseLeadershipIfHeld();
+            response = false;
         }
 
         lastCheckTimeInMillis = System.currentTimeMillis();

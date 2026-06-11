@@ -24,6 +24,7 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -39,7 +40,10 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DynamoDBLockBasedLeaderDeciderTest {
@@ -63,6 +67,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
             LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
             DefaultSdkAutoConstructList.getInstance());
 
+    private TableMigrationStateMachine mockTableMigrationStateMachine;
+
     @BeforeEach
     void setup() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
@@ -73,11 +79,18 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final CoordinatorStateDAO dao = new CoordinatorStateDAO(
                 dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, provider);
         dao.initialize();
+        mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(
                     workerId,
-                    DynamoDBLockBasedLeaderDecider.create(dao, workerId, 100L, 10L, new NullMetricsFactory()));
+                    DynamoDBLockBasedLeaderDecider.create(
+                            dao,
+                            workerId,
+                            100L,
+                            10L,
+                            new NullMetricsFactory(),
+                            mockTableMigrationStateMachine));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
@@ -151,5 +164,70 @@ class DynamoDBLockBasedLeaderDeciderTest {
                         AttributeValue.builder().s(UUID.randomUUID().toString()).build()))
                 .build();
         dynamoDBSyncClient.putItem(putItemRequest);
+    }
+
+    @Test
+    void isLeader_doesNotReleaseExistingLockWithMatchingVersionHash() {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        // Worker acquires the lock first
+        assertTrue(decider.isLeader(workerId));
+
+        // Another worker with the same version hash should not release the lock
+        final String otherWorkerId = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider otherDecider = workerIdToLeaderDeciderMap.get(otherWorkerId);
+        assertFalse(otherDecider.isLeader(otherWorkerId));
+
+        // Original worker should still be leader
+        assertTrue(decider.isLeader(workerId));
+    }
+
+    @Test
+    void isLeader_invokesHandleLeaderLockResult_whenLeaderIsTrue() throws Exception {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(mockTableMigrationStateMachine).handleLeaderLockResult(true);
+    }
+
+    @Test
+    void isLeader_invokesHandleLeaderLockResult_whenLeaderIsFalse() throws Exception {
+        // Use a worker that won't get the lock (another worker holds it)
+        final String leaderWorkerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider leaderDecider = workerIdToLeaderDeciderMap.get(leaderWorkerId);
+        assertTrue(leaderDecider.isLeader(leaderWorkerId));
+
+        final String nonLeaderWorkerId = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider nonLeaderDecider = workerIdToLeaderDeciderMap.get(nonLeaderWorkerId);
+        assertFalse(nonLeaderDecider.isLeader(nonLeaderWorkerId));
+
+        verify(mockTableMigrationStateMachine).handleLeaderLockResult(false);
+    }
+
+    @Test
+    void isLeader_returnsFalse_whenHandleLeaderLockResultThrowsDependencyException() throws Exception {
+        doThrow(new DependencyException("test", new RuntimeException()))
+                .when(mockTableMigrationStateMachine)
+                .handleLeaderLockResult(anyBoolean());
+
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertFalse(decider.isLeader(workerId));
+    }
+
+    @Test
+    void isLeader_returnsFalse_whenHandleLeaderLockResultThrowsInvalidStateException() throws Exception {
+        doThrow(new InvalidStateException("migration complete"))
+                .when(mockTableMigrationStateMachine)
+                .handleLeaderLockResult(anyBoolean());
+
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertFalse(decider.isLeader(workerId));
     }
 }
