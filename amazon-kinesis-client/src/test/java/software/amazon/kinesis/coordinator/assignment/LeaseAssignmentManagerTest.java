@@ -5,9 +5,11 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -28,33 +30,42 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.delegate.LeaseTableCoordinatorStateDAODelegate;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.leases.EntityDAO;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseTableDao;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
+import software.amazon.kinesis.worker.metricstats.delegate.LegacyTableWorkerMetricStatsDAODelegate;
 
 import static java.util.Objects.nonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_MOCKS;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,10 +92,11 @@ class LeaseAssignmentManagerTest {
     private ScheduledExecutorService scheduledExecutorService;
     private ScheduledFuture<Void> scheduledFuture;
     private Runnable leaseAssignmentManagerRunnable;
+    private final LeaseSerializer leaseSerializer = new DynamoDBLeaseSerializer();
     private final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
             LEASE_TABLE_NAME,
             dynamoDbAsyncClient,
-            new DynamoDBLeaseSerializer(),
+            leaseSerializer,
             true,
             TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
             LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
@@ -92,13 +104,26 @@ class LeaseAssignmentManagerTest {
             LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
             LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
             DefaultSdkAutoConstructList.getInstance());
+    private final EntityDAO entityDAO = new DynamoDBLeaseTableDao(
+            dynamoDbAsyncClient,
+            LEASE_TABLE_NAME,
+            leaseSerializer,
+            new LeaseTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, LEASE_TABLE_NAME),
+            Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
+            Runtime.getRuntime().availableProcessors());
     private WorkerMetricStatsDAO workerMetricsDAO;
+    private TableMigrationStatusProvider mockProvider;
 
     @BeforeEach
     void setup() throws ProvisionedThroughputException, DependencyException {
+        leaseRefresher.createLeaseTableIfNotExists();
+
         final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig("applicationName");
         config.tableName(WORKER_METRICS_TABLE_NAME);
-        workerMetricsDAO = new WorkerMetricStatsDAO(dynamoDbAsyncClient, config, 10000L);
+        mockProvider = mock(TableMigrationStatusProvider.class, RETURNS_MOCKS);
+        when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        workerMetricsDAO =
+                new WorkerMetricStatsDAO(dynamoDbAsyncClient, config, LEASE_TABLE_NAME, 10000L, mockProvider);
         workerMetricsDAO.initialize();
         mockLeaderDecider = Mockito.mock(LeaderDecider.class);
         scheduledExecutorService = Mockito.mock(ScheduledExecutorService.class);
@@ -112,7 +137,6 @@ class LeaseAssignmentManagerTest {
                     return scheduledFuture;
                 });
         when(scheduledFuture.cancel(anyBoolean())).thenReturn(true);
-        leaseRefresher.createLeaseTableIfNotExists();
     }
 
     @Test
@@ -725,7 +749,7 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
-    void performAssignment_staleWorkerMetricsEntries_assertCleaning() {
+    void performAssignment_staleWorkerMetricsEntries_assertCleaning() throws Exception {
         LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20);
 
@@ -734,7 +758,8 @@ class LeaseAssignmentManagerTest {
         // Non expired workerMetrics
         writeToWorkerMetricsTables(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
 
-        final WorkerMetricStats expiredWorkerStats = createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID);
+        final WorkerMetricStats.LeaseTableWorkerMetricStats expiredWorkerStats =
+                createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID);
         expiredWorkerStats.setLastUpdateTime(
                 Instant.now().minus(100, ChronoUnit.HOURS).getEpochSecond());
         // expired workerMetrics
@@ -751,29 +776,36 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_testRetryBehaviorForLeaseRefresher()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
+        final EntityDAO mockedentiEntityDAO = Mockito.mock(EntityDAO.class);
 
-        when(mockedLeaseRefresher.listLeasesParallely(any(), anyInt())).thenThrow(new RuntimeException());
+        when(mockedentiEntityDAO.scanEntities(any())).thenThrow(new RuntimeException());
 
-        createLeaseAssignmentManager(
+        createLeaseAssignmentManagerWithStrategy(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
                 100L,
                 System::nanoTime,
                 Integer.MAX_VALUE,
-                mockedLeaseRefresher,
-                workerMetricsDAO);
+                leaseRefresher,
+                mockedentiEntityDAO,
+                workerMetricsDAO,
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
 
         leaseAssignmentManagerRunnable.run();
 
-        verify(mockedLeaseRefresher, times(2)).listLeasesParallely(any(), anyInt());
+        verify(mockedentiEntityDAO, times(2)).scanEntities(any());
     }
 
     @Test
     void performAssignment_testRetryBehaviorForWorkerMetricsDAO()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
         final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
 
-        when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
+        final LegacyTableWorkerMetricStatsDAODelegate mockDelegate =
+                Mockito.mock(LegacyTableWorkerMetricStatsDAODelegate.class);
+        when(mockedWorkerMetricsDAO.getLegacyTableDaoDelegate()).thenReturn(mockDelegate);
+
+        when(mockDelegate.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -785,7 +817,7 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        verify(mockedWorkerMetricsDAO, times(2)).getAllWorkerMetricStats();
+        verify(mockDelegate, times(2)).getAllWorkerMetricStats();
     }
 
     @Test
@@ -1150,7 +1182,7 @@ class LeaseAssignmentManagerTest {
         final PutItemRequest putItemRequest = PutItemRequest.builder()
                 .tableName(WORKER_METRICS_TABLE_NAME)
                 .item(ImmutableMap.of(
-                        "wid", AttributeValue.builder().s(workerId).build()))
+                        "leaseKey", AttributeValue.builder().s(workerId).build()))
                 .build();
 
         dynamoDbAsyncClient.putItem(putItemRequest);
@@ -1173,7 +1205,6 @@ class LeaseAssignmentManagerTest {
 
         LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
-                workerMetricsDAO,
                 mockLeaderDecider,
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
                 TEST_LEADER_WORKER_ID,
@@ -1185,7 +1216,8 @@ class LeaseAssignmentManagerTest {
                 gracefulLeaseHandoffConfig,
                 LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 2 * failoverTimeMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                Mockito.mock(LAMDataManager.class));
 
         leaseAssignmentManager.start();
 
@@ -1205,7 +1237,6 @@ class LeaseAssignmentManagerTest {
 
         LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
-                workerMetricsDAO,
                 mockLeaderDecider,
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
                 TEST_LEADER_WORKER_ID,
@@ -1217,7 +1248,8 @@ class LeaseAssignmentManagerTest {
                 gracefulLeaseHandoffConfig,
                 LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 leaseAssignmentIntervalMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                Mockito.mock(LAMDataManager.class));
 
         leaseAssignmentManager.start();
 
@@ -1250,6 +1282,7 @@ class LeaseAssignmentManagerTest {
                 nanoTimeProvider,
                 maxLeasesPerWorker,
                 leaseRefresher,
+                entityDAO,
                 workerMetricStatsDao,
                 LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
     }
@@ -1267,6 +1300,7 @@ class LeaseAssignmentManagerTest {
                 nanoTimeProvider,
                 maxLeasesPerWorker,
                 leaseRefresher,
+                entityDAO,
                 workerMetricsDAO,
                 strategy);
     }
@@ -1277,12 +1311,15 @@ class LeaseAssignmentManagerTest {
             final Supplier<Long> nanoTimeProvider,
             final int maxLeasesPerWorker,
             LeaseRefresher leaseRefresher,
+            EntityDAO entityDAO,
             WorkerMetricStatsDAO workerMetricStatsDao,
             final LeaseAssignmentStrategy strategy) {
 
+        final LAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
+                entityDAO, workerMetricStatsDao, mockProvider, mock(Consumer.class), config);
+
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
-                workerMetricStatsDao,
                 mockLeaderDecider,
                 config,
                 TEST_LEADER_WORKER_ID,
@@ -1294,7 +1331,8 @@ class LeaseAssignmentManagerTest {
                 gracefulLeaseHandoffConfig,
                 strategy,
                 2 * leaseDurationMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                lamDataManager);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }
@@ -1328,18 +1366,18 @@ class LeaseAssignmentManagerTest {
         return lease;
     }
 
-    private WorkerMetricStats createDummyDefaultWorkerMetrics(final String workerId) {
+    private LeaseTableWorkerMetricStats createDummyDefaultWorkerMetrics(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of())
                 .build();
     }
 
-    private WorkerMetricStats createDummyYieldWorkerMetrics(final String workerId) {
+    private LeaseTableWorkerMetricStats createDummyYieldWorkerMetrics(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
@@ -1347,9 +1385,9 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createDummyTakeWorkerMetrics(final String workerId) {
+    private LeaseTableWorkerMetricStats createDummyTakeWorkerMetrics(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, 50D)))
@@ -1357,10 +1395,10 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createDummyWorkerMetrics(
+    private LeaseTableWorkerMetricStats createDummyWorkerMetrics(
             final String workerId, final double value, final long operatingRangeMax) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(value, value)))
@@ -1368,9 +1406,9 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createWorkerWithFailingWorkerMetric(final String workerId) {
+    private LeaseTableWorkerMetricStats createWorkerWithFailingWorkerMetric(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(50D, -1D)))
@@ -1378,9 +1416,9 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createWorkerWithFailingWorkerMetricInPast(final String workerId) {
+    private LeaseTableWorkerMetricStats createWorkerWithFailingWorkerMetricInPast(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(-1D, 50D, 50D)))
@@ -1388,9 +1426,9 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createWorkerWithHotWorkerMetricStats(final String workerId) {
+    private LeaseTableWorkerMetricStats createWorkerWithHotWorkerMetricStats(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(90D, 90D)))
@@ -1398,9 +1436,9 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private WorkerMetricStats createInActiveWorkerWithNoUtilization(final String workerId) {
+    private LeaseTableWorkerMetricStats createInActiveWorkerWithNoUtilization(final String workerId) {
         // Setting 0 as update time means worker is always expired.
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(0L)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
@@ -1408,11 +1446,12 @@ class LeaseAssignmentManagerTest {
                 .build();
     }
 
-    private void writeToWorkerMetricsTables(final WorkerMetricStats workerMetrics) {
+    private void writeToWorkerMetricsTables(final LeaseTableWorkerMetricStats workerMetrics) {
         dynamoDbAsyncClient
                 .putItem(PutItemRequest.builder()
-                        .tableName(WORKER_METRICS_TABLE_NAME)
-                        .item(TableSchema.fromBean(WorkerMetricStats.class).itemToMap(workerMetrics, false))
+                        .tableName(LEASE_TABLE_NAME)
+                        .item(TableSchema.fromBean(LeaseTableWorkerMetricStats.class)
+                                .itemToMap(workerMetrics, false))
                         .build())
                 .join();
     }

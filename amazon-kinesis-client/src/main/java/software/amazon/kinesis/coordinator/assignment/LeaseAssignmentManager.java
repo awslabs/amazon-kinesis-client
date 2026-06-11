@@ -15,8 +15,9 @@
 
 package software.amazon.kinesis.coordinator.assignment;
 
-import java.time.Duration;
-import java.time.Instant;
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,7 +26,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
@@ -38,12 +38,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections4.CollectionUtils;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -64,10 +66,6 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.NullMetricsScope;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
-import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
-
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
 /**
  * Performs the LeaseAssignment for the application. This starts by loading the leases and workerMetrics from the
@@ -88,28 +86,16 @@ public final class LeaseAssignmentManager {
     private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
     /**
-     * Default retry attempt for loading leases and workers before giving up.
-     */
-    private static final int DDB_LOAD_RETRY_ATTEMPT = 1;
-
-    /**
      * Internal threadpool used to parallely perform assignment operation by calling storage.
      */
     private static final ExecutorService LEASE_ASSIGNMENT_CALL_THREAD_POOL =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-    /**
-     * Used for loading the lease table.
-     */
-    private static final ExecutorService DDB_TABLE_LOADER_THREAD_POOL = Executors.newFixedThreadPool(1);
-
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
-    public static final int DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD = 2;
 
     private final LeaseRefresher leaseRefresher;
-    private final WorkerMetricStatsDAO workerMetricsDAO;
     private final LeaderDecider leaderDecider;
     private final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config;
     private final String currentWorkerId;
@@ -124,6 +110,7 @@ public final class LeaseAssignmentManager {
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
+    private final LAMDataManager lamDataManager;
 
     private Future<?> managerFuture;
 
@@ -260,7 +247,6 @@ public final class LeaseAssignmentManager {
 
             parallelyAssignLeases(inMemoryStorageView, metricsScope);
             printPerWorkerLeases(inMemoryStorageView);
-            deleteStaleWorkerMetricsEntries(inMemoryStorageView, metricsScope);
             success = true;
             noOfContinuousFailedAttempts = 0;
         } catch (final Throwable e) {
@@ -309,44 +295,6 @@ public final class LeaseAssignmentManager {
          */
         this.lamRunCounter = (this.lamRunCounter + 1) % config.varianceBalancingFrequency();
         return response;
-    }
-
-    /**
-     * Deletes the WorkerMetricStats entries which are stale(not updated since long time, ref
-     * {@link LeaseAssignmentManager#isWorkerMetricsEntryStale} for the condition to evaluate staleness)
-     */
-    private void deleteStaleWorkerMetricsEntries(
-            final InMemoryStorageView inMemoryStorageView, final MetricsScope metricsScope) {
-        final long startTime = System.currentTimeMillis();
-        try {
-            final List<WorkerMetricStats> staleWorkerMetricsList = inMemoryStorageView.getWorkerMetricsList().stream()
-                    .filter(this::isWorkerMetricsEntryStale)
-                    .collect(Collectors.toList());
-            MetricsUtil.addCount(
-                    metricsScope, "TotalStaleWorkerMetricsEntry", staleWorkerMetricsList.size(), MetricsLevel.DETAILED);
-            log.info("Number of stale workerMetrics entries : {}", staleWorkerMetricsList.size());
-            log.info("Stale workerMetrics list : {}", staleWorkerMetricsList);
-
-            final List<CompletableFuture<Boolean>> completableFutures = staleWorkerMetricsList.stream()
-                    .map(workerMetrics -> CompletableFuture.supplyAsync(
-                            () -> workerMetricsDAO.deleteMetrics(workerMetrics), LEASE_ASSIGNMENT_CALL_THREAD_POOL))
-                    .collect(Collectors.toList());
-
-            CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[0]))
-                    .join();
-        } finally {
-            MetricsUtil.addLatency(metricsScope, "StaleWorkerMetricsCleanup", startTime, MetricsLevel.DETAILED);
-        }
-    }
-
-    /**
-     * WorkerMetricStats entry is considered stale if the lastUpdateTime of the workerMetrics is older than
-     * workerMetricsStalenessThreshold * workerMetricsReporterFreqInMillis.
-     */
-    private boolean isWorkerMetricsEntryStale(final WorkerMetricStats workerMetrics) {
-        return Duration.between(Instant.ofEpochSecond(workerMetrics.getLastUpdateTime()), Instant.now())
-                        .toMillis()
-                > config.staleWorkerMetricsEntryCleanupDuration().toMillis();
     }
 
     private void printPerWorkerLeases(final InMemoryStorageView storageView) {
@@ -517,14 +465,10 @@ public final class LeaseAssignmentManager {
          */
         private List<Lease> leaseList;
         /**
-         * List of workers which are active (i.e., updated metric stats before the threshold ref)
-         * {@link this#computeWorkerExpiryThresholdInSecond})
+         * List of active worker metrics eligible for lease assignment. The {@link LAMDataManager}
+         * provides valid, non-expired metrics; LAM further excludes workers with failing metrics.
          */
         private List<WorkerMetricStats> activeWorkerMetrics;
-        /**
-         * List of all workerMetrics entries from storage.
-         */
-        private List<WorkerMetricStats> workerMetricsList;
         /**
          * List of active workers ids.
          */
@@ -557,59 +501,41 @@ public final class LeaseAssignmentManager {
         }
 
         /**
-         * Scans the LeaseTable and WorkerMetricStats in parallel and load the data and populate datastructures used
-         * in lease assignment.
+         * Loads leases and worker metrics via {@link LAMDataManager} and populates data structures
+         * used in lease assignment.
+         *
+         * <p>The {@link LAMDataSnapshot} returned by the manager contains valid, non-expired worker
+         * metrics. This method further filters out workers with failing metrics before using them
+         * for assignment decisions.</p>
          */
-        public void loadInMemoryStorageView(final MetricsScope metricsScope) {
-            final CompletableFuture<Map.Entry<List<Lease>, List<String>>> leaseListFuture = loadLeaseListAsync();
+        public void loadInMemoryStorageView(final MetricsScope metricsScope)
+                throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            final LAMDataSnapshot snapshot = lamDataManager.loadData(metricsScope);
 
-            final List<WorkerMetricStats> workerMetricsFromStorage =
-                    loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats);
-
-            final List<String> listOfWorkerIdOfInvalidWorkerMetricsEntry = workerMetricsFromStorage.stream()
-                    .filter(workerMetrics -> !workerMetrics.isValidWorkerMetric())
-                    .map(WorkerMetricStats::getWorkerId)
-                    .collect(Collectors.toList());
-            if (!listOfWorkerIdOfInvalidWorkerMetricsEntry.isEmpty()) {
-                log.warn("List of workerIds with invalid entries : {}", listOfWorkerIdOfInvalidWorkerMetricsEntry);
-                metricsScope.addData(
-                        "NumWorkersWithInvalidEntry",
-                        listOfWorkerIdOfInvalidWorkerMetricsEntry.size(),
-                        StandardUnit.COUNT,
-                        MetricsLevel.SUMMARY);
-            }
-
-            // Valid entries are considered further, for validity of entry refer WorkerMetricStats#isValidWorkerMetrics
-            this.workerMetricsList = workerMetricsFromStorage.stream()
-                    .filter(WorkerMetricStats::isValidWorkerMetric)
-                    .collect(Collectors.toList());
-
-            log.info("Total WorkerMetricStats available : {}", workerMetricsList.size());
-            final long workerExpiryThreshold = computeWorkerExpiryThresholdInSecond();
-
-            final long countOfWorkersWithFailingWorkerMetric = workerMetricsList.stream()
-                    .filter(WorkerMetricStats::isAnyWorkerMetricFailing)
-                    .count();
-            if (countOfWorkersWithFailingWorkerMetric != 0) {
-                metricsScope.addData(
-                        "NumWorkersWithFailingWorkerMetric",
-                        countOfWorkersWithFailingWorkerMetric,
-                        StandardUnit.COUNT,
-                        MetricsLevel.SUMMARY);
-            }
-
-            final Map.Entry<List<Lease>, List<String>> leaseListResponse = leaseListFuture.join();
-            this.leaseList = leaseListResponse.getKey();
-            if (!leaseListResponse.getValue().isEmpty()) {
-                log.warn("Leases that failed deserialization : {}", leaseListResponse.getValue());
-                MetricsUtil.addCount(
-                        metricsScope,
-                        "LeaseDeserializationFailureCount",
-                        leaseListResponse.getValue().size(),
-                        MetricsLevel.SUMMARY);
-            }
+            this.leaseList = snapshot.getLeases();
             this.leaseTableScanTime = nanoTimeProvider.get();
             log.info("Total Leases available : {}", leaseList.size());
+
+            // The snapshot contains valid, non-expired worker metrics from the manager.
+            // Filter out workers with failing metrics — those should not receive new assignments.
+            final List<WorkerMetricStats> workerMetricsFromSnapshot = snapshot.getWorkerMetricStats();
+            log.info("Total valid WorkerMetricStats from manager: {}", workerMetricsFromSnapshot.size());
+
+            final long countOfWorkersWithFailingMetric = workerMetricsFromSnapshot.stream()
+                    .filter(WorkerMetricStats::isAnyWorkerMetricFailing)
+                    .count();
+            if (countOfWorkersWithFailingMetric > 0) {
+                metricsScope.addData(
+                        "NumWorkersWithFailingWorkerMetric",
+                        countOfWorkersWithFailingMetric,
+                        StandardUnit.COUNT,
+                        MetricsLevel.SUMMARY);
+            }
+
+            this.activeWorkerMetrics = workerMetricsFromSnapshot.stream()
+                    .filter(wm -> !wm.isAnyWorkerMetricFailing())
+                    .collect(Collectors.toList());
+            log.info("Total active WorkerMetricStats (excluding failing): {}", activeWorkerMetrics.size());
 
             final double averageLeaseThroughput = leaseList.stream()
                     .filter(lease -> nonNull(lease.throughputKBps()))
@@ -618,17 +544,7 @@ public final class LeaseAssignmentManager {
                     // If none of the leases has any value, that means its app
                     // startup time and thus assigns 0 in that case to start with.
                     .orElse(0D);
-            /*
-             * If a workerMetrics has a metric (i.e. has -1 value in last index which denotes failure),
-             * skip it from activeWorkerMetrics and no new action on it will be done
-             * (new assignment etc.) until the metric has non -1 value in last index. This is to avoid performing action
-             * with the stale data on worker.
-             */
-            this.activeWorkerMetrics = workerMetricsList.stream()
-                    .filter(workerMetrics -> workerMetrics.getLastUpdateTime() >= workerExpiryThreshold
-                            && !workerMetrics.isAnyWorkerMetricFailing())
-                    .collect(Collectors.toList());
-            log.info("activeWorkerMetrics : {}", activeWorkerMetrics.size());
+
             targetAverageThroughput =
                     averageLeaseThroughput * leaseList.size() / Math.max(1, activeWorkerMetrics.size());
             leaseList.forEach(lease -> {
@@ -676,22 +592,6 @@ public final class LeaseAssignmentManager {
         }
 
         /**
-         * Calculates the value threshold in seconds for a worker to be considered as active.
-         * If a worker has not updated the WorkerMetricStats entry within this threshold, the worker is not considered
-         * as active.
-         *
-         * @return wall time in seconds
-         */
-        private long computeWorkerExpiryThresholdInSecond() {
-            final long timeInSeconds = Duration.ofMillis(System.currentTimeMillis()
-                            - DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD
-                                    * config.workerMetricsReporterFreqInMillis())
-                    .getSeconds();
-            log.info("WorkerMetricStats expiry time in seconds : {}", timeInSeconds);
-            return timeInSeconds;
-        }
-
-        /**
          * Looks at inMemoryWorkerToLeasesMapping for lease assignment and figures out if there is room considering
          * any new assignment that would have happened.
          */
@@ -715,31 +615,6 @@ public final class LeaseAssignmentManager {
 
         public Double getTotalAssignedThroughput(final String workerId) {
             return workerToTotalAssignedThroughputMap.getOrDefault(workerId, 0D);
-        }
-
-        private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
-            return CompletableFuture.supplyAsync(
-                    () -> loadWithRetry(() -> leaseRefresher.listLeasesParallely(LEASE_ASSIGNMENT_CALL_THREAD_POOL, 0)),
-                    DDB_TABLE_LOADER_THREAD_POOL);
-        }
-
-        private <T> T loadWithRetry(final Callable<T> loadFunction) {
-            int retryAttempt = 0;
-            while (true) {
-                try {
-                    return loadFunction.call();
-                } catch (final Exception e) {
-                    if (retryAttempt < DDB_LOAD_RETRY_ATTEMPT) {
-                        log.warn(
-                                "Failed to load : {}, retrying",
-                                loadFunction.getClass().getName(),
-                                e);
-                        retryAttempt++;
-                    } else {
-                        throw new CompletionException(e);
-                    }
-                }
-            }
         }
     }
 
