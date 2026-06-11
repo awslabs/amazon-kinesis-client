@@ -28,8 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
@@ -48,6 +46,7 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -109,7 +108,6 @@ public class DynamicMigrationComponentsInitializerTest {
         migrationInitializer = new DynamicMigrationComponentsInitializer(
                 mockMetricsFactory,
                 mockLeaseRefresher,
-                mockCoordinatorStateDAO,
                 mockWorkerMetricsScheduler,
                 mockWorkerMetricsDAO,
                 mockWorkerMetricsManager,
@@ -123,10 +121,50 @@ public class DynamicMigrationComponentsInitializerTest {
                 mockConsumer);
     }
 
+    // ========================
+    // Phase 1 tests (initializeClientVersionForPhase1)
+    // ========================
+
     @Test
-    public void testInitialize_ClientVersion3_X() throws DependencyException {
-        // Test initializing to verify correct leader decider is created
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X);
+    public void testInitializeClientVersionForPhase1() throws Exception {
+        migrationInitializer.initializeClientVersionForPhase1();
+
+        // Verify deterministic leader decider is created and initialized
+        verify(mockDeterministicLeaderDeciderCreator).get();
+        verify(mockDeterministicLeaderDecider).initialize();
+
+        // Verify no DDB lock leader, no adaptive leader, no LAM, no metrics
+        verify(mockDdbLockBasedLeaderDeciderCreator, never()).get();
+        verify(mockAdaptiveLeaderDeciderCreator, never()).get();
+        verify(mockLamCreator, never()).apply(any(), any());
+        verify(mockWorkerMetricsManager, never()).startManager();
+        verify(mockWorkerMetricsDAO, never()).initialize();
+        verify(mockConsumer, never()).initialize(anyBoolean(), any());
+
+        // Verify leader decider is set
+        assertEquals(mockDeterministicLeaderDecider, migrationInitializer.leaderDecider());
+    }
+
+    @Test
+    public void testInitializeClientVersionForPhase1_idempotent() throws Exception {
+        migrationInitializer.initializeClientVersionForPhase1();
+        migrationInitializer.initializeClientVersionForPhase1();
+
+        // Should only initialize once
+        verify(mockDeterministicLeaderDeciderCreator, Mockito.times(1)).get();
+        verify(mockDeterministicLeaderDecider, Mockito.times(1)).initialize();
+    }
+
+    // ========================
+    // CLIENT_VERSION_3X tests (initializeClientVersionFor3x from INIT)
+    // ========================
+
+    @Test
+    public void testInitialize_ClientVersion3_X() throws Exception {
+        when(mockLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
+                .thenReturn(true);
+
+        migrationInitializer.initializeClientVersionFor3x(ClientVersion.CLIENT_VERSION_INIT);
 
         verify(mockWorkerMetricsManager).startManager();
         verify(mockDdbLockBasedLeaderDeciderCreator).get();
@@ -137,11 +175,6 @@ public class DynamicMigrationComponentsInitializerTest {
         // verify LeaseAssignmentModeChange consumer initialization
         verify(mockConsumer).initialize(eq(false), eq(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT));
 
-        when(mockLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
-                .thenReturn(true);
-
-        // test initialization from state machine
-        migrationInitializer.initializeClientVersionFor3x(ClientVersion.CLIENT_VERSION_INIT);
         verify(mockWorkerMetricsDAO).initialize();
         verify(mockWorkerMetricsScheduler).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
         // verify that GSI will be created if it doesn't exist
@@ -159,9 +192,8 @@ public class DynamicMigrationComponentsInitializerTest {
      * 3. gsi creation is not triggered
      */
     @Test
-    public void testInitialize_ClientVersion_3_xWithRollback() throws DependencyException {
-        // Test initializing to verify correct leader decider is created
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
+    public void testInitialize_ClientVersion_3_xWithRollback() throws Exception {
+        migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
 
         verify(mockWorkerMetricsManager).startManager();
 
@@ -173,9 +205,6 @@ public class DynamicMigrationComponentsInitializerTest {
         // verify LeaseAssignmentModeChange consumer initialization
         verify(mockConsumer).initialize(eq(true), eq(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT));
 
-        // test initialization from state machine
-        migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
-
         verify(mockWorkerMetricsDAO).initialize();
         verify(mockWorkerMetricsScheduler).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
         verify(mockLeaseRefresher, never()).createLeaseOwnerToLeaseKeyIndexIfNotExists();
@@ -184,11 +213,9 @@ public class DynamicMigrationComponentsInitializerTest {
         verify(mockLam).start();
     }
 
-    @ParameterizedTest
-    @CsvSource({"CLIENT_VERSION_UPGRADE_FROM_2X", "CLIENT_VERSION_2X"})
-    public void testInitialize_ClientVersion_All2_X(final ClientVersion clientVersion) throws DependencyException {
-        // Test initializing to verify correct leader decider is created
-        migrationInitializer.initialize(clientVersion);
+    @Test
+    public void testInitialize_ClientVersion_UpgradeFrom2X() throws Exception {
+        migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
 
         verify(mockWorkerMetricsManager).startManager();
 
@@ -200,19 +227,10 @@ public class DynamicMigrationComponentsInitializerTest {
         // verify LeaseAssignmentModeChange consumer initialization
         verify(mockConsumer).initialize(eq(true), eq(LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT));
 
-        // test initialization from state machine
-        if (clientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X) {
-            migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
-            // start worker stats and create gsi without waiting
-            verify(mockWorkerMetricsDAO).initialize();
-            verify(mockWorkerMetricsScheduler).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
-            verify(mockLeaseRefresher).createLeaseOwnerToLeaseKeyIndexIfNotExists();
-        } else {
-            migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_INIT);
-            verify(mockWorkerMetricsDAO, never()).initialize();
-            verify(mockWorkerMetricsScheduler, never()).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
-            verify(mockLeaseRefresher, never()).createLeaseOwnerToLeaseKeyIndexIfNotExists();
-        }
+        // start worker stats and create gsi without waiting
+        verify(mockWorkerMetricsDAO).initialize();
+        verify(mockWorkerMetricsScheduler).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
+        verify(mockLeaseRefresher).createLeaseOwnerToLeaseKeyIndexIfNotExists();
 
         verify(mockLeaseRefresher, never()).waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong());
         verify(mockMigrationAdaptiveLeaderDecider).updateLeaderDecider(mockDeterministicLeaderDecider);
@@ -220,28 +238,45 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testShutdown() throws InterruptedException, DependencyException {
+    public void testInitialize_ClientVersion_2X() throws Exception {
+        migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_INIT);
+
+        verify(mockWorkerMetricsManager).startManager();
+
+        verify(mockDdbLockBasedLeaderDeciderCreator, never()).get();
+        verify(mockAdaptiveLeaderDeciderCreator).get();
+        verify(mockDeterministicLeaderDeciderCreator).get();
+        verify(mockLamCreator).apply(eq(mockLamThreadPool), eq(migrationInitializer.leaderDecider()));
+
+        // verify LeaseAssignmentModeChange consumer initialization
+        verify(mockConsumer).initialize(eq(true), eq(LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT));
+
+        verify(mockWorkerMetricsDAO, never()).initialize();
+        verify(mockWorkerMetricsScheduler, never()).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
+        verify(mockLeaseRefresher, never()).createLeaseOwnerToLeaseKeyIndexIfNotExists();
+
+        verify(mockLeaseRefresher, never()).waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong());
+        verify(mockMigrationAdaptiveLeaderDecider).updateLeaderDecider(mockDeterministicLeaderDecider);
+        verify(mockLam, never()).start();
+    }
+
+    @Test
+    public void testShutdown() throws Exception {
         when(mockLamThreadPool.awaitTermination(anyLong(), any())).thenReturn(true);
         when(mockWorkerMetricsScheduler.awaitTermination(anyLong(), any())).thenReturn(true);
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
+        migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
         migrationInitializer.shutdown();
 
         verify(mockLamThreadPool).shutdown();
         verify(mockWorkerMetricsScheduler).shutdown();
 
         verify(mockLam).stop();
-        // leader decider is not shutdown from DynamicMigrationComponentsInitializer
-        // scheduler does the shutdown
-        // verify(migrationInitializer.leaderDecider()).shutdown();
         verify(mockWorkerMetricsManager).stopManager();
     }
 
     @Test
-    public void initializationFails_WhenGsiIsNotActiveIn3_X() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X);
-        // test initialization from state machine
-
+    public void initializationFails_WhenGsiIsNotActiveIn3_X() throws Exception {
         when(mockLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
                 .thenReturn(false);
 
@@ -251,10 +286,7 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void initializationDoesNotFail_WhenGsiIsNotActiveIn3_XWithRollback() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
-        // test initialization from state machine
-
+    public void initializationDoesNotFail_WhenGsiIsNotActiveIn3_XWithRollback() throws Exception {
         when(mockLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
                 .thenReturn(false);
 
@@ -263,8 +295,7 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testComponentsInitialization_AfterFlip() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
+    public void testComponentsInitialization_AfterFlip() throws Exception {
         migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // Test flip
@@ -278,14 +309,13 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testComponentsInitialization_AfterRollForward() throws DependencyException {
+    public void testComponentsInitialization_AfterRollForward() throws Exception {
         final ScheduledFuture<?> mockFuture = mock(ScheduledFuture.class);
 
         doReturn(mockFuture)
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_2X);
         migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // test roll-forward
@@ -303,13 +333,12 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testComponentsInitialization_Rollback_BeforeFlip() throws DependencyException {
+    public void testComponentsInitialization_Rollback_BeforeFlip() throws Exception {
         final ScheduledFuture<?> mockFuture = mock(ScheduledFuture.class);
         doReturn(mockFuture)
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
         migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // test rollback before flip
@@ -320,16 +349,15 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testComponentsInitialization_Rollback_AfterFlip() throws DependencyException {
+    public void testComponentsInitialization_Rollback_AfterFlip() throws Exception {
         final ScheduledFuture<?> mockFuture = mock(ScheduledFuture.class);
         doReturn(mockFuture)
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
         migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
 
-        // test rollback before flip
+        // test rollback after flip
         migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
 
         // verify
@@ -341,7 +369,7 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @Test
-    public void testWorkerMetricsReporting() throws DependencyException {
+    public void testWorkerMetricsReporting() throws Exception {
         final ArgumentCaptor<Runnable> argumentCaptor = ArgumentCaptor.forClass(Runnable.class);
         final ScheduledFuture<?> mockFuture = mock(ScheduledFuture.class);
         doReturn(mockFuture)
@@ -358,7 +386,6 @@ public class DynamicMigrationComponentsInitializerTest {
             }
         });
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
         migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
 
         // run the worker stats reporting thread
