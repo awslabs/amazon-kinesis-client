@@ -16,6 +16,8 @@
 package software.amazon.kinesis.leader;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,9 +27,11 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
@@ -35,8 +39,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-
-import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
 
 /**
  * Implementation for LeaderDecider to elect leader using lock on dynamo db table. This class uses
@@ -47,7 +49,6 @@ import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_K
 @KinesisClientInternalApi
 public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
-    private final CoordinatorStateDAO coordinatorStateDao;
     private final AmazonDynamoDBLockClient dynamoDBLockClient;
     private final Long heartbeatPeriodMillis;
     private final String workerId;
@@ -74,7 +75,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 .build());
 
         return new DynamoDBLockBasedLeaderDecider(
-                coordinatorStateDao, dynamoDBLockClient, heartbeatPeriod, workerId, metricsFactory);
+                dynamoDBLockClient, heartbeatPeriod, workerId, metricsFactory);
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
@@ -114,21 +115,25 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             return lastIsLeaderResult;
         }
         boolean response;
-        // Get the lockItem from storage (if present
-        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LEADER_HASH_KEY, Optional.empty());
-        lockItem.ifPresent(item -> log.info("Worker : {} is the current leader.", item.getOwnerName()));
+
+        // Get the lockItem from storage (if present)
+        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
+        lockItem.ifPresent(item -> log.info("Worker : {} is the current {}.", item.getOwnerName(),
+            LeaderLock.LEADER_HASH_KEY));
 
         // If the lockItem is present and is expired, that means either current worker is not leader.
         if (!lockItem.isPresent() || lockItem.get().isExpired()) {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
                 final Optional<LockItem> leaderLockItem =
-                        dynamoDBLockClient.tryAcquireLock(AcquireLockOptions.builder(LEADER_HASH_KEY)
+                        dynamoDBLockClient.tryAcquireLock(AcquireLockOptions.builder(LeaderLock.LEADER_HASH_KEY)
                                 .withRefreshPeriod(heartbeatPeriodMillis)
                                 .withTimeUnit(TimeUnit.MILLISECONDS)
                                 .withShouldSkipBlockingWait(true)
+                                .withAdditionalAttributes(getLockAttributes())
                                 .build());
-                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
+                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new {}", item.getOwnerName(),
+                    LeaderLock.LEADER_HASH_KEY));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
             } catch (final InterruptedException e) {
@@ -150,6 +155,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
         return response;
+    }
+
+    private Map<String, AttributeValue> getLockAttributes() {
+        Map<String, AttributeValue> map = new HashMap<>();
+        map.putAll(new LeaderLock().serialize());
+
+        return map;
     }
 
     private void publishIsLeaderMetrics(final boolean response) {
@@ -185,7 +197,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     @Override
     public synchronized void releaseLeadershipIfHeld() {
         try {
-            final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LEADER_HASH_KEY, Optional.empty());
+            final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
             if (lockItem.isPresent()
                     && !lockItem.get().isExpired()
                     && lockItem.get().getOwnerName().equals(workerId)) {

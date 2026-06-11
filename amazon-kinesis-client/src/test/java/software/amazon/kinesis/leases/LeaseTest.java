@@ -12,6 +12,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -138,6 +139,34 @@ public class LeaseTest {
         lease.checkpointOwnerTimeoutTimestampMillis(LEASE_CHECKPOINT_TIMEOUT);
         lease.isExpiredOrUnassigned(false);
         return lease;
+    }
+
+    // --- Entity type system tests ---
+
+    @Test
+    public void testLeaseImplementsEntityInterface() {
+        final Lease lease = new Lease();
+        assertTrue("Lease should implement EntityDAO.Entity", lease instanceof EntityDAO.Entity);
+    }
+
+    @Test
+    public void testLeaseGetEntityType_returnsLease() {
+        final Lease lease = new Lease();
+        assertNotNull(lease.getEntityType());
+        assertEquals(EntityType.LEASE, lease.getEntityType());
+    }
+
+    @Test
+    public void testLeaseGetEntityType_alwaysReturnsLease() {
+        // Even with various fields set, entityType is always LEASE
+        final Lease lease = createLease("owner", "key", 0);
+        assertEquals(EntityType.LEASE, lease.getEntityType());
+    }
+
+    @Test
+    public void testLeaseEntityTypeDdbValue() {
+        final Lease lease = new Lease();
+        assertEquals("LEASE", lease.getEntityType().getDdbValue());
     }
 
     private static Lease createisEligibleForGracefulShutdownLease() {

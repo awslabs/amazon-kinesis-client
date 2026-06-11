@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.common.base.Strings;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -33,6 +34,7 @@ import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.DynamoUtils;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.UpdateField;
@@ -43,6 +45,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * LeaseSerializer can be decorated by other classes if you need to add fields to leases.
  */
 @KinesisClientInternalApi
+@Slf4j
 public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String LEASE_COUNTER_KEY = "leaseCounter";
     private static final String OWNER_SWITCHES_KEY = "ownerSwitchesSinceCheckpoint";
@@ -58,7 +61,8 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
     static final String CHECKPOINT_OWNER = "checkpointOwner";
     static final String LEASE_OWNER_KEY = "leaseOwner";
-    static final String LEASE_KEY_KEY = "leaseKey";
+    public static final String LEASE_KEY_KEY = "leaseKey";
+    public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {
@@ -119,6 +123,10 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         if (lease.checkpointOwner() != null) {
             result.put(CHECKPOINT_OWNER, DynamoUtils.createAttributeValue(lease.checkpointOwner()));
         }
+
+        result.put(
+                ENTITY_TYPE_ATTRIBUTE_NAME,
+                DynamoUtils.createAttributeValue(lease.getEntityType().getDdbValue()));
         return result;
     }
 
@@ -130,40 +138,51 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
     @Override
     public Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord, Lease leaseToUpdate) {
-        leaseToUpdate.leaseKey(DynamoUtils.safeGetString(dynamoRecord, LEASE_KEY_KEY));
-        leaseToUpdate.leaseOwner(DynamoUtils.safeGetString(dynamoRecord, LEASE_OWNER_KEY));
-        leaseToUpdate.leaseCounter(DynamoUtils.safeGetLong(dynamoRecord, LEASE_COUNTER_KEY));
+        final String entityType = DynamoUtils.safeGetString(dynamoRecord, ENTITY_TYPE_ATTRIBUTE_NAME);
 
-        leaseToUpdate.ownerSwitchesSinceCheckpoint(DynamoUtils.safeGetLong(dynamoRecord, OWNER_SWITCHES_KEY));
-        leaseToUpdate.checkpoint(new ExtendedSequenceNumber(
-                DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_SEQUENCE_NUMBER_KEY),
-                DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY)));
-        leaseToUpdate.parentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
-        leaseToUpdate.childShardIds(DynamoUtils.safeGetSS(dynamoRecord, CHILD_SHARD_IDS_KEY));
+        // for backward compatibility we should allow lease with no entity type from lease table
+        // to be serialized. We ensure no other entity will ever be written to lease table
+        // without an entity type so its safe to assume this.
+        if (entityType == null || EntityType.LEASE.getDdbValue().equals(entityType)) {
+            leaseToUpdate.leaseKey(DynamoUtils.safeGetString(dynamoRecord, LEASE_KEY_KEY));
+            leaseToUpdate.leaseOwner(DynamoUtils.safeGetString(dynamoRecord, LEASE_OWNER_KEY));
+            leaseToUpdate.leaseCounter(DynamoUtils.safeGetLong(dynamoRecord, LEASE_COUNTER_KEY));
 
-        if (!Strings.isNullOrEmpty(DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY))) {
-            leaseToUpdate.pendingCheckpoint(new ExtendedSequenceNumber(
-                    DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY),
-                    DynamoUtils.safeGetLong(dynamoRecord, PENDING_CHECKPOINT_SUBSEQUENCE_KEY)));
+            leaseToUpdate.ownerSwitchesSinceCheckpoint(DynamoUtils.safeGetLong(dynamoRecord, OWNER_SWITCHES_KEY));
+            leaseToUpdate.checkpoint(new ExtendedSequenceNumber(
+                    DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_SEQUENCE_NUMBER_KEY),
+                    DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY)));
+            leaseToUpdate.parentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
+            leaseToUpdate.childShardIds(DynamoUtils.safeGetSS(dynamoRecord, CHILD_SHARD_IDS_KEY));
+
+            if (!Strings.isNullOrEmpty(DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY))) {
+                leaseToUpdate.pendingCheckpoint(new ExtendedSequenceNumber(
+                        DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY),
+                        DynamoUtils.safeGetLong(dynamoRecord, PENDING_CHECKPOINT_SUBSEQUENCE_KEY)));
+            }
+
+            leaseToUpdate.pendingCheckpointState(
+                    DynamoUtils.safeGetByteArray(dynamoRecord, PENDING_CHECKPOINT_STATE_KEY));
+
+            final String startingHashKey, endingHashKey;
+            if (!Strings.isNullOrEmpty(startingHashKey = DynamoUtils.safeGetString(dynamoRecord, STARTING_HASH_KEY))
+                    && !Strings.isNullOrEmpty(
+                            endingHashKey = DynamoUtils.safeGetString(dynamoRecord, ENDING_HASH_KEY))) {
+                leaseToUpdate.hashKeyRange(HashKeyRangeForLease.deserialize(startingHashKey, endingHashKey));
+            }
+
+            if (DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS) != null) {
+                leaseToUpdate.throughputKBps(DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS));
+            }
+
+            if (DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER) != null) {
+                leaseToUpdate.checkpointOwner(DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER));
+            }
+
+            return leaseToUpdate;
         }
-
-        leaseToUpdate.pendingCheckpointState(DynamoUtils.safeGetByteArray(dynamoRecord, PENDING_CHECKPOINT_STATE_KEY));
-
-        final String startingHashKey, endingHashKey;
-        if (!Strings.isNullOrEmpty(startingHashKey = DynamoUtils.safeGetString(dynamoRecord, STARTING_HASH_KEY))
-                && !Strings.isNullOrEmpty(endingHashKey = DynamoUtils.safeGetString(dynamoRecord, ENDING_HASH_KEY))) {
-            leaseToUpdate.hashKeyRange(HashKeyRangeForLease.deserialize(startingHashKey, endingHashKey));
-        }
-
-        if (DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS) != null) {
-            leaseToUpdate.throughputKBps(DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS));
-        }
-
-        if (DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER) != null) {
-            leaseToUpdate.checkpointOwner(DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER));
-        }
-
-        return leaseToUpdate;
+        log.warn("dynamoRecord is not a Lease entity {}", dynamoRecord);
+        return null;
     }
 
     @Override

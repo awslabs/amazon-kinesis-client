@@ -666,7 +666,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 synchronized (response) {
                     for (final Map<String, AttributeValue> item : scanResult.items()) {
                         try {
-                            response.add(serializer.fromDynamoRecord(item));
+                            Lease lease = serializer.fromDynamoRecord(item);
+                            if (lease != null) {
+                                response.add(lease);
+                            }
                         } catch (final Exception e) {
                             // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
                             // do not fail all list call. Capture failed deserialize item and return to caller.
@@ -760,7 +763,17 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 while (scanResult != null) {
                     for (Map<String, AttributeValue> item : scanResult.items()) {
                         log.debug("Got item {} from DynamoDB.", item.toString());
-                        result.add(serializer.fromDynamoRecord(item));
+                        try {
+                            Lease lease = serializer.fromDynamoRecord(item);
+                            // ignore non-lease entity types
+                            if (lease != null) {
+                                result.add(lease);
+                            }
+                        } catch (final Exception e) {
+                            // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
+                            // do not fail all list call.
+                            log.error("Failed to deserialize lease", e);
+                        }
                     }
 
                     Map<String, AttributeValue> lastEvaluatedKey = scanResult.lastEvaluatedKey();
