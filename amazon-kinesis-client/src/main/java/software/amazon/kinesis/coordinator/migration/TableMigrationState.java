@@ -35,54 +35,59 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.EntityType;
 
 /**
- * Data model of the Migration state. This is used to track the state related to migration
- * from KCLv2.x to KCLv3.x.
+ * Data model of the TableMigration state. This is used to track the state related to table migration
+ * from KCLv3.4 -> KCLv3.5+
  */
 @Getter
 @ToString(callSuper = true)
 @Slf4j
 @KinesisClientInternalApi
-public class MigrationState extends CoordinatorState {
+public class TableMigrationState extends CoordinatorState {
     /**
      * Key value for the item in the CoordinatorState table
      */
-    public static final String MIGRATION_HASH_KEY = "Migration3.0";
+    public static final String TABLE_MIGRATION_HASH_KEY = "TableMigration3.5";
     /**
      * Attribute name in migration state item, whose value is used during
      * the KCL v3.x migration process to know whether the workers need to
      * perform KCL v2.x compatible operations or can perform native KCL v3.x
      * operations.
      */
-    public static final String CLIENT_VERSION_ATTRIBUTE_NAME = "cv";
+    public static final String TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME = "tm";
 
     public static final String MODIFIED_BY_ATTRIBUTE_NAME = "mb";
     public static final String MODIFIED_TIMESTAMP_ATTRIBUTE_NAME = "mts";
     public static final String HISTORY_ATTRIBUTE_NAME = "h";
     private static final int MAX_HISTORY_ENTRIES = 10;
 
-    private ClientVersion clientVersion;
+    /**
+     * Default bake time in seconds (60 seconds).
+     */
+    public static final long DEFAULT_BAKE_TIME_SECONDS = 60L;
+
+    private TableMigrationStatus tableMigrationStatus;
     private String modifiedBy;
     private long modifiedTimestamp;
-    private final List<HistoryEntry> history;
+    private final List<TableMigrationStateHistoryEntry> history;
 
-    private MigrationState(
+    private TableMigrationState(
             final String key,
-            final ClientVersion clientVersion,
+            final TableMigrationStatus tableMigrationStatus,
             final String modifiedBy,
             final long modifiedTimestamp,
-            final List<HistoryEntry> historyEntries,
+            final List<TableMigrationStateHistoryEntry> historyEntries,
             final Map<String, AttributeValue> others) {
-        super(key, EntityType.CoordinatorStateType.CLIENT_VERSION_MIGRATION, others);
-        this.clientVersion = clientVersion;
+        super(key, EntityType.CoordinatorStateType.TABLE_MIGRATION, others);
+        this.tableMigrationStatus = tableMigrationStatus;
         this.modifiedBy = modifiedBy;
         this.modifiedTimestamp = modifiedTimestamp;
         this.history = historyEntries;
     }
 
-    public MigrationState(final String modifiedBy) {
+    public TableMigrationState(final String modifiedBy) {
         this(
-                MIGRATION_HASH_KEY,
-                ClientVersion.CLIENT_VERSION_INIT,
+                TABLE_MIGRATION_HASH_KEY,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT,
                 modifiedBy,
                 System.currentTimeMillis(),
                 new ArrayList<>(),
@@ -90,14 +95,14 @@ public class MigrationState extends CoordinatorState {
     }
 
     public HashMap<String, AttributeValue> serialize() {
-        final HashMap<String, AttributeValue> result = new HashMap<>(super.serialize());
-        result.put(CLIENT_VERSION_ATTRIBUTE_NAME, AttributeValue.fromS(clientVersion.name()));
+        final HashMap<String, AttributeValue> result = new HashMap<>();
+        result.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, AttributeValue.fromS(tableMigrationStatus.name()));
         result.put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(modifiedBy));
         result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));
 
         if (!history.isEmpty()) {
             final List<AttributeValue> historyList = new ArrayList<>();
-            for (final HistoryEntry entry : history) {
+            for (final TableMigrationStateHistoryEntry entry : history) {
                 historyList.add(AttributeValue.builder().m(entry.serialize()).build());
             }
             result.put(
@@ -108,33 +113,39 @@ public class MigrationState extends CoordinatorState {
         return result;
     }
 
-    public static MigrationState deserialize(final String key, final HashMap<String, AttributeValue> attributes) {
-        if (!MIGRATION_HASH_KEY.equals(key)) {
+    public static TableMigrationState deserialize(final String key, final HashMap<String, AttributeValue> attributes) {
+        if (!TABLE_MIGRATION_HASH_KEY.equals(key)) {
             return null;
         }
 
         try {
             final HashMap<String, AttributeValue> mutableAttributes = new HashMap<>(attributes);
-            final ClientVersion clientVersion = ClientVersion.valueOf(
-                    mutableAttributes.remove(CLIENT_VERSION_ATTRIBUTE_NAME).s());
+            final TableMigrationStatus tableMigrationStatus = TableMigrationStatus.valueOf(mutableAttributes
+                    .remove(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME)
+                    .s());
             final String modifiedBy =
                     mutableAttributes.remove(MODIFIED_BY_ATTRIBUTE_NAME).s();
             final long modifiedTimestamp = Long.parseLong(
                     mutableAttributes.remove(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME).n());
 
-            final List<HistoryEntry> historyList = new ArrayList<>();
+            final List<TableMigrationStateHistoryEntry> historyList = new ArrayList<>();
             if (attributes.containsKey(HISTORY_ATTRIBUTE_NAME)) {
                 mutableAttributes.remove(HISTORY_ATTRIBUTE_NAME).l().stream()
-                        .map(historyEntry -> HistoryEntry.deserialize(historyEntry.m()))
+                        .map(entry -> TableMigrationStateHistoryEntry.deserialize(entry.m()))
                         .forEach(historyList::add);
             }
-            final MigrationState migrationState = new MigrationState(
-                    MIGRATION_HASH_KEY, clientVersion, modifiedBy, modifiedTimestamp, historyList, mutableAttributes);
+            final TableMigrationState tableMigrationState = new TableMigrationState(
+                    TABLE_MIGRATION_HASH_KEY,
+                    tableMigrationStatus,
+                    modifiedBy,
+                    modifiedTimestamp,
+                    historyList,
+                    mutableAttributes);
 
             if (!mutableAttributes.isEmpty()) {
-                log.info("Unknown attributes {} for state {}", mutableAttributes, migrationState);
+                log.info("Unknown attributes {} for state {}", mutableAttributes, tableMigrationState);
             }
-            return migrationState;
+            return tableMigrationState;
 
         } catch (final Exception e) {
             log.warn("Unable to deserialize state with key {} and attributes {}", key, attributes, e);
@@ -142,44 +153,48 @@ public class MigrationState extends CoordinatorState {
         return null;
     }
 
-    public Map<String, ExpectedAttributeValue> getDynamoClientVersionExpectation() {
+    public Map<String, ExpectedAttributeValue> getDynamoTableMigrationStatusExpectation() {
         return new HashMap<String, ExpectedAttributeValue>() {
             {
                 put(
-                        CLIENT_VERSION_ATTRIBUTE_NAME,
+                        TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
                         ExpectedAttributeValue.builder()
-                                .value(AttributeValue.fromS(clientVersion.name()))
+                                .value(AttributeValue.fromS(tableMigrationStatus.name()))
                                 .build());
             }
         };
     }
 
-    public MigrationState copy() {
-        return new MigrationState(
+    public TableMigrationState copy() {
+        return new TableMigrationState(
                 getKey(),
-                getClientVersion(),
+                getTableMigrationStatus(),
                 getModifiedBy(),
                 getModifiedTimestamp(),
                 new ArrayList<>(getHistory()),
                 new HashMap<>(getAttributes()));
     }
 
-    public MigrationState update(final ClientVersion clientVersion, final String modifiedBy) {
+    public TableMigrationState update(final TableMigrationStatus tableMigrationStatus, final String modifiedBy) {
         log.info(
-                "Migration state is being updated to {} current state {} caller {}",
-                clientVersion,
+                "Table Migration state is being updated to {} current state {} caller {}",
+                tableMigrationStatus,
                 this,
                 StackTraceUtils.getPrintableStackTrace(Thread.currentThread().getStackTrace()));
-        addHistoryEntry(this.clientVersion, this.modifiedBy, this.modifiedTimestamp);
-        this.clientVersion = clientVersion;
+        addTableMigrationStateHistoryEntry(this.tableMigrationStatus, this.modifiedBy, this.modifiedTimestamp);
+        this.tableMigrationStatus = tableMigrationStatus;
         this.modifiedBy = modifiedBy;
         this.modifiedTimestamp = System.currentTimeMillis();
         return this;
     }
 
-    public void addHistoryEntry(
-            final ClientVersion lastClientVersion, final String lastModifiedBy, final long lastModifiedTimestamp) {
-        history.add(0, new HistoryEntry(lastClientVersion, lastModifiedBy, lastModifiedTimestamp));
+    public void addTableMigrationStateHistoryEntry(
+            final TableMigrationStatus lastTableMigrationStatus,
+            final String lastModifiedBy,
+            final long lastModifiedTimestamp) {
+        history.add(
+                0,
+                new TableMigrationStateHistoryEntry(lastTableMigrationStatus, lastModifiedBy, lastModifiedTimestamp));
         if (history.size() > MAX_HISTORY_ENTRIES) {
             log.info("Limit {} reached, dropping history {}", MAX_HISTORY_ENTRIES, history.remove(history.size() - 1));
         }
@@ -188,9 +203,9 @@ public class MigrationState extends CoordinatorState {
     public Map<String, AttributeValueUpdate> getDynamoUpdate() {
         final HashMap<String, AttributeValueUpdate> updates = new HashMap<>();
         updates.put(
-                CLIENT_VERSION_ATTRIBUTE_NAME,
+                TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME,
                 AttributeValueUpdate.builder()
-                        .value(AttributeValue.fromS(clientVersion.name()))
+                        .value(AttributeValue.fromS(tableMigrationStatus.name()))
                         .action(AttributeAction.PUT)
                         .build());
         updates.put(
@@ -209,8 +224,9 @@ public class MigrationState extends CoordinatorState {
             updates.put(
                     HISTORY_ATTRIBUTE_NAME,
                     AttributeValueUpdate.builder()
-                            .value(AttributeValue.fromL(
-                                    history.stream().map(HistoryEntry::toAv).collect(Collectors.toList())))
+                            .value(AttributeValue.fromL(history.stream()
+                                    .map(TableMigrationStateHistoryEntry::toAv)
+                                    .collect(Collectors.toList())))
                             .action(AttributeAction.PUT)
                             .build());
         }
@@ -219,8 +235,8 @@ public class MigrationState extends CoordinatorState {
 
     @RequiredArgsConstructor
     @ToString
-    public static class HistoryEntry {
-        private final ClientVersion lastClientVersion;
+    public static class TableMigrationStateHistoryEntry {
+        private final TableMigrationStatus lastTableMigrationStatus;
         private final String lastModifiedBy;
         private final long lastModifiedTimestamp;
 
@@ -231,16 +247,17 @@ public class MigrationState extends CoordinatorState {
         public Map<String, AttributeValue> serialize() {
             return new HashMap<String, AttributeValue>() {
                 {
-                    put(CLIENT_VERSION_ATTRIBUTE_NAME, AttributeValue.fromS(lastClientVersion.name()));
+                    put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, AttributeValue.fromS(lastTableMigrationStatus.name()));
                     put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(lastModifiedBy));
                     put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(lastModifiedTimestamp)));
                 }
             };
         }
 
-        public static HistoryEntry deserialize(final Map<String, AttributeValue> map) {
-            return new HistoryEntry(
-                    ClientVersion.valueOf(map.get(CLIENT_VERSION_ATTRIBUTE_NAME).s()),
+        public static TableMigrationStateHistoryEntry deserialize(final Map<String, AttributeValue> map) {
+            return new TableMigrationStateHistoryEntry(
+                    TableMigrationStatus.valueOf(
+                            map.get(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME).s()),
                     map.get(MODIFIED_BY_ATTRIBUTE_NAME).s(),
                     Long.parseLong(map.get(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME).n()));
         }

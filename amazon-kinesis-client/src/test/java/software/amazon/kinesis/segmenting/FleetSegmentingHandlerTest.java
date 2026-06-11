@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
@@ -73,17 +74,15 @@ public class FleetSegmentingHandlerTest {
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashMatches() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY,
-                sampleVersionHash,
-                Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashKeyMissing() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
         assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
@@ -91,25 +90,25 @@ public class FleetSegmentingHandlerTest {
     @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
         assertEquals(CoordinatorState.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenItemNotPresent() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.LEADER_HASH_KEY))
                 .thenReturn(null);
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashExpired() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 7200);
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 7200);
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
@@ -118,31 +117,29 @@ public class FleetSegmentingHandlerTest {
         attrs.put("someOtherKey", AttributeValue.fromS("value"));
         CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(CoordinatorState.LEADER_HASH_KEY)))
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
                 .thenReturn(state);
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
     void isOnCurrentVersion_returnsTrue_whenVersionHashMatches() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY,
-                sampleVersionHash,
-                Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
         assertTrue(handler.isOnCurrentVersion());
     }
 
     @Test
     void isOnCurrentVersion_returnsFalse_whenVersionHashDoesNotMatch() throws Exception {
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         assertFalse(handler.isOnCurrentVersion());
     }
 
     @Test
     void isOnCurrentVersion_returnsFalse_whenItemNotPresent() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.LEADER_HASH_KEY))
                 .thenReturn(null);
         assertFalse(handler.isOnCurrentVersion());
     }
@@ -153,7 +150,7 @@ public class FleetSegmentingHandlerTest {
         attrs.put("someOtherKey", AttributeValue.fromS("value"));
         CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(CoordinatorState.LEADER_HASH_KEY))
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.LEADER_HASH_KEY))
                 .thenReturn(state);
 
         assertFalse(handler.isOnCurrentVersion());
@@ -209,7 +206,7 @@ public class FleetSegmentingHandlerTest {
     @Test
     void getVersionHashWithLastUpdatedTimeForLockTable_returnsAttributeValueMap() {
         final long before = Instant.now().getEpochSecond();
-        final Map<String, AttributeValue> result = handler.getVersionHashWithLastUpdatedTimeForLockTable();
+        final Map<String, AttributeValue> result = handler.getLockAttributes();
         final long after = Instant.now().getEpochSecond();
 
         assertEquals(sampleVersionHash, result.get("versionHash").s());
@@ -334,9 +331,9 @@ public class FleetSegmentingHandlerTest {
 
         // Even with a CurrentVersion item that has a different hash, disabled handler returns Leader
         mockCoordinatorState(
-                CoordinatorState.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
-        assertEquals(CoordinatorState.LEADER_HASH_KEY, disabledHandler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, disabledHandler.getHashKeyForLeaderLock());
     }
 
     @Test
@@ -353,7 +350,7 @@ public class FleetSegmentingHandlerTest {
         CoordinatorStateDAO heartbeatDAO = mock(CoordinatorStateDAO.class);
         mockCoordinatorState(
                 heartbeatDAO,
-                CoordinatorState.LEADER_HASH_KEY,
+                LeaderLock.LEADER_HASH_KEY,
                 sampleVersionHash,
                 Instant.now().getEpochSecond());
 
@@ -389,7 +386,7 @@ public class FleetSegmentingHandlerTest {
         CoordinatorStateDAO heartbeatDAO = mock(CoordinatorStateDAO.class);
         mockCoordinatorState(
                 heartbeatDAO,
-                CoordinatorState.LEADER_HASH_KEY,
+                LeaderLock.LEADER_HASH_KEY,
                 sampleVersionHash,
                 Instant.now().getEpochSecond());
 

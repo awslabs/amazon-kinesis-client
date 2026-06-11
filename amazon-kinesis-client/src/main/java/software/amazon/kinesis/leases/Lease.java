@@ -28,6 +28,7 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.common.HashKeyRangeForLease;
+import software.amazon.kinesis.leases.EntityDAO.Entity;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -53,7 +54,13 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
             "isExpiredOrUnassigned"
         })
 @ToString
-public class Lease {
+public class Lease implements Entity {
+
+    @Override
+    public EntityType getEntityType() {
+        return EntityType.LEASE;
+    }
+
     /**
      * See javadoc for System.nanoTime - summary:
      *

@@ -20,6 +20,8 @@ import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.coordinator.delegate.LegacyTableCoordinatorStateDAODelegate;
+import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
@@ -83,24 +85,24 @@ public class FleetSegmentingHandler {
     public String getHashKeyForLeaderLock() {
         // If segmenting handler is disabled, default to returning the Leader key
         if (!isEnabled) {
-            return CoordinatorState.LEADER_HASH_KEY;
+            return LeaderLock.LEADER_HASH_KEY;
         }
         // If the current leader does not exist, default to obtaining the Leader lock.
         // If the current leader does exist but is expired, then the versioned workers were rolled back. For both
         // cases, obtain the normal leader lock.
         final Map<String, AttributeValue> currentVersionAttrs =
-                getCoordinatorStateAttributes(CoordinatorState.LEADER_HASH_KEY);
+                getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
         if (currentVersionAttrs == null
                 || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
                 || isVersionHashExpired(currentVersionAttrs)) {
-            return CoordinatorState.LEADER_HASH_KEY;
+            return LeaderLock.LEADER_HASH_KEY;
         }
 
         // If all workers are emitting the same version, take the Leader lock.
         // If the current version does exist and the version hash is not expired, take the leader lock depending on
         // the value of the version hash.
         if (isVersionEmittedByAllActiveWorkers || doesVersionHashMatch(currentVersionAttrs)) {
-            return CoordinatorState.LEADER_HASH_KEY;
+            return LeaderLock.LEADER_HASH_KEY;
         }
         return CoordinatorState.DEPLOYING_LEADER_HASH_KEY;
     }
@@ -112,7 +114,7 @@ public class FleetSegmentingHandler {
         return workerProperties;
     }
 
-    public Map<String, AttributeValue> getVersionHashWithLastUpdatedTimeForLockTable() {
+    public Map<String, AttributeValue> getLockAttributes() {
         Map<String, AttributeValue> workerProperties = new HashMap<>();
         getVersionHashWithLastUpdatedTime().forEach((k, v) -> workerProperties.put(k, AttributeValue.fromS(v)));
         return workerProperties;
@@ -127,7 +129,7 @@ public class FleetSegmentingHandler {
         if (!isEnabled) {
             return true;
         }
-        final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(CoordinatorState.LEADER_HASH_KEY);
+        final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
         return doesVersionHashMatch(attrs);
     }
 
@@ -188,7 +190,8 @@ public class FleetSegmentingHandler {
     private Map<String, ExpectedAttributeValue> getVersionHashHeartbeatExpectationMap(final String leaderKey) {
         final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
         expectations.put(
-                CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
+                // TODO: fix this
+                LegacyTableCoordinatorStateDAODelegate.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
                 ExpectedAttributeValue.builder()
                         .value(AttributeValue.fromS(leaderKey))
                         .build());
