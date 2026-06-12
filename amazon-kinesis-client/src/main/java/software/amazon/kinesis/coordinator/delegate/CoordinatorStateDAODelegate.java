@@ -160,7 +160,8 @@ public abstract class CoordinatorStateDAODelegate {
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         log.debug("Listing coordinatorState");
 
-        final ScanRequest request = ScanRequest.builder().tableName(tableName).build();
+        final ScanRequest request =
+                ScanRequest.builder().tableName(tableName).consistentRead(true).build();
 
         try {
             ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(request));
