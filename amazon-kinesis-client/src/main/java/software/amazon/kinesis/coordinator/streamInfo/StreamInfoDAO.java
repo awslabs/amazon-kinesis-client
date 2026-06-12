@@ -14,6 +14,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -82,9 +83,10 @@ public class StreamInfoDAO {
     public List<StreamInfo> listStreamInfo()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         final List<CoordinatorState> coordinatorStateList =
-                coordinatorStateDAO.listCoordinatorStateByEntityType(StreamInfo.ENTITY_TYPE);
+                coordinatorStateDAO.listCoordinatorStateByEntityType(EntityType.CoordinatorStateType.STREAM_INFO);
         return coordinatorStateList.stream()
-                .map(state -> StreamInfo.deserialize(state.getKey(), state.getAttributes()))
+                .filter(state -> state instanceof StreamInfo)
+                .map(state -> (StreamInfo) state)
                 .collect(Collectors.toList());
     }
 
@@ -100,11 +102,11 @@ public class StreamInfoDAO {
     public StreamInfo getStreamInfo(String key)
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         final CoordinatorState coordinatorState = coordinatorStateDAO.getCoordinatorState(key);
-        if (coordinatorState == null) {
+        if (coordinatorState == null || !(coordinatorState instanceof StreamInfo)) {
             log.warn("Could not find StreamInfo for key {}", key);
             return null;
         }
-        return StreamInfo.deserialize(coordinatorState.getKey(), coordinatorState.getAttributes());
+        return (StreamInfo) coordinatorState;
     }
 
     /**

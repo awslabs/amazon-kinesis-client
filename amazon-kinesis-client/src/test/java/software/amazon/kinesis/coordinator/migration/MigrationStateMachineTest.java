@@ -117,6 +117,41 @@ public class MigrationStateMachineTest {
     }
 
     @Test
+    public void testStateMachineInitialization_phase1Config_entersInitState() throws Exception {
+        stateMachineUnderTest =
+                getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE1);
+
+        // Phase 1: state machine should be in CLIENT_VERSION_INIT - pure 2.x passive mode
+        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_INIT, stateMachineUnderTest.getCurrentClientVersion());
+
+        // Verify that the initializer's Phase 1 method was called (not any other)
+        verify(mockInitializer).initializeClientVersionForPhase1();
+        verify(mockInitializer, Mockito.never()).initializeClientVersionFor3x(any());
+        verify(mockInitializer, Mockito.never()).initializeClientVersionForUpgradeFrom2x(any());
+        verify(mockInitializer, Mockito.never()).initializeClientVersionFor2x(any());
+        verify(mockInitializer, Mockito.never()).initializeClientVersionFor3xWithRollback(any());
+
+        // No DDB write should occur for Phase 1 INIT state
+        verify(mockCoordinatorStateDAO, Mockito.never()).createCoordinatorStateIfNotExists(any());
+        verify(mockCoordinatorStateDAO, Mockito.never()).updateCoordinatorStateWithExpectation(any(), any());
+    }
+
+    @Test
+    public void testStateMachineInitialization_phase1Config_withExistingState_honorsExistingState() throws Exception {
+        // If there's already a 3X_WITH_ROLLBACK state in DDB and we deploy with Phase1, honor the existing state
+        final MigrationState existingState =
+                new MigrationState(WORKER_ID).update(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK, WORKER_ID);
+        when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(existingState);
+
+        stateMachineUnderTest =
+                getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE1);
+
+        // Should honor the existing DDB state rather than going to INIT
+        Assertions.assertEquals(
+                ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK, stateMachineUnderTest.getCurrentClientVersion());
+    }
+
+    @Test
     public void testMigrationReadyFlip() throws Exception {
         stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
@@ -262,8 +297,7 @@ public class MigrationStateMachineTest {
                         ? runnableCaptor.getAllValues().get(0)
                         : runnableCaptor.getAllValues().get(1);
 
-        final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
+        final MigrationState state = new MigrationState(WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
@@ -275,8 +309,7 @@ public class MigrationStateMachineTest {
     }
 
     private void initiateAndTestRollBack(final Runnable rollbackMonitorRunnable) throws Exception {
-        final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
+        final MigrationState state = new MigrationState(WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
@@ -288,8 +321,8 @@ public class MigrationStateMachineTest {
     }
 
     private void initiateAndTestRollForward(final Runnable rollforwardMonitorRunnable) throws Exception {
-        final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, WORKER_ID)
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, WORKER_ID);
+        final MigrationState state =
+                new MigrationState(WORKER_ID).update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
@@ -302,8 +335,7 @@ public class MigrationStateMachineTest {
     }
 
     private void initiateAndTestSuccessfulUpgrade(final Runnable successfulUpgradeMonitor) throws Exception {
-        final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_3X, WORKER_ID);
+        final MigrationState state = new MigrationState(WORKER_ID).update(ClientVersion.CLIENT_VERSION_3X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);

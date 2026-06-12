@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StackTraceUtils;
 import software.amazon.kinesis.coordinator.CoordinatorState;
+import software.amazon.kinesis.leases.EntityType;
 
 /**
  * Data model of the Migration state. This is used to track the state related to migration
@@ -71,17 +72,16 @@ public class MigrationState extends CoordinatorState {
             final long modifiedTimestamp,
             final List<HistoryEntry> historyEntries,
             final Map<String, AttributeValue> others) {
-        setKey(key);
-        setAttributes(others);
+        super(key, EntityType.CoordinatorStateType.CLIENT_VERSION_MIGRATION, others);
         this.clientVersion = clientVersion;
         this.modifiedBy = modifiedBy;
         this.modifiedTimestamp = modifiedTimestamp;
         this.history = historyEntries;
     }
 
-    public MigrationState(final String key, final String modifiedBy) {
+    public MigrationState(final String modifiedBy) {
         this(
-                key,
+                MIGRATION_HASH_KEY,
                 ClientVersion.CLIENT_VERSION_INIT,
                 modifiedBy,
                 System.currentTimeMillis(),
@@ -90,7 +90,7 @@ public class MigrationState extends CoordinatorState {
     }
 
     public HashMap<String, AttributeValue> serialize() {
-        final HashMap<String, AttributeValue> result = new HashMap<>();
+        final HashMap<String, AttributeValue> result = new HashMap<>(super.serialize());
         result.put(CLIENT_VERSION_ATTRIBUTE_NAME, AttributeValue.fromS(clientVersion.name()));
         result.put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(modifiedBy));
         result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));

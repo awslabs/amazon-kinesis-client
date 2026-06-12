@@ -13,24 +13,39 @@ import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
-import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class DynamoDBLockBasedLeaderDeciderTest {
 
@@ -40,26 +55,50 @@ class DynamoDBLockBasedLeaderDeciderTest {
     private final DynamoDbAsyncClient dynamoDBAsyncClient = dynamoDBEmbedded.dynamoDbAsyncClient();
     private final DynamoDbClient dynamoDBSyncClient = dynamoDBEmbedded.dynamoDbClient();
     private final Map<String, DynamoDBLockBasedLeaderDecider> workerIdToLeaderDeciderMap = new HashMap<>();
+    // To create Lease table
+    private final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+            TEST_LOCK_TABLE_NAME,
+            dynamoDBAsyncClient,
+            new DynamoDBLeaseSerializer(),
+            true,
+            TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
+            LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+            new DdbTableConfig(),
+            LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+            LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+            DefaultSdkAutoConstructList.getInstance());
 
     private FleetSegmentingHandler mockSegmentingHandler;
+    private TableMigrationStateMachine mockTableMigrationStateMachine;
 
     @BeforeEach
-    void setup() throws DependencyException {
+    void setup() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
         c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
-        final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateTableConfig());
+        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
+        when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        leaseRefresher.createLeaseTableIfNotExists();
+        final CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, provider);
         dao.initialize();
         mockSegmentingHandler = mock(FleetSegmentingHandler.class);
+        mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
         Mockito.when(mockSegmentingHandler.getVersionHash())
                 .thenReturn(String.valueOf(
                         LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode()));
-        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(CoordinatorState.LEADER_HASH_KEY);
+        Mockito.when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(
                     workerId,
                     DynamoDBLockBasedLeaderDecider.create(
-                            dao, workerId, 100L, 10L, new NullMetricsFactory(), mockSegmentingHandler));
+                            dao,
+                            workerId,
+                            100L,
+                            10L,
+                            new NullMetricsFactory(),
+                            mockSegmentingHandler,
+                            mockTableMigrationStateMachine));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
@@ -93,10 +132,9 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final GetItemRequest getItemRequest = GetItemRequest.builder()
                 .tableName(TEST_LOCK_TABLE_NAME)
                 .key(Collections.singletonMap(
-                        CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
-                        AttributeValue.builder()
-                                .s(CoordinatorState.LEADER_HASH_KEY)
-                                .build()))
+                        // TODO: check this for correctness
+                        DynamoDBLeaseSerializer.LEASE_KEY_KEY,
+                        AttributeValue.builder().s(LeaderLock.LEADER_HASH_KEY).build()))
                 .build();
         final GetItemResponse getItemResult = dynamoDBSyncClient.getItem(getItemRequest);
         // assert that after shutdown the lockItem is no longer present.
@@ -126,10 +164,9 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final PutItemRequest putItemRequest = PutItemRequest.builder()
                 .tableName(TEST_LOCK_TABLE_NAME)
                 .item(ImmutableMap.of(
-                        CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
-                        AttributeValue.builder()
-                                .s(CoordinatorState.LEADER_HASH_KEY)
-                                .build(),
+                        // TODO: check for correctness
+                        DynamoDBLeaseSerializer.LEASE_KEY_KEY,
+                        AttributeValue.builder().s(LeaderLock.LEADER_HASH_KEY).build(),
                         "leaseDuration",
                         AttributeValue.builder().s("200").build(),
                         "ownerName",
@@ -155,5 +192,53 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
         // Original worker should still be leader
         assertTrue(decider.isLeader(workerId));
+    }
+
+    @Test
+    void isLeader_invokesHandleLeaderLockResult_whenLeaderIsTrue() throws Exception {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(mockTableMigrationStateMachine).handleLeaderLockResult(true);
+    }
+
+    @Test
+    void isLeader_invokesHandleLeaderLockResult_whenLeaderIsFalse() throws Exception {
+        // Use a worker that won't get the lock (another worker holds it)
+        final String leaderWorkerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider leaderDecider = workerIdToLeaderDeciderMap.get(leaderWorkerId);
+        assertTrue(leaderDecider.isLeader(leaderWorkerId));
+
+        final String nonLeaderWorkerId = getWorkerId(2);
+        final DynamoDBLockBasedLeaderDecider nonLeaderDecider = workerIdToLeaderDeciderMap.get(nonLeaderWorkerId);
+        assertFalse(nonLeaderDecider.isLeader(nonLeaderWorkerId));
+
+        verify(mockTableMigrationStateMachine).handleLeaderLockResult(false);
+    }
+
+    @Test
+    void isLeader_returnsFalse_whenHandleLeaderLockResultThrowsDependencyException() throws Exception {
+        doThrow(new DependencyException("test", new RuntimeException()))
+                .when(mockTableMigrationStateMachine)
+                .handleLeaderLockResult(anyBoolean());
+
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertFalse(decider.isLeader(workerId));
+    }
+
+    @Test
+    void isLeader_returnsFalse_whenHandleLeaderLockResultThrowsInvalidStateException() throws Exception {
+        doThrow(new InvalidStateException("migration complete"))
+                .when(mockTableMigrationStateMachine)
+                .handleLeaderLockResult(anyBoolean());
+
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertFalse(decider.isLeader(workerId));
     }
 }

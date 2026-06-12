@@ -21,6 +21,7 @@ import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.EntityType.CoordinatorStateType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -42,7 +43,7 @@ public class StreamInfoDAOTest {
     @Mock
     private KinesisAsyncClient mockKinesisAsyncClient;
 
-    private static final String ENTITY_TYPE = "STREAM";
+    private static final CoordinatorStateType ENTITY_TYPE = CoordinatorStateType.STREAM_INFO;
     private StreamInfoDAO streamInfoDAO;
     private final String streamId = "streamId-123-ghi";
     private final String streamName = "test-stream";
@@ -178,7 +179,7 @@ public class StreamInfoDAOTest {
     public void testGetStreamInfoWhenStreamExistsReturnsStreamInfo() throws Exception {
         Map<String, AttributeValue> attributes = new HashMap<>();
         attributes.put("streamId", AttributeValue.builder().s(streamId).build());
-        attributes.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
+        attributes.put("entityType", AttributeValue.builder().s("STREAM").build());
         attributes.put("streamArn", AttributeValue.builder().s(streamArn).build());
         StreamInfo mockState = new StreamInfo(streamName, streamId);
         mockState.setAttributes(attributes);
@@ -216,14 +217,14 @@ public class StreamInfoDAOTest {
         String streamName1 = "stream-id-key1";
         Map<String, AttributeValue> attributes1 = new HashMap<>();
         attributes1.put("streamId", AttributeValue.builder().s("stream1").build());
-        attributes1.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
+        attributes1.put("entityType", AttributeValue.builder().s("STREAM").build());
         CoordinatorState state1 = new StreamInfo(streamName1, streamId);
         state1.setAttributes(attributes1);
 
         String streamName2 = "stream-id-key2";
         Map<String, AttributeValue> attributes2 = new HashMap<>();
         attributes2.put("streamId", AttributeValue.builder().s("stream2").build());
-        attributes2.put("entityType", AttributeValue.builder().s(ENTITY_TYPE).build());
+        attributes2.put("entityType", AttributeValue.builder().s("STREAM").build());
         CoordinatorState state2 = new StreamInfo(streamName2, streamId);
         state2.setAttributes(attributes2);
 

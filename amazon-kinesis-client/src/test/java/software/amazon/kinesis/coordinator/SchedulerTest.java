@@ -224,6 +224,29 @@ public class SchedulerTest {
         shardDetectorMap = new HashMap<>();
         shardRecordProcessorFactory = new TestShardRecordProcessorFactory();
 
+        // Create the lease table in embedded DynamoDB so TableMigrationStateMachine can write to it
+        try {
+            dynamoDBClient
+                    .createTable(software.amazon.awssdk.services.dynamodb.model.CreateTableRequest.builder()
+                            .tableName(tableName)
+                            .keySchema(software.amazon.awssdk.services.dynamodb.model.KeySchemaElement.builder()
+                                    .attributeName("leaseKey")
+                                    .keyType(software.amazon.awssdk.services.dynamodb.model.KeyType.HASH)
+                                    .build())
+                            .attributeDefinitions(
+                                    software.amazon.awssdk.services.dynamodb.model.AttributeDefinition.builder()
+                                            .attributeName("leaseKey")
+                                            .attributeType(
+                                                    software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
+                                                            .S)
+                                            .build())
+                            .billingMode(software.amazon.awssdk.services.dynamodb.model.BillingMode.PAY_PER_REQUEST)
+                            .build())
+                    .join();
+        } catch (Exception e) {
+            // Table may already exist from a previous test
+        }
+
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
         coordinatorConfig = new CoordinatorConfig(applicationName)
                 .parentShardPollIntervalMillis(100L)

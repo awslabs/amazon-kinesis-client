@@ -80,7 +80,7 @@ public class ClientVersionChangeMonitorTest {
         verify(mockScheduler).scheduleWithFixedDelay(argumentCaptor.capture(), anyLong(), anyLong(), anyObject());
 
         final MigrationState initialState =
-                new MigrationState(MIGRATION_HASH_KEY, "DUMMY_WORKER").update(currentClientVersion, "DUMMY_WORKER");
+                new MigrationState("DUMMY_WORKER").update(currentClientVersion, "DUMMY_WORKER");
         final MigrationState changedState = initialState.copy().update(changedClientVersion, "DUMMY_WORKER2");
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY))
                 .thenReturn(initialState)
@@ -111,8 +111,8 @@ public class ClientVersionChangeMonitorTest {
         final ArgumentCaptor<Runnable> argumentCaptor = ArgumentCaptor.forClass(Runnable.class);
         verify(mockScheduler).scheduleWithFixedDelay(argumentCaptor.capture(), anyLong(), anyLong(), anyObject());
 
-        final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, "DUMMY_WORKER")
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
+        final MigrationState state =
+                new MigrationState("DUMMY_WORKER").update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
 
         argumentCaptor.getValue().run();
@@ -137,8 +137,8 @@ public class ClientVersionChangeMonitorTest {
         final ArgumentCaptor<Runnable> argumentCaptor = ArgumentCaptor.forClass(Runnable.class);
         verify(mockScheduler).scheduleWithFixedDelay(argumentCaptor.capture(), anyLong(), anyLong(), anyObject());
 
-        final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, "DUMMY_WORKER")
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
+        final MigrationState state =
+                new MigrationState("DUMMY_WORKER").update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
 
         doThrow(new InvalidStateException("test exception")).when(mockCallback).accept(any());

@@ -15,25 +15,23 @@
 package software.amazon.kinesis.coordinator.migration;
 
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
-import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.ClientVersionConfig;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_INIT;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRATION_HASH_KEY;
 
@@ -41,65 +39,64 @@ import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRA
  * Initializer to determine start state of the state machine which identifies the
  * state to initialize KCL when it is starting up. The initial state is determined based on the
  * customer configured {@link ClientVersionConfig} and the current {@link MigrationState} in DDB,
- * as follows
- * ClientVersionConfig | MigrationState (DDB)             | initial client version
- * --------------------+---------------------------------+--------------------------------
- * COMPATIBLE_WITH_2X  | Does not exist                  | CLIENT_VERSION_UPGRADE_FROM_2X
- * 3X                  | Does not exist                  | CLIENT_VERSION_3X
- * COMPATIBLE_WITH_2X  | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X_WITH_ROLLBACK
- * 3X                  | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X
- * any                 | CLIENT_VERSION_2X               | CLIENT_VERSION_2X
- * any                 | CLIENT_VERSION_UPGRADE_FROM_2X  | CLIENT_VERSION_UPGRADE_FROM_2X
- * any                 | CLIENT_VERSION_3X               | CLIENT_VERSION_3X
+ * as follows:
+ *
+ * ClientVersionConfig      | MigrationState (DDB)             | initial client version
+ * -------------------------+---------------------------------+----------------------------------------------
+ * COMPATIBLE_WITH_2X_PHASE1| Does not exist                  | CLIENT_VERSION_INIT (local only, not written to DDB)
+ * COMPATIBLE_WITH_2X       | Does not exist                  | CLIENT_VERSION_UPGRADE_FROM_2X
+ * 3X                       | Does not exist                  | CLIENT_VERSION_3X
+ * COMPATIBLE_WITH_2X_PHASE1| CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X_WITH_ROLLBACK
+ * COMPATIBLE_WITH_2X       | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X_WITH_ROLLBACK
+ * 3X                       | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X
+ * any                      | CLIENT_VERSION_2X               | CLIENT_VERSION_2X
+ * any                      | CLIENT_VERSION_UPGRADE_FROM_2X  | CLIENT_VERSION_UPGRADE_FROM_2X
+ * any                      | CLIENT_VERSION_3X               | CLIENT_VERSION_3X
+ *
+ * Phase 1 COMPATIBLE_WITH_2X_PHASE1 does not write any state to DDB.
+ * When CLIENT_VERSION_INIT is returned, the migration state machine remains inactive and
+ * KCL operates in pure 2.x
  */
 @KinesisClientInternalApi
 @RequiredArgsConstructor
 @Slf4j
 @ThreadSafe
 public class MigrationClientVersionStateInitializer {
-    private static final int MAX_INITIALIZATION_RETRY = 10;
+    private static final int MAX_INITIALIZATION_RETRY = 1;
     private static final long INITIALIZATION_RETRY_DELAY_MILLIS = 1000L;
     /**
      * A jitter factor of 10% to stagger the retries.
      */
     private static final double JITTER_FACTOR = 0.1;
 
-    private final Callable<Long> timeProvider;
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final ClientVersionConfig clientVersionConfig;
     private final Random random;
     private final String workerIdentifier;
 
+    /**
+     * Determine the initial client version by reading the current state from DDB and
+     * applying the configured client version policy. This is a READ-ONLY operation —
+     * no state is written to DDB. The DDB write happens in the state's {@code enter()} method.
+     *
+     * <p>If the read fails, Scheduler's retry loop will re-invoke the entire initialization.</p>
+     *
+     * @return the initial client version and the migration state read from DDB
+     * @throws DependencyException if reading from DDB fails
+     */
     public SimpleEntry<ClientVersion, MigrationState> getInitialState() throws DependencyException {
         log.info("Initializing migration state machine starting state, configured version {}", clientVersionConfig);
 
         try {
-            MigrationState migrationState = getMigrationStateFromDynamo();
-            int retryCount = 0;
-            while (retryCount++ < MAX_INITIALIZATION_RETRY) {
-                final ClientVersion initialClientVersion = getClientVersionForInitialization(migrationState);
-                if (migrationState.getClientVersion() != initialClientVersion) {
-                    // If update fails, the value represents current state in dynamo
-                    migrationState = updateMigrationStateInDynamo(migrationState, initialClientVersion);
-                    if (migrationState.getClientVersion() == initialClientVersion) {
-                        // update succeeded. Transition to the state
-                        return new SimpleEntry<>(initialClientVersion, migrationState);
-                    }
-                    final long delay = getInitializationRetryDelay();
-                    log.warn(
-                            "Failed to update migration state with {}, retry after delay {}",
-                            initialClientVersion,
-                            delay);
-                    safeSleep(delay);
-                } else {
-                    return new SimpleEntry<>(initialClientVersion, migrationState);
-                }
-            }
+            final MigrationState migrationState = getMigrationStateFromDynamo();
+            final ClientVersion initialClientVersion = getClientVersionForInitialization(migrationState);
+            log.info("Determined initial client version {} from DDB state {}", initialClientVersion, migrationState);
+            return new SimpleEntry<>(initialClientVersion, migrationState);
         } catch (final InvalidStateException e) {
             log.error("Unable to initialize state machine", e);
+            throw new DependencyException(
+                    new RuntimeException("Unable to determine initial state for migration state machine", e));
         }
-        throw new DependencyException(
-                new RuntimeException("Unable to determine initial state for migration state machine"));
     }
 
     public ClientVersion getClientVersionForInitialization(final MigrationState migrationState) {
@@ -138,48 +135,12 @@ public class MigrationClientVersionStateInitializer {
         return nextClientVersion;
     }
 
-    /**
-     * Update the migration state's client version in dynamo conditional on the current client version
-     * in dynamo. So that if another worker updates the value first, the update fails. If the update fails,
-     * the method will read the latest value and return so that initialization can be retried.
-     * If the value does not exist in dynamo, it will creat it.
-     */
-    private MigrationState updateMigrationStateInDynamo(
-            final MigrationState migrationState, final ClientVersion nextClientVersion) throws InvalidStateException {
-        try {
-            if (migrationState.getClientVersion() == ClientVersion.CLIENT_VERSION_INIT) {
-                migrationState.update(nextClientVersion, workerIdentifier);
-                log.info("Creating {}", migrationState);
-                final boolean created = coordinatorStateDAO.createCoordinatorStateIfNotExists(migrationState);
-                if (!created) {
-                    log.debug("Create {} did not succeed", migrationState);
-                    return getMigrationStateFromDynamo();
-                }
-            } else {
-                log.info("Updating {} with {}", migrationState, nextClientVersion);
-                final Map<String, ExpectedAttributeValue> expectations =
-                        migrationState.getDynamoClientVersionExpectation();
-                migrationState.update(nextClientVersion, workerIdentifier);
-                final boolean updated =
-                        coordinatorStateDAO.updateCoordinatorStateWithExpectation(migrationState, expectations);
-                if (!updated) {
-                    log.debug("Update {} did not succeed", migrationState);
-                    return getMigrationStateFromDynamo();
-                }
-            }
-            return migrationState;
-        } catch (final ProvisionedThroughputException | DependencyException e) {
-            log.debug(
-                    "Failed to update migration state {} with {}, return previous value to trigger a retry",
-                    migrationState,
-                    nextClientVersion,
-                    e);
-            return migrationState;
-        }
-    }
-
     private ClientVersion getNextClientVersionBasedOnConfigVersion() {
         switch (clientVersionConfig) {
+            case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE1:
+                // Phase 1: Remain in INIT for phase1
+                // KCL operates in 2.x compatible mode without activating migration.
+                return CLIENT_VERSION_INIT;
             case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X:
                 return CLIENT_VERSION_UPGRADE_FROM_2X;
             case CLIENT_VERSION_CONFIG_3X:
@@ -200,7 +161,7 @@ public class MigrationClientVersionStateInitializer {
                     final CoordinatorState state = coordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY);
                     if (state == null) {
                         log.info("No Migration state available in DDB");
-                        return new MigrationState(MIGRATION_HASH_KEY, workerIdentifier);
+                        return new MigrationState(workerIdentifier);
                     }
                     if (state instanceof MigrationState) {
                         log.info("Current migration state in DDB {}", state);
