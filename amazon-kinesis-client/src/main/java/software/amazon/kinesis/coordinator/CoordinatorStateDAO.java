@@ -17,6 +17,7 @@ package software.amazon.kinesis.coordinator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import javax.annotation.concurrent.ThreadSafe;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonDynamoDBLockClientOptionsBuilder;
@@ -338,7 +339,10 @@ public class CoordinatorStateDAO {
                 .build();
         try {
             dynamoDbAsyncClient.transactWriteItems(request).get();
-        } catch (final Exception e) {
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DependencyException("TransactWriteItems interrupted", e);
+        } catch (final ExecutionException e) {
             final Throwable cause = e.getCause() != null ? e.getCause() : e;
             if (cause instanceof TransactionCanceledException) {
                 throw new DependencyException(

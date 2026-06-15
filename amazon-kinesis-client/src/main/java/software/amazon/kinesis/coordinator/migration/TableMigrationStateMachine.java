@@ -88,4 +88,17 @@ public interface TableMigrationStateMachine {
      *         must release the current lock so the correct lock can be acquired
      */
     void handleLeaderLockResult(boolean isLeader) throws DependencyException, InvalidStateException;
+
+    /**
+     * Idempotent shutdown of the table migration state machine. Cancels any in-flight
+     * async copy operation and shuts down the dedicated executor used for migration tasks.
+     *
+     * <p>After this method returns, no further DDB mutations will be performed by the
+     * state machine. This should be called during scheduler shutdown to ensure a leader
+     * shutting down mid-copy does not continue mutating DDB tables after the worker
+     * considers itself stopped.</p>
+     *
+     * <p>Calling this method multiple times is safe and has no additional effect.</p>
+     */
+    void shutdown();
 }

@@ -15,9 +15,6 @@
 package software.amazon.kinesis.coordinator.assignment;
 
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsScope;
 
 /**
@@ -54,10 +51,12 @@ public interface LAMDataManager {
      *
      * @param metricsScope the metrics scope for emitting data quality metrics
      * @return a snapshot containing clean leases and only active, valid worker metrics for LAM
-     * @throws DependencyException if DynamoDB scan fails in an unexpected way
-     * @throws InvalidStateException if a required table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
      */
-    LAMDataSnapshot loadData(MetricsScope metricsScope)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    LAMDataSnapshot loadData(MetricsScope metricsScope);
+
+    /**
+     * Shuts down any internal resources (e.g., thread pools) used by this manager.
+     * Should be called when the LeaseAssignmentManager is stopped.
+     */
+    void shutdown();
 }

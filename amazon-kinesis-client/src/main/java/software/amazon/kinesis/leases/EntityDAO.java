@@ -95,4 +95,12 @@ public interface EntityDAO {
      */
     Map<EntityType, EntityScanList> scanEntities(EntityType... entityTypes)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Shuts down any resources held by this DAO, such as thread pools used for parallel scans.
+     * This method is idempotent.
+     */
+    default void shutdown() {
+        // no-op by default for backward compatibility
+    }
 }

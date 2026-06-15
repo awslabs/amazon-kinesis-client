@@ -3,6 +3,7 @@ package software.amazon.kinesis.coordinator.assignment;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -26,8 +27,13 @@ import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
+import software.amazon.awssdk.services.dynamodb.model.KeyType;
+import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.delegate.LeaseTableCoordinatorStateDAODelegate;
@@ -1505,5 +1511,89 @@ class LeaseAssignmentManagerTest {
                 leaseRefresher.listLeases().stream().collect(Collectors.toMap(Lease::leaseKey, Lease::leaseOwner));
         // Lease-count decider picks Yield worker (fewer leases) despite higher CPU
         assertEquals(TEST_YIELD_WORKER_ID, leaseAssignments.get("newLease"));
+    }
+
+    // --- Migration: LAM balances to 3.4 workers (legacy-only metrics without entityType) ---
+
+    @Test
+    void performAssignment_duringMigration_assignsLeasesToBoth34And35Workers() throws Exception {
+        // Create legacy worker metrics table (PK: wid) — simulates a pre-existing 3.4 deployment
+        dynamoDbAsyncClient
+                .createTable(b -> b.tableName(WORKER_METRICS_TABLE_NAME)
+                        .keySchema(KeySchemaElement.builder()
+                                .attributeName("wid")
+                                .keyType(KeyType.HASH)
+                                .build())
+                        .attributeDefinitions(AttributeDefinition.builder()
+                                .attributeName("wid")
+                                .attributeType(ScalarAttributeType.S)
+                                .build())
+                        .provisionedThroughput(ProvisionedThroughput.builder()
+                                .readCapacityUnits(5L)
+                                .writeCapacityUnits(5L)
+                                .build()))
+                .join();
+
+        // Simulate DEPLOYED state: 3.5 workers write to lease table, 3.4 workers write to legacy table
+        final TableMigrationStatusProvider deployedProvider = mock(TableMigrationStatusProvider.class, RETURNS_MOCKS);
+        when(deployedProvider.getTableMigrationStatus())
+                .thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
+        when(deployedProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig("applicationName");
+        config.tableName(WORKER_METRICS_TABLE_NAME);
+        WorkerMetricStatsDAO migrationDao =
+                new WorkerMetricStatsDAO(dynamoDbAsyncClient, config, LEASE_TABLE_NAME, 10000L, deployedProvider);
+        migrationDao.initialize();
+
+        // 3.5 worker: writes metrics to lease table (has entityType)
+        final String worker35 = "worker-3-5";
+        migrationDao.updateMetrics(createDummyTakeWorkerMetrics(worker35));
+
+        // 3.4 worker: writes metrics to legacy table WITHOUT entityType (simulates old KCL version)
+        final String worker34 = "worker-3-4";
+        final long currentTime = Instant.now().getEpochSecond();
+        Map<String, AttributeValue> legacyItem = new HashMap<>();
+        legacyItem.put("wid", AttributeValue.fromS(worker34));
+        legacyItem.put("lut", AttributeValue.fromN(String.valueOf(currentTime)));
+        legacyItem.put(
+                "sts",
+                AttributeValue.fromM(ImmutableMap.of(
+                        "C",
+                        AttributeValue.builder()
+                                .l(AttributeValue.fromN("50.0"), AttributeValue.fromN("50.0"))
+                                .build())));
+        legacyItem.put(
+                "opr",
+                AttributeValue.fromM(ImmutableMap.of(
+                        "C",
+                        AttributeValue.builder().l(AttributeValue.fromN("80")).build())));
+        legacyItem.put("p", AttributeValue.fromM(ImmutableMap.of("versionHash", AttributeValue.fromS("0"))));
+        // Deliberately NO entityType attribute — simulates 3.4 worker
+        dynamoDbAsyncClient
+                .putItem(b -> b.tableName(WORKER_METRICS_TABLE_NAME).item(legacyItem))
+                .join();
+
+        // Create unassigned leases
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                leaseRefresher,
+                migrationDao);
+
+        leaseAssignmentManagerRunnable.run();
+
+        final Map<String, String> assignments =
+                leaseRefresher.listLeases().stream().collect(Collectors.toMap(Lease::leaseKey, Lease::leaseOwner));
+
+        // Both workers should have leases assigned — LAM must see 3.4 worker from legacy table
+        assertTrue(assignments.containsValue(worker35), "3.5 worker should have leases assigned");
+        assertTrue(
+                assignments.containsValue(worker34), "3.4 worker (legacy, no entityType) should have leases assigned");
     }
 }

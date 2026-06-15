@@ -65,6 +65,21 @@ public class TableMigrationSummary {
     int workersWithUnexpiredLeases;
 
     /**
+     * Total number of distinct workers that own at least one lease (regardless of lease expiry).
+     * This mirrors the "unique lease owners" concept from MigrationReadyMonitor and includes
+     * all lease owners, not just those with unexpired leases.
+     */
+    int totalWorkersWithLeases;
+
+    /**
+     * Number of lease owners that are emitting active worker metrics (in either table).
+     * This is the intersection of all lease owners and workers with active metrics,
+     * mirroring the readiness check in MigrationReadyMonitor.areLeaseOwnersEmittingWorkerMetrics.
+     * When this equals {@link #totalWorkersWithLeases}, all lease owners are emitting metrics.
+     */
+    int leaseOwnersWithActiveMetrics;
+
+    /**
      * The fleet-wide minimum support code computed across all lease-owning workers.
      * <ul>
      *   <li>Returns 0 if any lease owner lacks support or has an expired support code heartbeat.</li>

@@ -1,3 +1,17 @@
+/*
+ * Copyright 2024 Amazon.com, Inc. or its affiliates.
+ * Licensed under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package software.amazon.kinesis.coordinator.assignment;
 
 import java.time.Duration;
@@ -246,6 +260,9 @@ class MigrationAwareLAMDataManagerTest {
         assertEquals(1, summary.getActiveWorkersWithMetricsInLeaseTable());
         assertEquals(1, summary.getActiveWorkersWithMetricsInLegacyTable());
         assertEquals(1, summary.getWorkersWithUnexpiredLeases());
+        // worker1 owns lease1 and worker1 has active metrics → 1 lease owner with active metrics
+        assertEquals(1, summary.getTotalWorkersWithLeases());
+        assertEquals(1, summary.getLeaseOwnersWithActiveMetrics());
     }
 
     @Test
@@ -460,5 +477,161 @@ class MigrationAwareLAMDataManagerTest {
 
         // Both entries are returned - LAMDataSnapshot documents that callers handle dedup
         assertEquals(2, snapshot.getWorkerMetricStats().size());
+    }
+
+    @Test
+    void loadData_migrationSummary_totalWorkersWithLeases_countsAllLeaseOwners() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // 3 leases owned by 2 distinct workers
+        Lease lease1 = createLease("lease1", "worker1");
+        Lease lease2 = createLease("lease2", "worker2");
+        Lease lease3 = createLease("lease3", "worker1");
+        WorkerMetricStats wm1 = createActiveWorkerMetrics("worker1");
+        WorkerMetricStats wm2 = createActiveWorkerMetrics("worker2");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2, lease3), Arrays.asList(wm1, wm2)));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        // 2 distinct lease owners
+        assertEquals(2, summary.getTotalWorkersWithLeases());
+    }
+
+    @Test
+    void loadData_migrationSummary_totalWorkersWithLeases_excludesNullOwners() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // One lease with owner, one unassigned (null owner)
+        Lease assignedLease = createLease("lease1", "worker1");
+        Lease unassignedLease = new Lease();
+        unassignedLease.leaseKey("lease2");
+
+        WorkerMetricStats wm = createActiveWorkerMetrics("worker1");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(
+                        buildScanResult(Arrays.asList(assignedLease, unassignedLease), Collections.singletonList(wm)));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        // Only 1 owner (null owners excluded)
+        assertEquals(1, summary.getTotalWorkersWithLeases());
+    }
+
+    @Test
+    void loadData_migrationSummary_leaseOwnersWithActiveMetrics_allOwnersEmitting() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        // 2 lease owners, both have active metrics
+        Lease lease1 = createLease("lease1", "worker1");
+        Lease lease2 = createLease("lease2", "worker2");
+        WorkerMetricStats wm1 = createActiveWorkerMetrics("worker1");
+        WorkerMetricStats wm2 = createActiveWorkerMetrics("worker2");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2), Collections.singletonList(wm1)));
+        when(legacyDelegate.getAllWorkerMetricStats()).thenReturn(Collections.singletonList(wm2));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        assertEquals(2, summary.getTotalWorkersWithLeases());
+        assertEquals(2, summary.getLeaseOwnersWithActiveMetrics());
+        // All lease owners are emitting → these are equal
+        assertEquals(summary.getTotalWorkersWithLeases(), summary.getLeaseOwnersWithActiveMetrics());
+    }
+
+    @Test
+    void loadData_migrationSummary_leaseOwnersWithActiveMetrics_someOwnersNotEmitting() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // 3 lease owners: worker1, worker2, worker3
+        // Only worker1 and worker3 have active metrics
+        Lease lease1 = createLease("lease1", "worker1");
+        Lease lease2 = createLease("lease2", "worker2");
+        Lease lease3 = createLease("lease3", "worker3");
+        WorkerMetricStats wm1 = createActiveWorkerMetrics("worker1");
+        WorkerMetricStats wm3 = createActiveWorkerMetrics("worker3");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2, lease3), Arrays.asList(wm1, wm3)));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        assertEquals(3, summary.getTotalWorkersWithLeases());
+        // worker2 has no metrics → only 2 lease owners with active metrics
+        assertEquals(2, summary.getLeaseOwnersWithActiveMetrics());
+    }
+
+    @Test
+    void loadData_migrationSummary_leaseOwnersWithActiveMetrics_ownerHasExpiredMetrics() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // worker1 has active metrics, worker2 has expired metrics
+        Lease lease1 = createLease("lease1", "worker1");
+        Lease lease2 = createLease("lease2", "worker2");
+        WorkerMetricStats wm1 = createActiveWorkerMetrics("worker1");
+        WorkerMetricStats wm2 = createExpiredWorkerMetrics("worker2");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2), Arrays.asList(wm1, wm2)));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        assertEquals(2, summary.getTotalWorkersWithLeases());
+        // worker2's metrics are expired, so only worker1 counts
+        assertEquals(1, summary.getLeaseOwnersWithActiveMetrics());
+    }
+
+    @Test
+    void loadData_migrationSummary_leaseOwnersWithActiveMetrics_noLeases() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // No leases, but workers exist with metrics
+        WorkerMetricStats wm1 = createActiveWorkerMetrics("worker1");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Collections.emptyList(), Collections.singletonList(wm1)));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        assertEquals(0, summary.getTotalWorkersWithLeases());
+        assertEquals(0, summary.getLeaseOwnersWithActiveMetrics());
+    }
+
+    @Test
+    void loadData_migrationSummary_leaseOwnersWithActiveMetrics_metricsInLegacyTableCount() throws Exception {
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        // worker1 has lease but metrics only in legacy table
+        Lease lease1 = createLease("lease1", "worker1");
+        WorkerMetricStats wmLegacy = createActiveWorkerMetrics("worker1");
+
+        when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
+                .thenReturn(buildScanResult(Collections.singletonList(lease1), Collections.emptyList()));
+        when(legacyDelegate.getAllWorkerMetricStats()).thenReturn(Collections.singletonList(wmLegacy));
+
+        manager.loadData(new NullMetricsScope());
+
+        TableMigrationSummary summary = capturedSummary.get();
+        assertNotNull(summary);
+        assertEquals(1, summary.getTotalWorkersWithLeases());
+        // worker1 has active metrics in legacy table → counts
+        assertEquals(1, summary.getLeaseOwnersWithActiveMetrics());
+        assertEquals(0, summary.getActiveWorkersWithMetricsInLeaseTable());
+        assertEquals(1, summary.getActiveWorkersWithMetricsInLegacyTable());
     }
 }

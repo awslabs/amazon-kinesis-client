@@ -23,7 +23,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
- * Immutable snapshot of the data loaded by {@link LAMDataProvider} for a single
+ * Immutable snapshot of the data loaded by {@link LAMDataManager} for a single
  * {@link LeaseAssignmentManager} assignment cycle.
  *
  * <p>Contains the merged view of leases and worker metrics from all relevant tables.

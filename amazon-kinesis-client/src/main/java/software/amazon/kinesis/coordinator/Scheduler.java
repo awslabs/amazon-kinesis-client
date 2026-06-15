@@ -236,6 +236,9 @@ public class Scheduler implements Runnable {
     private boolean leasesSyncedOnAppInit = false;
 
     @Getter(AccessLevel.NONE)
+    private final EntityDAO entityDAO;
+
+    @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
 
     /**
@@ -319,7 +322,11 @@ public class Scheduler implements Runnable {
                 tableMigrationStatusProvider,
                 coordinatorStateDAO,
                 leaseManagementConfig.workerIdentifier(),
-                coordinatorConfig);
+                coordinatorConfig,
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
+                        .setNameFormat("table-migration-async-copy")
+                        .setDaemon(true)
+                        .build()));
         final StreamInfoDAO streamInfoDAO =
                 new StreamInfoDAO(coordinatorStateDAO, leaseManagementConfig.kinesisClient());
         this.streamInfoManager = leaseManagementFactory.createStreamInfoManager(
@@ -341,6 +348,15 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
+
+        this.entityDAO = new DynamoDBLeaseTableDao(
+                leaseManagementConfig.dynamoDBClient(),
+                leaseManagementConfig.tableName(),
+                leaseSerializer,
+                coordinatorStateDAO.getLeaseTableDaoDelegate(),
+                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
+                Runtime.getRuntime().availableProcessors());
+
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
         this.migrationStateMachine = new MigrationStateMachineImpl(
@@ -443,14 +459,6 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.tableName(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
                 tableMigrationStatusProvider);
-
-        final EntityDAO entityDAO = new DynamoDBLeaseTableDao(
-                leaseManagementConfig.dynamoDBClient(),
-                leaseManagementConfig.tableName(),
-                leaseSerializer,
-                coordinatorStateDAO.getLeaseTableDaoDelegate(),
-                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
-                Runtime.getRuntime().availableProcessors());
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)
@@ -1129,6 +1137,10 @@ public class Scheduler implements Runnable {
 
             migrationStateMachine.shutdown();
             migrationComponentsInitializer.shutdown();
+            tableMigrationStateMachine.shutdown();
+            // Call after migrationComponentsInitializer which perform LAM shutdown
+            // so it is not using the DAO anymore.
+            entityDAO.shutdown();
             // Stop lease coordinator, so leases are not renewed or stolen from other workers.
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().

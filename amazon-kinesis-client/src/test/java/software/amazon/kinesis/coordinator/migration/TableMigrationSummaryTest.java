@@ -1,3 +1,17 @@
+/*
+ * Copyright 2024 Amazon.com, Inc. or its affiliates.
+ * Licensed under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package software.amazon.kinesis.coordinator.migration;
 
 import org.junit.jupiter.api.Test;
@@ -13,6 +27,8 @@ class TableMigrationSummaryTest {
                 .activeWorkersWithMetricsInLegacyTable(2)
                 .activeWorkersWithMetricsInLeaseTable(3)
                 .workersWithUnexpiredLeases(4)
+                .totalWorkersWithLeases(6)
+                .leaseOwnersWithActiveMetrics(4)
                 .minSupportCode(2)
                 .build();
 
@@ -20,6 +36,8 @@ class TableMigrationSummaryTest {
         assertEquals(2, summary.getActiveWorkersWithMetricsInLegacyTable());
         assertEquals(3, summary.getActiveWorkersWithMetricsInLeaseTable());
         assertEquals(4, summary.getWorkersWithUnexpiredLeases());
+        assertEquals(6, summary.getTotalWorkersWithLeases());
+        assertEquals(4, summary.getLeaseOwnersWithActiveMetrics());
         assertEquals(2, summary.getMinSupportCode());
     }
 
@@ -31,6 +49,8 @@ class TableMigrationSummaryTest {
         assertEquals(0, summary.getActiveWorkersWithMetricsInLegacyTable());
         assertEquals(0, summary.getActiveWorkersWithMetricsInLeaseTable());
         assertEquals(0, summary.getWorkersWithUnexpiredLeases());
+        assertEquals(0, summary.getTotalWorkersWithLeases());
+        assertEquals(0, summary.getLeaseOwnersWithActiveMetrics());
         assertEquals(0, summary.getMinSupportCode());
     }
 

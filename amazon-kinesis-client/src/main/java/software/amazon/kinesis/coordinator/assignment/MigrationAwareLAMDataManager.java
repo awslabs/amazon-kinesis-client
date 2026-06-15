@@ -45,9 +45,6 @@ import software.amazon.kinesis.leases.EntityDAO.EntityScanList;
 import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
@@ -121,8 +118,7 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
     }
 
     @Override
-    public LAMDataSnapshot loadData(final MetricsScope metricsScope)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public LAMDataSnapshot loadData(final MetricsScope metricsScope) {
         final TableMigrationStatus status = tableMigrationStatusProvider.getTableMigrationStatus();
 
         // Step 1: Start lease table scan async on the executor service.
@@ -206,7 +202,7 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
     }
 
     /**
-     * Deletes stale worker metrics entries asynchronously on the common ForkJoinPool.
+     * Deletes stale worker metrics entries asynchronously.
      * Uses the correct delegate based on where the metric originated from.
      */
     private void deleteStaleWorkerMetricsAsync(
@@ -265,6 +261,9 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
         while (true) {
             try {
                 return loadFunction.call();
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new CompletionException(e);
             } catch (final Exception e) {
                 if (retryAttempt < DDB_LOAD_RETRY_ATTEMPT) {
                     log.warn("Failed to load, retrying (attempt {})", retryAttempt + 1, e);
@@ -274,6 +273,12 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 }
             }
         }
+    }
+
+    @Override
+    public void shutdown() {
+        executorService.shutdownNow();
+        log.info("MigrationAwareLAMDataManager executor service shut down.");
     }
 
     private void publishMigrationSummary(
@@ -288,6 +293,11 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
+        // All unique lease owners (regardless of expiry) - mirrors MigrationReadyMonitor's
+        // getUniqueLeaseOwnersFromLeaseTable behavior
+        final Set<String> allLeaseOwners =
+                leases.stream().map(Lease::leaseOwner).filter(Objects::nonNull).collect(Collectors.toSet());
+
         final Set<String> activeWorkersInLeaseTable = leaseTableMetrics.stream()
                 .filter(wm -> !wm.isExpired(workerMetricsExpiryDuration))
                 .map(WorkerMetricStats::getWorkerId)
@@ -301,6 +311,12 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
         final Set<String> allActiveWorkersWithMetrics = new HashSet<>(activeWorkersInLeaseTable);
         allActiveWorkersWithMetrics.addAll(activeWorkersInLegacyTable);
 
+        // Count how many lease owners are emitting active metrics (in either table)
+        // This mirrors the core check in MigrationReadyMonitor.areLeaseOwnersEmittingWorkerMetrics
+        final long leaseOwnersWithActiveMetricsCount = allLeaseOwners.stream()
+                .filter(allActiveWorkersWithMetrics::contains)
+                .count();
+
         // Compute min support code inline (merged from FleetSupportCodeEvaluator)
         final int minSupportCode = computeMinSupportCode(unexpiredLeaseOwners, leaseTableMetrics, legacyTableMetrics);
 
@@ -309,6 +325,8 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 .activeWorkersWithMetricsInLeaseTable(activeWorkersInLeaseTable.size())
                 .activeWorkersWithMetricsInLegacyTable(activeWorkersInLegacyTable.size())
                 .workersWithUnexpiredLeases(unexpiredLeaseOwners.size())
+                .totalWorkersWithLeases(allLeaseOwners.size())
+                .leaseOwnersWithActiveMetrics((int) leaseOwnersWithActiveMetricsCount)
                 .minSupportCode(minSupportCode)
                 .build();
 

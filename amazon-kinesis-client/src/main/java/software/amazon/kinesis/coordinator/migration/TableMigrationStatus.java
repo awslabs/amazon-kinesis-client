@@ -16,6 +16,8 @@ package software.amazon.kinesis.coordinator.migration;
 
 import java.util.Map;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+
 /**
  * TableMigration support during upgrade from KCLv3.4 or lower to KCLv3.5 or higher.
  *
@@ -28,7 +30,7 @@ import java.util.Map;
  * Reorganizing the values is not backward compatible, also if versions are removed, the corresponding
  * enum value cannot be reused without backward compatibility considerations.
  *
- *                                                  2.x -> 3.5x Migration (go to complete or NOT_NEEDED maybe ?)
+ *                                                  2.x -> 3.5x Migration (go to complete)
  *   .-----------------------------------------------------------------------------------------------------------------.
  *   |                        .---------------------------------.  .---------------------------.                       |
  *   |                        |      min support code           |  |     code rollback         |                       |
@@ -45,6 +47,7 @@ import java.util.Map;
  *
  * When PENDING state is entered
  */
+@KinesisClientInternalApi
 public enum TableMigrationStatus {
     /**
      * This is a local state before table migration status is either

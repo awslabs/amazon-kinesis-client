@@ -181,7 +181,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
             return leaseToUpdate;
         }
-        log.warn("dynamoRecord is not a Lease entity {}", dynamoRecord);
+        log.debug("dynamoRecord is not a Lease entity {}", dynamoRecord);
         return null;
     }
 

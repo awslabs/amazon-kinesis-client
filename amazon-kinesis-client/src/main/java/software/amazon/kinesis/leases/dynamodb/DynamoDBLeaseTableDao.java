@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
@@ -190,6 +191,10 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
 
         Map<String, AttributeValue> lastEvaluatedKey = null;
         do {
+            if (Thread.currentThread().isInterrupted()) {
+                log.info("Scan segment {} interrupted, stopping early", segment);
+                throw new DependencyException(new InterruptedException("Scan segment " + segment + " was interrupted"));
+            }
             final ScanRequest scanRequest = ScanRequest.builder()
                     .tableName(tableName)
                     .segment(segment)
@@ -281,6 +286,25 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
             default:
                 log.warn("No deserializer for entityType {}. Skipping record.", entityType);
                 return null;
+        }
+    }
+
+    @Override
+    public void shutdown() {
+        if (executorService.isShutdown()) {
+            return;
+        }
+        log.info("Shutting down EntityDAO executor service");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.info("EntityDAO executor service did not terminate in 5s, forcing shutdown");
+                executorService.shutdownNow();
+            }
+        } catch (final InterruptedException e) {
+            log.warn("Interrupted while waiting for EntityDAO executor service shutdown", e);
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }

@@ -132,9 +132,10 @@ public final class LeaseAssignmentManager {
 
     public synchronized void stop() {
         if (nonNull(managerFuture)) {
-            log.info("Completed shutdown of LeaseAssignmentManager");
             managerFuture.cancel(true);
             managerFuture = null;
+            lamDataManager.shutdown();
+            log.info("Completed shutdown of LeaseAssignmentManager");
             return;
         }
         log.info("LeaseAssignmentManager is not running...");
@@ -250,20 +251,29 @@ public final class LeaseAssignmentManager {
             success = true;
             noOfContinuousFailedAttempts = 0;
         } catch (final Throwable e) {
-            log.error("LeaseAssignmentManager failed to perform lease assignment.", e);
-            noOfContinuousFailedAttempts++;
+            // If the thread was interrupted (e.g., via stop()/cancel(true)), restore the interrupt flag
+            // so the ScheduledExecutorService can detect the cancellation and stop re-scheduling.
+            if (Thread.currentThread().isInterrupted()
+                    || e instanceof InterruptedException
+                    || (e instanceof CompletionException && e.getCause() instanceof InterruptedException)) {
+                log.info("LeaseAssignmentManager interrupted, stopping assignment.", e);
+                Thread.currentThread().interrupt();
+            } else {
+                log.error("LeaseAssignmentManager failed to perform lease assignment.", e);
+                noOfContinuousFailedAttempts++;
 
-            final boolean isError = e instanceof Error;
-            final int failureThreshold = isError ? 1 : DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER;
+                final boolean isError = e instanceof Error;
+                final int failureThreshold = isError ? 1 : DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER;
 
-            if (noOfContinuousFailedAttempts >= failureThreshold) {
-                log.error(
-                        "Failed to perform assignment {} times in a row{}, releasing leadership from worker : {}",
-                        failureThreshold,
-                        isError ? " (Error detected)" : "",
-                        currentWorkerId);
-                MetricsUtil.addCount(metricsScope, FORCE_LEADER_RELEASE_METRIC_NAME, 1, MetricsLevel.SUMMARY);
-                leaderDecider.releaseLeadershipIfHeld();
+                if (noOfContinuousFailedAttempts >= failureThreshold) {
+                    log.error(
+                            "Failed to perform assignment {} times in a row{}, releasing leadership from worker : {}",
+                            failureThreshold,
+                            isError ? " (Error detected)" : "",
+                            currentWorkerId);
+                    MetricsUtil.addCount(metricsScope, FORCE_LEADER_RELEASE_METRIC_NAME, 1, MetricsLevel.SUMMARY);
+                    leaderDecider.releaseLeadershipIfHeld();
+                }
             }
         } finally {
             MetricsUtil.addSuccessAndLatency(metricsScope, success, startTime, MetricsLevel.SUMMARY);
@@ -508,8 +518,7 @@ public final class LeaseAssignmentManager {
          * metrics. This method further filters out workers with failing metrics before using them
          * for assignment decisions.</p>
          */
-        public void loadInMemoryStorageView(final MetricsScope metricsScope)
-                throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        public void loadInMemoryStorageView(final MetricsScope metricsScope) {
             final LAMDataSnapshot snapshot = lamDataManager.loadData(metricsScope);
 
             this.leaseList = snapshot.getLeases();

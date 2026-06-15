@@ -19,7 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
@@ -132,6 +132,8 @@ import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.Featu
 @ThreadSafe
 public class TableMigrationStateMachineImpl implements TableMigrationStateMachine {
 
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 30L;
+
     private final TableMigrationStatusProvider statusProvider;
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final LegacyTableCoordinatorStateDAODelegate legacyDao;
@@ -142,6 +144,13 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private final boolean migrateAllEntitiesToLeaseTable;
     /** Override map of configured bake time for migration status transitions */
     private final Map<TableMigrationStatus, Long> bakeTimeOverrides;
+
+    /**
+     * Dedicated executor for running the async copy operation. Owned and shut down
+     * by this state machine. Using a dedicated pool to ensure isolation and timely
+     * execution of the task.
+     */
+    private final ExecutorService migrationExecutor;
 
     /**
      * Tracks an in-progress async move operation. If non-null and complete,
@@ -156,6 +165,11 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private boolean initialized = false;
 
     /**
+     * Whether shutdown has been called. Access is guarded by {@code synchronized}.
+     */
+    private boolean isShutdown = false;
+
+    /**
      * Latest migration summary pushed by the LAMDataProvider's consumer callback.
      * Updated on each LAM run (leader only). Used by {@code handleLeaderLockResult}
      * to evaluate whether all workers have migrated their metrics to the lease table.
@@ -167,7 +181,8 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             final TableMigrationStatusProvider statusProvider,
             final CoordinatorStateDAO coordinatorStateDAO,
             final String workerId,
-            final CoordinatorConfig coordinatorConfig) {
+            final CoordinatorConfig coordinatorConfig,
+            final ExecutorService migrationExecutor) {
         this.statusProvider = statusProvider;
         this.coordinatorStateDAO = coordinatorStateDAO;
         this.legacyDao = coordinatorStateDAO.getLegacyTableDaoDelegate();
@@ -175,6 +190,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
         this.workerId = workerId;
         this.migrateAllEntitiesToLeaseTable = coordinatorConfig.migrateAllEntitiesToLeaseTable();
         this.bakeTimeOverrides = buildBakeTimeOverrides(coordinatorConfig);
+        this.migrationExecutor = migrationExecutor;
     }
 
     private static Map<TableMigrationStatus, Long> buildBakeTimeOverrides(final CoordinatorConfig config) {
@@ -617,25 +633,64 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
         }
     }
 
+    // ==================== Shutdown ====================
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Cancels any in-flight async copy and shuts down the dedicated migration executor.
+     * After this returns, no new DDB mutations will be initiated by this state machine.</p>
+     */
+    @Override
+    public synchronized void shutdown() {
+        if (isShutdown) {
+            log.info("TableMigrationStateMachine already shut down.");
+            return;
+        }
+        isShutdown = true;
+        log.info("Shutting down TableMigrationStateMachine.");
+
+        // Cancel any in-progress async move
+        if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
+            log.info("Cancelling in-flight async move during shutdown.");
+            pendingMoveFuture.cancel(true);
+            pendingMoveFuture = null;
+        }
+
+        // Shut down the dedicated migration executor.
+        migrationExecutor.shutdown();
+        try {
+            if (!migrationExecutor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                log.warn("Migration executor did not terminate within {}s, forcing shutdown", SHUTDOWN_TIMEOUT_SECONDS);
+                migrationExecutor.shutdownNow();
+            }
+        } catch (final InterruptedException e) {
+            log.warn("Interrupted while waiting for migration executor shutdown", e);
+            migrationExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        log.info("TableMigrationStateMachine shutdown complete.");
+    }
+
     // ==================== Async Copy Logic ====================
 
     /**
      * Starts asynchronous move of all coordinator state entries (except the lock and
-     * TableMigrationState) from the legacy table to the lease table using the common ForkJoinPool.
-     * Each invocation re-fetches entries from legacy table, so retries after failure will pick up
-     * the current state of the legacy table.
+     * TableMigrationState) from the legacy table to the lease table using the dedicated
+     * migration executor. Each invocation re-fetches entries from legacy table, so retries
+     * after failure will pick up the current state of the legacy table.
      */
     private void startAsyncMove() {
         pendingMoveFuture = CompletableFuture.supplyAsync(
                 () -> {
                     try {
                         return moveCoordinatorStateEntries();
-                    } catch (final Exception e) {
+                    } catch (final Throwable e) {
                         log.error("Async move of coordinator state entries failed", e);
                         return false;
                     }
                 },
-                ForkJoinPool.commonPool());
+                migrationExecutor);
     }
 
     /**
@@ -913,7 +968,10 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * Returns true when all workers have fully migrated their metrics to the lease table,
      * meaning:
      * <ol>
-     *   <li>Total workers with leases == total active workers with metrics (all workers are reporting)</li>
+     *   <li>All workers with unexpired leases are emitting active worker metrics
+     *       ({@code leaseOwnersWithActiveMetrics == workersWithUnexpiredLeases}), mirroring the
+     *       {@code workersWithActiveWorkerMetrics.containsAll(leaseOwners)} check in
+     *       {@link MigrationReadyMonitor}</li>
      *   <li>Active workers with metrics in legacy table == 0 (no one is writing to legacy anymore)</li>
      * </ol>
      *
@@ -925,18 +983,14 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             log.debug("No migration summary available yet, conservatively returning false.");
             return false;
         }
-        final int workersWithLeases = latestMigrationSummary.getWorkersWithUnexpiredLeases();
-        final boolean allWorkersReporting =
-                workersWithLeases == latestMigrationSummary.getTotalActiveWorkersWithMetrics();
+        // Check that all workers with unexpired leases are emitting active metrics — mirrors
+        // MigrationReadyMonitor.areLeaseOwnersEmittingWorkerMetrics check
+        final boolean allLeaseOwnersEmitting = latestMigrationSummary.getLeaseOwnersWithActiveMetrics()
+                == latestMigrationSummary.getWorkersWithUnexpiredLeases();
         final boolean legacyEmpty = latestMigrationSummary.getActiveWorkersWithMetricsInLegacyTable() == 0;
-        final boolean result = allWorkersReporting && legacyEmpty;
+        final boolean result = allLeaseOwnersEmitting && legacyEmpty;
 
-        log.info(
-                "isLegacyWorkerMetricsEmpty={} (workersWithLeases={}, totalActiveWithMetrics={}, activeInLegacy={})",
-                result,
-                workersWithLeases,
-                latestMigrationSummary.getTotalActiveWorkersWithMetrics(),
-                latestMigrationSummary.getActiveWorkersWithMetricsInLegacyTable());
+        log.info("isLegacyWorkerMetricsEmpty={}, migrationSummary={}", result, latestMigrationSummary);
         return result;
     }
 
