@@ -14,17 +14,27 @@
  */
 package software.amazon.kinesis.worker.metricstats.delegate;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.enhanced.dynamodb.Expression;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.model.ScanEnhancedRequest;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWorkerMetricStats;
+
+import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 
 /**
  * Delegate for WorkerMetricStats stored in the unified lease table.
@@ -36,7 +46,18 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWo
  *
  * <p>The lease table is always available (created by the lease management layer),
  * so {@link #initialize()} is a no-op.</p>
+ *
+ * <p><b>Note on scan efficiency:</b> The scan in {@link #getAllWorkerMetricStats()} uses a
+ * filter expression on {@code entityType = WORKER_METRIC_STATS}. In the legacy dedicated
+ * table this filter is effectively a no-op (all records match). In the lease table, this
+ * is not efficient as DynamoDB still reads the entire table and applies the filter
+ * server-side. A dedicated entityType GSI would have poor partition distribution for lease
+ * entries since all leases share the same entityType value. A better future optimization is
+ * to use the leaseOwner GSI (with entityType stored in the leaseOwner attribute position
+ * (for non-lease entities) and once the GSI becomes available after the migration
+ * state machine completes it can be used for efficient scans which is essentially a query.</p>
  */
+@Slf4j
 @KinesisClientInternalApi
 public class LeaseTableWorkerMetricStatsDAODelegate extends WorkerMetricStatsDAODelegate<LeaseTableWorkerMetricStats> {
 
@@ -50,7 +71,8 @@ public class LeaseTableWorkerMetricStatsDAODelegate extends WorkerMetricStatsDAO
                 LeaseTableWorkerMetricStats.class,
                 TableSchema.fromBean(LeaseTableWorkerMetricStats.class),
                 DynamoDBLeaseSerializer.LEASE_KEY_KEY,
-                workerMetricsReporterFrequencyMillis);
+                workerMetricsReporterFrequencyMillis,
+                log);
     }
 
     @Override
@@ -58,10 +80,45 @@ public class LeaseTableWorkerMetricStatsDAODelegate extends WorkerMetricStatsDAO
         // No-op — the lease table is always available (created by lease management)
     }
 
+    /**
+     * Retrieve all worker metric stats entries from the backing table, filtered by
+     * {@code entityType = WORKER_METRIC_STATS}. In the legacy dedicated table this
+     * filter is a no-op since all entries should match. In the lease table, this
+     * ensures only WorkerMetricStats records are returned (not leases, coordinator state, etc.).
+     *
+     * @return list of all {@link WorkerMetricStats} entries
+     * @throws DependencyException if DynamoDB operation fails unexpectedly
+     * @throws InvalidStateException if the backing table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB lacks capacity
+     */
     @Override
     public List<WorkerMetricStats> getAllWorkerMetricStats()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return super.getAllWorkerMetricStats();
+        log.debug("Scanning WorkerMetricStats from table {}", tableName);
+
+        final Expression filterExpression = Expression.builder()
+                .expression("#et = :etVal")
+                .expressionNames(Collections.singletonMap("#et", DynamoDBLeaseSerializer.ENTITY_TYPE_ATTRIBUTE_NAME))
+                .expressionValues(Collections.singletonMap(
+                        ":etVal",
+                        AttributeValue.builder()
+                                .s(EntityType.WORKER_METRIC_STATS.getDdbValue())
+                                .build()))
+                .build();
+
+        final ScanEnhancedRequest scanRequest =
+                ScanEnhancedRequest.builder().filterExpression(filterExpression).build();
+
+        final List<WorkerMetricStats> workerMetricStats = new ArrayList<>();
+        try {
+            unwrappingFuture(() -> table.scan(scanRequest).items().subscribe(workerMetricStats::add));
+        } catch (final ResourceNotFoundException e) {
+            throw new InvalidStateException(
+                    String.format("Cannot scan WorkerMetricStats, because table %s does not exist", tableName));
+        } catch (final Exception e) {
+            throw new DependencyException(e);
+        }
+        return workerMetricStats;
     }
 
     @Override

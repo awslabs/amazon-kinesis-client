@@ -139,7 +139,9 @@ public class DynamicMigrationComponentsInitializerTest {
         verify(mockLamCreator, never()).apply(any(), any());
         verify(mockWorkerMetricsManager, never()).startManager();
         verify(mockWorkerMetricsDAO, never()).initialize();
-        verify(mockConsumer, never()).initialize(anyBoolean(), any());
+
+        // Verify LeaseAssignmentModeChange consumer is initialized with correct values
+        verify(mockConsumer).initialize(eq(false), eq(LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT));
 
         // Verify leader decider is set
         assertEquals(mockDeterministicLeaderDecider, migrationInitializer.leaderDecider());

@@ -37,12 +37,7 @@ public class StreamInfo extends CoordinatorState {
     }
 
     public static StreamInfo deserialize(final String key, final Map<String, AttributeValue> attributes) {
-        if (attributes == null || !attributes.containsKey(ENTITY_TYPE_ATTRIBUTE_NAME)) {
-            return null;
-        }
-        final AttributeValue entityTypeAttr = attributes.get(ENTITY_TYPE_ATTRIBUTE_NAME);
-        if (entityTypeAttr == null
-                || !EntityType.CoordinatorStateType.STREAM_INFO.getDdbValue().equals(entityTypeAttr.s())) {
+        if (attributes == null) {
             return null;
         }
         try {

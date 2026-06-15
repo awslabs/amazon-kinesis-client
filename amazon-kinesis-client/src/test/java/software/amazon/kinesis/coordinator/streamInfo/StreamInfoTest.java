@@ -84,45 +84,40 @@ class StreamInfoTest {
     }
 
     // --- Deserialization ---
+    // Note: entityType attribute is stripped by the DAO delegate's resolveEntityType() before
+    // calling the deserializer, so deserialize tests should NOT include entityType in attributes.
 
     @Test
-    void deserialize_withEntityTypeAttribute_preservesEntityType() {
+    void deserialize_validAttributes_returnsStreamInfo() {
         final Map<String, AttributeValue> attributes = new HashMap<>();
         attributes.put(StreamInfo.STREAM_ID_ATTRIBUTE_NAME, AttributeValue.fromS("deserialized-stream-id"));
-        attributes.put(StreamInfo.ENTITY_TYPE_ATTRIBUTE_NAME, AttributeValue.fromS("STREAM"));
 
         final StreamInfo deserialized = StreamInfo.deserialize("stream-key-2", attributes);
 
         assertNotNull(deserialized);
+        assertEquals("deserialized-stream-id", deserialized.getStreamId());
+        assertEquals("stream-key-2", deserialized.getKey());
+        // entityType is always set by the constructor, not from the attributes map
         assertEquals(EntityType.STREAM_INFO, deserialized.getEntityType());
-        assertEquals("STREAM", deserialized.getEntityType().getDdbValue());
     }
 
     @Test
-    void deserialize_withoutEntityTypeAttribute_returnsNull() {
-        // StreamInfo.deserialize requires entityType attribute as discriminator
-        final Map<String, AttributeValue> attributes = new HashMap<>();
-        attributes.put(StreamInfo.STREAM_ID_ATTRIBUTE_NAME, AttributeValue.fromS("stream-id-no-type"));
-
-        final StreamInfo deserialized = StreamInfo.deserialize("key-without-type", attributes);
+    void deserialize_nullAttributes_returnsNull() {
+        final StreamInfo deserialized = StreamInfo.deserialize("key", null);
         assertNull(deserialized);
     }
 
     @Test
-    void deserialize_roundTrip_preservesEntityType() {
-        final StreamInfo original = new StreamInfo("key-1", "stream-123");
-        final Map<String, AttributeValue> serialized = original.serialize();
+    void deserialize_missingStreamId_returnsNull() {
+        // Missing STREAM_ID_ATTRIBUTE_NAME causes an exception -> returns null
+        final Map<String, AttributeValue> attributes = new HashMap<>();
 
-        final StreamInfo deserialized = StreamInfo.deserialize("key-1", serialized);
-
-        assertNotNull(deserialized);
-        assertEquals(original.getEntityType(), deserialized.getEntityType());
-        assertEquals("stream-123", deserialized.getStreamId());
+        final StreamInfo deserialized = StreamInfo.deserialize("key", attributes);
+        assertNull(deserialized);
     }
 
     @Test
-    void serialize_thenDeserialize_roundTrip_includesEntityType() {
-        // Create a StreamInfo, serialize it, then deserialize - entityType is preserved
+    void serialize_thenDeserialize_roundTrip() {
         final StreamInfo original = new StreamInfo("key-1", "stream-456");
         final Map<String, AttributeValue> serialized = original.serialize();
 
@@ -130,9 +125,12 @@ class StreamInfoTest {
         assertTrue(serialized.containsKey("entityType"), "serialize() should include entityType");
         assertEquals("STREAM", serialized.get("entityType").s());
 
-        // Deserialize from the serialized form works correctly
+        // Simulate DAO behavior: remove entityType before passing to deserializer
+        serialized.remove("entityType");
+
         final StreamInfo deserialized = StreamInfo.deserialize("key-1", serialized);
         assertNotNull(deserialized);
+        assertEquals("stream-456", deserialized.getStreamId());
         assertEquals(EntityType.STREAM_INFO, deserialized.getEntityType());
         assertEquals(CoordinatorStateType.STREAM_INFO, deserialized.getCoordinatorStateEntityType());
     }

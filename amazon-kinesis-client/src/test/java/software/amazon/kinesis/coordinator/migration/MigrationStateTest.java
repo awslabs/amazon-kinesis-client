@@ -94,10 +94,9 @@ class MigrationStateTest {
     }
 
     // --- Deserialization ---
+    // Note: entityType attribute is stripped by the DAO delegate's resolveEntityType() before
+    // calling the deserializer, so deserialize tests should NOT include entityType in attributes.
 
-    // In the legacy coordinator table, MigrationState records have no entityType attribute.
-    // However, when deserialized the class always derives entityType from its constructor,
-    // so before writing to the lease table we ensure the entityType will be present.
     @Test
     void deserialize_validKey_preservesEntityType() {
         final HashMap<String, AttributeValue> attributes = new HashMap<>();
@@ -110,6 +109,10 @@ class MigrationStateTest {
         final MigrationState deserialized = MigrationState.deserialize(MigrationState.MIGRATION_HASH_KEY, attributes);
 
         assertNotNull(deserialized);
+        assertEquals(ClientVersion.CLIENT_VERSION_INIT, deserialized.getClientVersion());
+        assertEquals("worker-1", deserialized.getModifiedBy());
+        assertEquals(1234567890L, deserialized.getModifiedTimestamp());
+        // entityType is always set by the constructor, not from the attributes map
         assertEquals(EntityType.CLIENT_VERSION_MIGRATION, deserialized.getEntityType());
         assertEquals("CLIENT_VERSION_MIGRATION", deserialized.getEntityType().getDdbValue());
     }
@@ -128,27 +131,21 @@ class MigrationStateTest {
     }
 
     @Test
-    void deserialize_withoutEntityType_classStillHasEntityType_andReserializingIncludesIt() {
-        // Simulate a legacy DDB record that was written before entityType was introduced
-        // (no entityType attribute in the record)
-        final HashMap<String, AttributeValue> legacyAttributes = new HashMap<>();
-        legacyAttributes.put(
+    void deserialize_thenReserialize_includesEntityType() {
+        final HashMap<String, AttributeValue> attributes = new HashMap<>();
+        attributes.put(
                 MigrationState.CLIENT_VERSION_ATTRIBUTE_NAME,
                 AttributeValue.fromS(ClientVersion.CLIENT_VERSION_2X.name()));
-        legacyAttributes.put(MigrationState.MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS("old-worker"));
-        legacyAttributes.put(MigrationState.MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN("1000000000"));
-        // Deliberately NOT adding "entityType" attribute
+        attributes.put(MigrationState.MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS("old-worker"));
+        attributes.put(MigrationState.MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN("1000000000"));
 
-        // Deserialize — the class itself always sets entityType via constructor
-        final MigrationState deserialized =
-                MigrationState.deserialize(MigrationState.MIGRATION_HASH_KEY, legacyAttributes);
+        final MigrationState deserialized = MigrationState.deserialize(MigrationState.MIGRATION_HASH_KEY, attributes);
 
         assertNotNull(deserialized);
-        // The deserialized object still has the entity type set by the class
         assertEquals(EntityType.CLIENT_VERSION_MIGRATION, deserialized.getEntityType());
         assertEquals(CoordinatorStateType.CLIENT_VERSION_MIGRATION, deserialized.getCoordinatorStateEntityType());
 
-        // Re-serializing will now include the entityType attribute (backfill on next write)
+        // Re-serializing will include the entityType attribute (via super.serialize())
         final Map<String, AttributeValue> reserialized = deserialized.serialize();
         assertTrue(reserialized.containsKey("entityType"), "Re-serialized record should include entityType attribute");
         assertEquals("CLIENT_VERSION_MIGRATION", reserialized.get("entityType").s());

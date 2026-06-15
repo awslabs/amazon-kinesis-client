@@ -116,10 +116,11 @@ public abstract class CoordinatorStateDAODelegate {
 
     /**
      * Resolve the EntityType from a DDB record. Uses the entityType attribute if present,
-     * otherwise infers from well-known partition key values.
+     * otherwise infers from well-known partition key values. Removes the entityType attribute
+     * from the map so that downstream deserializers don't see it as an unknown attribute.
      */
     private EntityType resolveEntityType(final String key, final Map<String, AttributeValue> attributes) {
-        final AttributeValue entityTypeAttr = attributes.get(ENTITY_TYPE_ATTRIBUTE_NAME);
+        final AttributeValue entityTypeAttr = attributes.remove(ENTITY_TYPE_ATTRIBUTE_NAME);
         if (entityTypeAttr != null && entityTypeAttr.s() != null) {
             final EntityType resolved = EntityType.fromDdbValue(entityTypeAttr.s());
             if (resolved != null) {

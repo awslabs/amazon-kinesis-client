@@ -14,11 +14,13 @@
  */
 package software.amazon.kinesis.worker.metricstats.delegate;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.model.ScanEnhancedRequest;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
@@ -62,7 +64,8 @@ public class LegacyTableWorkerMetricStatsDAODelegate extends WorkerMetricStatsDA
                 LegacyWorkerMetricStats.class,
                 TableSchema.fromBean(LegacyWorkerMetricStats.class),
                 WorkerMetricStats.KEY_WORKER_ID,
-                workerMetricsReporterFrequencyMillis);
+                workerMetricsReporterFrequencyMillis,
+                log);
     }
 
     @Override
@@ -109,13 +112,36 @@ public class LegacyTableWorkerMetricStatsDAODelegate extends WorkerMetricStatsDA
         return enabled;
     }
 
+    /**
+     * Retrieve all worker metric stats entries from the backing table. In the legacy table entries
+     * are not filtered by entity type since during migration old workers will not be writing
+     * the entity type.
+     *
+     * @return list of all {@link WorkerMetricStats} entries
+     * @throws DependencyException if DynamoDB operation fails unexpectedly
+     * @throws InvalidStateException if the backing table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB lacks capacity
+     */
     @Override
     public List<WorkerMetricStats> getAllWorkerMetricStats()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (!enabled) {
             return Collections.emptyList();
         }
-        return super.getAllWorkerMetricStats();
+        log.debug("Scanning WorkerMetricStats from table {}", tableName);
+
+        final ScanEnhancedRequest scanRequest = ScanEnhancedRequest.builder().build();
+
+        final List<WorkerMetricStats> workerMetricStats = new ArrayList<>();
+        try {
+            unwrappingFuture(() -> table.scan(scanRequest).items().subscribe(workerMetricStats::add));
+        } catch (final ResourceNotFoundException e) {
+            throw new InvalidStateException(
+                    String.format("Cannot scan WorkerMetricStats, because table %s does not exist", tableName));
+        } catch (final Exception e) {
+            throw new DependencyException(e);
+        }
+        return workerMetricStats;
     }
 
     @Override

@@ -162,6 +162,8 @@ public final class DynamicMigrationComponentsInitializer {
         currentAssignmentMode = DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT;
         leaderDecider = deterministicLeaderDeciderCreator.get();
         leaderDecider.initialize();
+        log.info("Initializing {}", leaseModeChangeConsumer.getClass().getSimpleName());
+        leaseModeChangeConsumer.initialize(dualMode, currentAssignmentMode);
         initialized = true;
     }
 

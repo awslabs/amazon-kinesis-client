@@ -280,6 +280,76 @@ class WorkerMetricStatsDAORoutingTest {
         assertTrue(item == null || item.isEmpty());
     }
 
+    // --- Scan filtering ---
+
+    @Test
+    void getAllWorkerMetricStats_leaseTable_filtersOutNonWorkerMetricEntities() throws Exception {
+        // Seed lease table with a WMS entry
+        putWorkerMetricItem(LEASE_TABLE, "leaseKey", "wms-entry");
+        // Seed lease table with a non-WMS entry (e.g. a lease or coordinator state)
+        Map<String, AttributeValue> nonWmsItem = new HashMap<>();
+        nonWmsItem.put("leaseKey", AttributeValue.fromS("some-shard-lease"));
+        nonWmsItem.put("entityType", AttributeValue.fromS("LEASE"));
+        nonWmsItem.put("lut", AttributeValue.fromN(String.valueOf(Instant.now().getEpochSecond())));
+        ddbClient.putItem(b -> b.tableName(LEASE_TABLE).item(nonWmsItem)).get();
+
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(false);
+        WorkerMetricStatsDAO dao = createDao();
+        dao.initialize();
+
+        List<WorkerMetricStats> results = dao.getAllWorkerMetricStats();
+
+        assertTrue(results.stream().anyMatch(s -> "wms-entry".equals(s.getWorkerId())));
+        assertFalse(results.stream().anyMatch(s -> "some-shard-lease".equals(s.getWorkerId())));
+    }
+
+    @Test
+    void getAllWorkerMetricStats_legacyTable_worksWithoutEntityTypeAttribute() throws Exception {
+        // During migration, old workers will write worker metric stats without the entityType
+        // attribute, so the legacy scan must be able to read them without filtering on entityType.
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("wid", AttributeValue.fromS("legacy-no-et"));
+        item.put("lut", AttributeValue.fromN(String.valueOf(Instant.now().getEpochSecond())));
+        item.put(
+                "sts",
+                AttributeValue.fromM(ImmutableMap.of(
+                        "C",
+                        AttributeValue.builder().l(AttributeValue.fromN("50.0")).build())));
+        item.put(
+                "opr",
+                AttributeValue.fromM(ImmutableMap.of(
+                        "C",
+                        AttributeValue.builder().l(AttributeValue.fromN("80")).build())));
+        ddbClient.putItem(b -> b.tableName(LEGACY_TABLE).item(item)).get();
+
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        WorkerMetricStatsDAO dao = createDao();
+        dao.initialize();
+
+        List<WorkerMetricStats> results = dao.getAllWorkerMetricStats();
+
+        assertTrue(results.stream().anyMatch(s -> "legacy-no-et".equals(s.getWorkerId())));
+    }
+
+    @Test
+    void getAllWorkerMetricStats_legacyDisabled_returnsEmptyList() throws Exception {
+        // Use a table name that doesn't exist to ensure legacy is disabled
+        WorkerMetricsTableConfig workerMetricsConfig = new WorkerMetricsTableConfig(null);
+        workerMetricsConfig.tableName("nonexistent-table");
+
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        WorkerMetricStatsDAO dao =
+                new WorkerMetricStatsDAO(ddbClient, workerMetricsConfig, LEASE_TABLE, 10000L, statusProvider);
+        dao.initialize();
+
+        // Legacy delegate should be disabled (table doesn't exist) and return empty
+        List<WorkerMetricStats> legacyResults = dao.getLegacyTableDaoDelegate().getAllWorkerMetricStats();
+        assertTrue(legacyResults.isEmpty());
+    }
+
     // --- Helpers ---
 
     private void putWorkerMetricItem(String tableName, String pkAttr, String workerId) {

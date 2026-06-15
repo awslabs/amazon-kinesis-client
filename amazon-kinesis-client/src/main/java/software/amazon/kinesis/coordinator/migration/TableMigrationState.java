@@ -95,7 +95,7 @@ public class TableMigrationState extends CoordinatorState {
     }
 
     public HashMap<String, AttributeValue> serialize() {
-        final HashMap<String, AttributeValue> result = new HashMap<>();
+        final HashMap<String, AttributeValue> result = new HashMap<>(super.serialize());
         result.put(TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME, AttributeValue.fromS(tableMigrationStatus.name()));
         result.put(MODIFIED_BY_ATTRIBUTE_NAME, AttributeValue.fromS(modifiedBy));
         result.put(MODIFIED_TIMESTAMP_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(modifiedTimestamp)));

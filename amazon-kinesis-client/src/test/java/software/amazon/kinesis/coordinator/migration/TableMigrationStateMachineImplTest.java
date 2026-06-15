@@ -25,6 +25,7 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration tests for TableMigrationStateMachineImpl using in-memory DynamoDB.
@@ -139,6 +140,31 @@ class TableMigrationStateMachineImplTest {
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, statusProvider.getTableMigrationStatus());
+    }
+
+    @Test
+    void initialize_noLegacyTable_doesNotPersistStateToDDB() throws Exception {
+        // 2→3 short-circuit should NOT write state to lease table — checking if the legacy
+        // table exists is cheap so we just keep COMPLETE in memory on every startup.
+        CoordinatorStateTableConfig tableConfig = new CoordinatorConfig("test-app").coordinatorStateTableConfig();
+        tableConfig.tableName("non-existent-table");
+
+        CoordinatorStateDAO dao = new CoordinatorStateDAO(ddbClient, tableConfig, LEASE_TABLE, statusProvider);
+        CoordinatorConfig coordConfig = createCoordinatorConfig(false);
+
+        TableMigrationStateMachineImpl sm =
+                new TableMigrationStateMachineImpl(statusProvider, dao, WORKER_ID, coordConfig);
+        sm.initialize();
+
+        // Verify nothing was written to the lease table
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("leaseKey", AttributeValue.fromS(TableMigrationState.TABLE_MIGRATION_HASH_KEY));
+        GetItemResponse result = ddbClient
+                .getItem(b -> b.tableName(LEASE_TABLE).key(key).consistentRead(true))
+                .get();
+        assertTrue(
+                result.item() == null || result.item().isEmpty(),
+                "2→3 short-circuit should not persist state to lease table");
     }
 
     // --- Initialization: Legacy table exists, no state in DDB, config=false ---

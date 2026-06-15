@@ -57,7 +57,7 @@ import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.Featu
  * <pre>
  * (no state in DDB + no legacy table)
  *      |
- *      +---> COMPLETE   [any worker writes; 2-to-3 migration short-circuit]
+ *      +---> COMPLETE   [2-to-3 migration short-circuit, no state written]
  *
  * (no state in DDB + legacy table exists + config=true)
  *      |
@@ -212,7 +212,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
         final TableMigrationState stateFromDDB = readStateFromLegacy();
 
         // 3. Determine current status and perform any worker-driven transition + write.
-        final TableMigrationStatus effectiveStatus = determineAndPersistStatus(stateFromDDB);
+        final TableMigrationStatus effectiveStatus = determineStatusForInitialization(stateFromDDB);
 
         // 4. Publish status so routing and downstream components work.
         statusProvider.initialize(
@@ -312,12 +312,12 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     // ==================== Initialization ====================
 
     /**
-     * Determine the effective local status from DDB state and config, and persist if needed.
+     * Determine the effective local status from DDB state and config
      *
      * <p>Logic:</p>
      * <ul>
      *   <li>If DDB has COMPLETE → return COMPLETE (terminal, config irrelevant).</li>
-     *   <li>If no state in DDB and no legacy table → write COMPLETE to DDB (2→3 short-circuit).</li>
+     *   <li>If no state in DDB and no legacy table → return COMPLETE to DDB (2→3 short-circuit).</li>
      *   <li>If no state in DDB and legacy table exists → use config to determine local status.</li>
      *   <li>If DDB has a non-COMPLETE state → apply config override per the table below.</li>
      * </ul>
@@ -338,15 +338,19 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * COMPLETE   | any                   | COMPLETE
      * </pre>
      */
-    private TableMigrationStatus determineAndPersistStatus(final TableMigrationState stateFromDDB)
+    private TableMigrationStatus determineStatusForInitialization(final TableMigrationState stateFromDDB)
             throws DependencyException, InvalidStateException {
 
         // Case 1: No state in DDB.
         if (stateFromDDB == null) {
             if (!legacyDao.isEnabled()) {
-                // No legacy table — 2→3 migration short-circuit: write COMPLETE to lease table directly.
+                // No legacy table — 2→3 migration short-circuit
                 log.info("No state in DDB, no legacy table -> writing COMPLETE (2->3 migration)");
-                writeStatusToLeaseTable(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, null);
+                // Dont persist table migration status, we could be in the process of 2->3 migration
+                // and we cannot write to lease table yet, checking if legacy table exists is cheap
+                // so continue to just use COMPLETE status in memory and all workers will have the
+                // same ando nce we toggle to v3 functionality, the workers will start using lease
+                // table for all entity types
                 return TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
             }
             // Legacy table exists — config determines local status (leader will persist later).
@@ -1009,39 +1013,6 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             }
         } catch (final InvalidStateException | ProvisionedThroughputException e) {
             throw new DependencyException("Failed to write table migration status " + status + " to legacy", e);
-        }
-    }
-
-    /**
-     * Write status to the lease table.
-     * - If existingState is null: creates the entry (conditional on key not existing).
-     * - If existingState is non-null: updates conditionally (key exists AND previous status matches).
-     *
-     * Used for the 2→3 short-circuit (no legacy table) and the final COMPLETE write.
-     */
-    private void writeStatusToLeaseTable(final TableMigrationStatus status, final TableMigrationState existingState)
-            throws DependencyException {
-        try {
-            if (existingState == null) {
-                final TableMigrationState newState = new TableMigrationState(workerId);
-                newState.update(status, workerId);
-                if (leaseTableDao.createCoordinatorStateIfNotExists(newState)) {
-                    log.info("Created table migration state in lease table: {}", status);
-                } else {
-                    log.info("Table migration state already exists in lease table, another worker created it.");
-                }
-            } else {
-                final TableMigrationState updated = existingState.copy();
-                updated.update(status, workerId);
-                if (leaseTableDao.updateCoordinatorStateWithExpectation(
-                        updated, existingState.getDynamoTableMigrationStatusExpectation())) {
-                    log.info("Updated table migration state in lease table: {}", status);
-                } else {
-                    log.warn("Conditional write to lease table failed for {}. Another worker advanced state.", status);
-                }
-            }
-        } catch (final InvalidStateException | ProvisionedThroughputException e) {
-            throw new DependencyException("Failed to write table migration status " + status + " to lease table", e);
         }
     }
 }

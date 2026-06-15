@@ -4,6 +4,7 @@ import java.util.HashMap;
 
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.kinesis.leases.EntityType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -42,12 +43,17 @@ class TableMigrationStateTest {
         assertEquals(
                 WORKER_ID,
                 serialized.get(TableMigrationState.MODIFIED_BY_ATTRIBUTE_NAME).s());
+        // entityType must be present from super.serialize()
+        assertTrue(serialized.containsKey("entityType"), "serialize() must include entityType from super.serialize()");
+        assertEquals("TABLE_MIGRATION", serialized.get("entityType").s());
     }
 
     @Test
     void deserialize_validAttributes_roundTrips() {
         TableMigrationState original = new TableMigrationState(WORKER_ID);
         HashMap<String, AttributeValue> serialized = original.serialize();
+        // Simulate DAO behavior: entityType is stripped before calling deserializer
+        serialized.remove("entityType");
 
         TableMigrationState deserialized =
                 TableMigrationState.deserialize(TableMigrationState.TABLE_MIGRATION_HASH_KEY, serialized);
@@ -56,6 +62,9 @@ class TableMigrationStateTest {
         assertEquals(original.getTableMigrationStatus(), deserialized.getTableMigrationStatus());
         assertEquals(original.getModifiedBy(), deserialized.getModifiedBy());
         assertEquals(original.getModifiedTimestamp(), deserialized.getModifiedTimestamp());
+        assertEquals(EntityType.TABLE_MIGRATION, deserialized.getEntityType());
+        // Re-serializing includes entityType
+        assertTrue(deserialized.serialize().containsKey("entityType"));
     }
 
     @Test
