@@ -18,7 +18,6 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -46,19 +45,30 @@ import static software.amazon.kinesis.coordinator.migration.MigrationStateMachin
  */
 @Slf4j
 @KinesisClientInternalApi
-@RequiredArgsConstructor
 @ThreadSafe
-public class MigrationClientVersion3xWithRollbackState implements MigrationClientVersionState {
+public class MigrationClientVersion3xWithRollbackState extends AbstractMigrationClientVersionState {
 
     private final MigrationStateMachine stateMachine;
-    private final CoordinatorStateDAO coordinatorStateDAO;
     private final ScheduledExecutorService stateMachineThreadPool;
     private final DynamicMigrationComponentsInitializer initializer;
     private final Random random;
 
     private ClientVersionChangeMonitor rollbackMonitor;
-    private boolean entered;
-    private boolean left;
+
+    public MigrationClientVersion3xWithRollbackState(
+            final MigrationStateMachine stateMachine,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final ScheduledExecutorService stateMachineThreadPool,
+            final DynamicMigrationComponentsInitializer initializer,
+            final Random random,
+            final MigrationState migrationState,
+            final String workerIdentifier) {
+        super(migrationState, coordinatorStateDAO, workerIdentifier);
+        this.stateMachine = stateMachine;
+        this.stateMachineThreadPool = stateMachineThreadPool;
+        this.initializer = initializer;
+        this.random = random;
+    }
 
     @Override
     public ClientVersion clientVersion() {
@@ -66,24 +76,18 @@ public class MigrationClientVersion3xWithRollbackState implements MigrationClien
     }
 
     @Override
-    public synchronized void enter(final ClientVersion fromClientVersion) throws DependencyException {
-        if (!entered) {
-            log.info("Entering {} from {}", this, fromClientVersion);
-            initializer.initializeClientVersionFor3xWithRollback(fromClientVersion);
-            // we need to run the rollback monitor
-            log.info("Starting rollback monitor");
-            rollbackMonitor = new ClientVersionChangeMonitor(
-                    initializer.metricsFactory(),
-                    coordinatorStateDAO,
-                    stateMachineThreadPool,
-                    this::onClientVersionChange,
-                    clientVersion(),
-                    random);
-            rollbackMonitor.startMonitor();
-            entered = true;
-        } else {
-            log.info("Not entering {}", left ? "already exited state" : "already entered state");
-        }
+    protected void doEnter(final ClientVersion fromClientVersion) throws DependencyException {
+        initializer.initializeClientVersionFor3xWithRollback(fromClientVersion);
+        // we need to run the rollback monitor
+        log.info("Starting rollback monitor");
+        rollbackMonitor = new ClientVersionChangeMonitor(
+                initializer.metricsFactory(),
+                coordinatorStateDAO,
+                stateMachineThreadPool,
+                this::onClientVersionChange,
+                clientVersion(),
+                random);
+        rollbackMonitor.startMonitor();
     }
 
     @Override

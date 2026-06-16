@@ -114,6 +114,8 @@ public class MigrationStateMachineTest {
             final ClientVersionConfig config, final ClientVersion expectedStateMachineState) throws Exception {
         stateMachineUnderTest = getStateMachineUnderTest(config);
         Assertions.assertEquals(expectedStateMachineState, stateMachineUnderTest.getCurrentClientVersion());
+        // Verify DDB state was created during initial enter (since DDB had CLIENT_VERSION_INIT)
+        verify(mockCoordinatorStateDAO).createCoordinatorStateIfNotExists(any());
     }
 
     @Test

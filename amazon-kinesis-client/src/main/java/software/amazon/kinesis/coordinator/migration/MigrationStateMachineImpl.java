@@ -238,7 +238,13 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
                 return new MigrationClientVersionInitState(initializer);
             case CLIENT_VERSION_2X:
                 return new MigrationClientVersion2xState(
-                        this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
+                        this,
+                        coordinatorStateDAO,
+                        stateMachineThreadPool,
+                        initializer,
+                        random,
+                        migrationState,
+                        workerId);
             case CLIENT_VERSION_UPGRADE_FROM_2X:
                 return new MigrationClientVersionUpgradeFrom2xState(
                         this,
@@ -248,12 +254,20 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
                         initializer,
                         random,
                         migrationState,
-                        flipTo3XStabilizerTimeInSeconds);
+                        flipTo3XStabilizerTimeInSeconds,
+                        workerId);
             case CLIENT_VERSION_3X_WITH_ROLLBACK:
                 return new MigrationClientVersion3xWithRollbackState(
-                        this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
+                        this,
+                        coordinatorStateDAO,
+                        stateMachineThreadPool,
+                        initializer,
+                        random,
+                        migrationState,
+                        workerId);
             case CLIENT_VERSION_3X:
-                return new MigrationClientVersion3xState(this, initializer);
+                return new MigrationClientVersion3xState(
+                        this, initializer, coordinatorStateDAO, migrationState, workerId);
         }
         throw new IllegalStateException(String.format("Unknown client version %s", clientVersion));
     }
