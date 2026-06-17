@@ -248,21 +248,6 @@ public class LeaseManagementConfig {
     private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
 
     /**
-     * Flag to enable the rolling deployment system.
-     *
-     * <p>
-     * If set to true and a new LeaseAssignmentStrategy is being deployed, then the new strategy will only be
-     * applied to the growing subset of workers that receive the updated version until all workers receive the update.
-     *
-     * <p>
-     * If set to false, then the new assignment algorithm will take effect on all workers when a worker with the updated
-     * version becomes the leader of the fleet.
-     *
-     * <p>Default value: false</p>
-     */
-    private boolean enableRollingDeploymentSystem = false;
-
-    /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
      * already existing tables.
      *
