@@ -35,6 +35,7 @@ import software.amazon.kinesis.leases.Lease;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
@@ -59,6 +60,14 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         MockitoAnnotations.openMocks(this);
         decider =
                 new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
+    }
+
+    private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
+        when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
+                .thenReturn(true);
+        when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))
+                .thenReturn(true);
+        return new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
     }
 
     @Test
