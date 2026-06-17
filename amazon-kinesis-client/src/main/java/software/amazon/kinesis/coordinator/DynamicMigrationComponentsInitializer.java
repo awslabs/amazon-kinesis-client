@@ -361,6 +361,22 @@ public final class DynamicMigrationComponentsInitializer {
     }
 
     /**
+     * Placeholder method for the prepare for upgrade from 2x state. This state exists for the purpose
+     * of direct migration to single table format at the same time as v2 to v3 migration. To do both, we
+     * cannot write coordinator states (including the MigrationState) or worker stats into the lease table.
+     * Instead, we have to wait for the code to be deployed everywhere, and run v2 functionality without a
+     * rollforward monitor like that for CLIENT_VERSION_2X (so that on the second deployment, workers move
+     * to v3 compatible functionality progressively as more are deployed, rather than all at once).
+     */
+    public synchronized void initializeClientVersionForPrepareToUpgradeFrom2x(final ClientVersion fromClientVersion) {
+        log.info("Initializing KCL components for prepare for upgrade from 2x from {}", fromClientVersion);
+
+        if (fromClientVersion != ClientVersion.CLIENT_VERSION_INIT) {
+            log.error("Prepare for upgrade from 2x state should only be reached from client version init state!");
+        }
+    }
+
+    /**
      * Initialize KCL with components and configuration to run vanilla 3x functionality
      * while allowing roll-back to 2x functionality. This can happen at KCL Worker startup
      * when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK (after the flip)

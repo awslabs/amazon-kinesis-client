@@ -325,6 +325,13 @@ public class LeaseManagementConfig {
 
     private StreamIdOnboardingState streamIdOnboardingState = StreamIdOnboardingState.NOT_ONBOARDED;
 
+    /**
+     * Controls whether we should consolidate worker stats and coordinator states into the lease table. Default=false
+     * This is used for existing v3 customers running the legacy multi-table format. This config value should
+     * be set on the second deployment, once the code to parse the single table format has been deployed everywhere.
+     */
+    private boolean migrateAllEntityTypesToLeaseTable = false;
+
     @Deprecated
     public LeaseManagementConfig(
             String tableName,

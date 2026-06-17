@@ -27,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.collect.ImmutableMap;
 import lombok.NonNull;
@@ -87,6 +88,8 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -137,6 +140,13 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private Integer cachedTotalSegments;
     private Instant expirationTimeForTotalSegmentsCache;
     private static final Duration CACHE_DURATION_FOR_TOTAL_SEGMENTS = Duration.ofHours(2);
+
+    private AtomicReference<List<WorkerMetricStats>> scannedWorkerMetrics = new AtomicReference<>(new ArrayList<>());
+
+    @Override
+    public List<WorkerMetricStats> getWorkerMetrics() {
+        return scannedWorkerMetrics.getAndSet(new ArrayList<>());
+    }
 
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
@@ -666,7 +676,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 synchronized (response) {
                     for (final Map<String, AttributeValue> item : scanResult.items()) {
                         try {
-                            response.add(serializer.fromDynamoRecord(item));
+                            Lease processed = processScannedItem(item);
+                            if (processed != null) {
+                                response.add(processed);
+                            }
                         } catch (final Exception e) {
                             // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
                             // do not fail all list call. Capture failed deserialize item and return to caller.
@@ -760,7 +773,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 while (scanResult != null) {
                     for (Map<String, AttributeValue> item : scanResult.items()) {
                         log.debug("Got item {} from DynamoDB.", item.toString());
-                        result.add(serializer.fromDynamoRecord(item));
+                        Lease processed = processScannedItem(item);
+                        if (processed != null) {
+                            result.add(processed);
+                        }
                     }
 
                     Map<String, AttributeValue> lastEvaluatedKey = scanResult.lastEvaluatedKey();
@@ -793,6 +809,27 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (DynamoDbException | TimeoutException e) {
             throw new DependencyException(e);
         }
+    }
+
+    /**
+     * Deserializes the key-value map to a Lease object if entityType is null, else if it's a worker
+     * stats entry, deserializes as worker stats entry and adds to worker metrics list to handoff to LAM,
+     * else must be coordinator state and ignores
+     * @param item - the key-value map retrieved from DynamoDB
+     * @return a Lease object if entityType is null, else null
+     */
+    private Lease processScannedItem(final Map<String, AttributeValue> item) {
+        String entityType = serializer.getEntityType(item);
+        if (entityType == null) {
+            // lease object; will be added to scanned leases list
+            return serializer.fromDynamoRecord(item);
+        } else if (entityType.equals(WorkerMetricStats.ENTITY_TYPE)) {
+            // worker stats entry; use decided upon schema to deserialize -> should be lease table's schema
+            scannedWorkerMetrics.get().add(WorkerMetricStatsDAO.getSchema().mapToItem(item));
+        } else {
+            // ignore coordinator states (for now); may need to sync stream info to legacy table in future
+        }
+        return null;
     }
 
     /**

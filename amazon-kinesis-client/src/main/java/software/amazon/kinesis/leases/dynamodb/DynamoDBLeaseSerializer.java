@@ -58,7 +58,8 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
     static final String CHECKPOINT_OWNER = "checkpointOwner";
     static final String LEASE_OWNER_KEY = "leaseOwner";
-    static final String LEASE_KEY_KEY = "leaseKey";
+    public static final String LEASE_KEY_KEY = "leaseKey";
+    public static final String ENTITY_TYPE_KEY = "entityType";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {
@@ -120,6 +121,11 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(CHECKPOINT_OWNER, DynamoUtils.createAttributeValue(lease.checkpointOwner()));
         }
         return result;
+    }
+
+    @Override
+    public String getEntityType(final Map<String, AttributeValue> dynamoRecord) {
+        return DynamoUtils.safeGetString(dynamoRecord, ENTITY_TYPE_KEY);
     }
 
     @Override

@@ -51,4 +51,13 @@ public class CoordinatorState {
     private String key;
 
     private Map<String, AttributeValue> attributes;
+
+    /**
+     * Getter for the modifiedTimestamp field.
+     * Overridden by generated getter for field in subclass named exactly `modifiedTimestamp`
+     * @return the modified timestamp belonging to the CoordinatorState, or System.currentTimeMillis()
+     */
+    public long getModifiedTimestamp() {
+        return System.currentTimeMillis();
+    }
 }

@@ -34,6 +34,7 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRATION_HASH_KEY;
 
@@ -168,6 +169,9 @@ public class MigrationClientVersionStateInitializer {
                 }
             }
             return migrationState;
+        } catch (final UnsupportedOperationException e) {
+            // coordinatorStateDAO must not be initialized yet; this is fine -> return the state and don't write to DDB
+            return migrationState;
         } catch (final ProvisionedThroughputException | DependencyException e) {
             log.debug(
                     "Failed to update migration state {} with {}, return previous value to trigger a retry",
@@ -181,6 +185,9 @@ public class MigrationClientVersionStateInitializer {
     private ClientVersion getNextClientVersionBasedOnConfigVersion() {
         switch (clientVersionConfig) {
             case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X:
+                return CLIENT_VERSION_PREPARE_TO_UPGRADE_FROM_2X;
+            case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE2:
+                coordinatorStateDAO.initialize(true);
                 return CLIENT_VERSION_UPGRADE_FROM_2X;
             case CLIENT_VERSION_CONFIG_3X:
                 return CLIENT_VERSION_3X;
