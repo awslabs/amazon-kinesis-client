@@ -23,7 +23,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 /**
  * Reporter that is periodically executed to report WorkerMetricStats. It collects
@@ -37,7 +36,6 @@ public class WorkerMetricStatsReporter implements Runnable {
     private final String workerIdentifier;
     private final WorkerMetricStatsManager workerMetricsManager;
     private final WorkerMetricStatsDAO workerMetricsDAO;
-    private final FleetSegmentingHandler segmentingHandler;
 
     @Override
     public void run() {
@@ -57,7 +55,6 @@ public class WorkerMetricStatsReporter implements Runnable {
                     .metricStats(workerMetricsManager.computeMetrics())
                     .operatingRange(workerMetricsManager.getOperatingRange())
                     .lastUpdateTime(Instant.now().getEpochSecond())
-                    .properties(segmentingHandler.getVersionHashWithLastUpdatedTime())
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
             success = true;
