@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
+import software.amazon.kinesis.coordinator.assignment.LAMDataManager;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
@@ -114,6 +115,8 @@ public final class DynamicMigrationComponentsInitializer {
     private boolean dualMode;
     private boolean initialized;
 
+    private final LAMDataManager lamDataManager;
+
     @Builder(access = AccessLevel.PACKAGE)
     DynamicMigrationComponentsInitializer(
             final MetricsFactory metricsFactory,
@@ -128,7 +131,8 @@ public final class DynamicMigrationComponentsInitializer {
             final Supplier<DynamoDBLockBasedLeaderDecider> ddbLockBasedLeaderDeciderCreator,
             final String workerIdentifier,
             final WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider) {
+            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider,
+            final LAMDataManager lamDataManager) {
         this.metricsFactory = metricsFactory;
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
@@ -145,6 +149,7 @@ public final class DynamicMigrationComponentsInitializer {
         this.deterministicLeaderDeciderCreator = deterministicLeaderDeciderCreator;
         this.ddbLockBasedLeaderDeciderCreator = ddbLockBasedLeaderDeciderCreator;
         this.leaseModeChangeConsumer = leaseAssignmentModeProvider;
+        this.lamDataManager = lamDataManager;
     }
 
     /**
@@ -221,6 +226,7 @@ public final class DynamicMigrationComponentsInitializer {
             if (leaseAssignmentManager != null) {
                 leaseAssignmentManager.stop();
             }
+            lamDataManager.shutdown();
             // leader decider is shut down later when scheduler is doing a final shutdown
             // since scheduler still accesses the leader decider while shutting down
             stopWorkerMetricsReporter();

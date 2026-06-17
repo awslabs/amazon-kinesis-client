@@ -82,6 +82,14 @@ public class MigrationAdaptiveLeaderDecider implements LeaderDecider {
     }
 
     @Override
+    public synchronized void releaseLeadershipIfHeld() {
+        if (currentLeaderDecider == null) {
+            throw new IllegalStateException("LeaderDecider uninitialized");
+        }
+        currentLeaderDecider.releaseLeadershipIfHeld();
+    }
+
+    @Override
     public synchronized void shutdown() {
         if (nonNull(currentLeaderDecider)) {
             log.info("Shutting down current {}", currentLeaderDecider.getClass().getSimpleName());

@@ -459,6 +459,12 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.tableName(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
                 tableMigrationStatusProvider);
+        final MigrationAwareLAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
+                entityDAO,
+                workerMetricsDAO,
+                tableMigrationStatusProvider,
+                ((TableMigrationStateMachineImpl) tableMigrationStateMachine)::updateMigrationSummary,
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)
@@ -474,12 +480,6 @@ public class Scheduler implements Runnable {
                         1,
                         new ThreadFactoryBuilder().setNameFormat("lam-thread").build()))
                 .lamCreator((lamThreadPool, leaderDecider) -> {
-                    final MigrationAwareLAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
-                            entityDAO,
-                            workerMetricsDAO,
-                            tableMigrationStatusProvider,
-                            ((TableMigrationStateMachineImpl) tableMigrationStateMachine)::updateMigrationSummary,
-                            leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
                     return new LeaseAssignmentManager(
                             leaseRefresher,
                             leaderDecider,
@@ -509,6 +509,7 @@ public class Scheduler implements Runnable {
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
+                .lamDataManager(lamDataManager)
                 .build();
     }
 

@@ -134,7 +134,6 @@ public final class LeaseAssignmentManager {
         if (nonNull(managerFuture)) {
             managerFuture.cancel(true);
             managerFuture = null;
-            lamDataManager.shutdown();
             log.info("Completed shutdown of LeaseAssignmentManager");
             return;
         }

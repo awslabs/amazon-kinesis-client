@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
+import software.amazon.kinesis.coordinator.assignment.LAMDataManager;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
@@ -93,6 +94,7 @@ public class DynamicMigrationComponentsInitializerTest {
             new WorkerUtilizationAwareAssignmentConfig();
     final MigrationAdaptiveLeaseAssignmentModeProvider mockConsumer =
             mock(MigrationAdaptiveLeaseAssignmentModeProvider.class);
+    private final LAMDataManager mockLamDataManager = mock(LAMDataManager.class);
 
     private static final String APPLICATION_NAME = "TEST_APPLICATION";
 
@@ -118,7 +120,8 @@ public class DynamicMigrationComponentsInitializerTest {
                 mockDdbLockBasedLeaderDeciderCreator,
                 workerIdentifier,
                 workerUtilizationAwareAssignmentConfig,
-                mockConsumer);
+                mockConsumer,
+                mockLamDataManager);
     }
 
     // ========================
@@ -274,6 +277,7 @@ public class DynamicMigrationComponentsInitializerTest {
         verify(mockWorkerMetricsScheduler).shutdown();
 
         verify(mockLam).stop();
+        verify(mockLamDataManager).shutdown();
         verify(mockWorkerMetricsManager).stopManager();
     }
 
