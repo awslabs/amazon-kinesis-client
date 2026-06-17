@@ -27,7 +27,6 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -80,11 +79,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 .build());
 
         return new DynamoDBLockBasedLeaderDecider(
-                dynamoDBLockClient,
-                heartbeatPeriod,
-                workerId,
-                metricsFactory,
-                tableMigrationStateMachine);
+                dynamoDBLockClient, heartbeatPeriod, workerId, metricsFactory, tableMigrationStateMachine);
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
@@ -134,8 +129,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
         // Get the lockItem from storage (if present)
         final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
-        lockItem.ifPresent(item -> log.info("Worker : {} is the current {}.", item.getOwnerName(),
-            LeaderLock.LEADER_HASH_KEY));
+        lockItem.ifPresent(
+                item -> log.info("Worker : {} is the current {}.", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
 
         // If the lockItem is present and is expired, that means either current worker is not leader.
         if (!lockItem.isPresent() || lockItem.get().isExpired()) {
@@ -148,8 +143,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                                 .withShouldSkipBlockingWait(true)
                                 .withAdditionalAttributes(getLockAttributes())
                                 .build());
-                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new {}", item.getOwnerName(),
-                    LeaderLock.LEADER_HASH_KEY));
+                leaderLockItem.ifPresent(
+                        item -> log.info("Worker : {} is new {}", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
             } catch (final InterruptedException e) {
@@ -221,7 +216,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     @Override
     public synchronized void releaseLeadershipIfHeld() {
         try {
-            final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
+            final Optional<LockItem> lockItem =
+                    dynamoDBLockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
             if (lockItem.isPresent()
                     && !lockItem.get().isExpired()
                     && lockItem.get().getOwnerName().equals(workerId)) {

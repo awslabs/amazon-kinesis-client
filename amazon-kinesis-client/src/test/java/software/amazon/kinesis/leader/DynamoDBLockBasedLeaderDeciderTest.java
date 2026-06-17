@@ -7,13 +7,11 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal;
 import com.google.common.collect.ImmutableMap;
-
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -85,12 +83,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
             workerIdToLeaderDeciderMap.put(
                     workerId,
                     DynamoDBLockBasedLeaderDecider.create(
-                            dao,
-                            workerId,
-                            100L,
-                            10L,
-                            new NullMetricsFactory(),
-                            mockTableMigrationStateMachine));
+                            dao, workerId, 100L, 10L, new NullMetricsFactory(), mockTableMigrationStateMachine));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);

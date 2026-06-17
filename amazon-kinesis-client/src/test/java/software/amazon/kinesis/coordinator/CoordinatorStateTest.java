@@ -156,6 +156,5 @@ class CoordinatorStateTest {
     @Test
     void constants_areCorrectlyDefined() {
         assertEquals("Leader", LeaderLock.LEADER_HASH_KEY);
-        assertEquals("DeployingLeader", CoordinatorState.DEPLOYING_LEADER_HASH_KEY);
     }
 }

@@ -15,9 +15,6 @@
 
 package software.amazon.kinesis.coordinator.assignment;
 
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,14 +35,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import org.apache.commons.collections4.CollectionUtils;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -66,6 +61,9 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.NullMetricsScope;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
+
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
 
 /**
  * Performs the LeaseAssignment for the application. This starts by loading the leases and workerMetrics from the

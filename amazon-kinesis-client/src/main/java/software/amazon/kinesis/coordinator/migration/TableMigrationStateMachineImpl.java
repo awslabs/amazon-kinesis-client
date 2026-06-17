@@ -710,7 +710,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      *
      * <p>Entries excluded from the move:</p>
      * <ul>
-     *   <li>Lock entries (LEADER_HASH_KEY, DEPLOYING_LEADER_HASH_KEY) — remain in legacy</li>
+     *   <li>Lock entry (LEADER_HASH_KEY) — remain in legacy</li>
      *   <li>TableMigrationState entry — written separately with COMPLETE status</li>
      * </ul>
      *
@@ -734,8 +734,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
 
         for (final CoordinatorState entry : legacyEntries) {
             // Skip lock entries — they are not migrated
-            if (LeaderLock.LEADER_HASH_KEY.equals(entry.getKey())
-                    || CoordinatorState.DEPLOYING_LEADER_HASH_KEY.equals(entry.getKey())) {
+            if (LeaderLock.LEADER_HASH_KEY.equals(entry.getKey())) {
                 log.debug("Skipping lock entry: {}", entry.getKey());
                 continue;
             }
@@ -810,8 +809,6 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * <p>Including this in each transactional batch ensures that if leadership was lost
      * (another worker took the lock), the entire transaction fails atomically — preventing
      * partial moves by a stale leader.</p>
-     *
-     * TODO: Handle DEPLOYING_LEADER_HASH_KEY coordinator state.
      */
     private TransactWriteItem createLockOwnerConditionCheck() {
         final Map<String, AttributeValue> key = new HashMap<>();
@@ -949,7 +946,6 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             for (final CoordinatorState entry : entries) {
                 final String key = entry.getKey();
                 if (LeaderLock.LEADER_HASH_KEY.equals(key)
-                        || CoordinatorState.DEPLOYING_LEADER_HASH_KEY.equals(key)
                         || TableMigrationState.TABLE_MIGRATION_HASH_KEY.equals(key)) {
                     continue;
                 }
