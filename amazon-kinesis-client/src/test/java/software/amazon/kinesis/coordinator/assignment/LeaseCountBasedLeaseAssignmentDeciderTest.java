@@ -62,7 +62,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
                 new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
     }
 
-    private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
+    private LeaseCountBasedLeaseAssignmentDecider createDecider() {
         when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
                 .thenReturn(true);
         when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))
@@ -300,7 +300,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(workers);
         when(inMemoryStorageView.getLeaseList()).thenReturn(Arrays.asList(normalLease, expiredHandoffLease));
 
-        LeaseCountBasedLeaseAssignmentDecider decider = createDecider(workers);
+        LeaseCountBasedLeaseAssignmentDecider decider = createDecider();
 
         // Execute
         decider.balanceWorkerVariance();
