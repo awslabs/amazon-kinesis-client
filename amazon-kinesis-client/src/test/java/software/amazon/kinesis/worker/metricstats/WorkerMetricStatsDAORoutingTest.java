@@ -273,6 +273,62 @@ class WorkerMetricStatsDAORoutingTest {
         assertTrue(results.stream().anyMatch(s -> "lease-worker-both".equals(s.getWorkerId())));
     }
 
+    @Test
+    void getAllWorkerMetricStats_readsDynamicallyFlipToLeaseTableOnComplete() throws Exception {
+        // Seed legacy table
+        putWorkerMetricItem(LEGACY_TABLE, "wid", "legacy-dynamic");
+        // Seed lease table
+        putWorkerMetricItem(LEASE_TABLE, "leaseKey", "lease-dynamic");
+
+        // Initialize with INIT status
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        WorkerMetricStatsDAO dao = createDao();
+        dao.initialize();
+
+        // Reads should combine both tables before status changes
+        List<WorkerMetricStats> resultsBefore = dao.getAllWorkerMetricStats();
+        assertTrue(resultsBefore.stream().anyMatch(s -> "legacy-dynamic".equals(s.getWorkerId())));
+        assertTrue(resultsBefore.stream().anyMatch(s -> "lease-dynamic".equals(s.getWorkerId())));
+
+        // Simulate status dynamically transitioning to COMPLETE
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // Reads should now only return lease table data (dynamic behavior)
+        List<WorkerMetricStats> resultsAfter = dao.getAllWorkerMetricStats();
+        assertTrue(resultsAfter.stream().anyMatch(s -> "lease-dynamic".equals(s.getWorkerId())));
+        assertFalse(resultsAfter.stream().anyMatch(s -> "legacy-dynamic".equals(s.getWorkerId())));
+    }
+
+    @Test
+    void writeStillUsesCachedStatus_afterDynamicReadFlip() throws Exception {
+        // Initialize with INIT status
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        WorkerMetricStatsDAO dao = createDao();
+        dao.initialize();
+
+        // Simulate status dynamically transitioning to COMPLETE
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+
+        // Write should still go to legacy table (using cached INIT status)
+        WorkerMetricStats stats = new WorkerMetricStats();
+        stats.setWorkerId("cached-write-worker");
+        stats.setLastUpdateTime(Instant.now().getEpochSecond());
+        stats.setMetricStats(ImmutableMap.of("C", ImmutableList.of(50.0)));
+        stats.setOperatingRange(ImmutableMap.of("C", ImmutableList.of(80L)));
+        dao.updateMetrics(stats);
+
+        // Verify written to legacy table (not lease table)
+        Map<String, AttributeValue> legacyItem = getItem(LEGACY_TABLE, "wid", "cached-write-worker");
+        assertFalse(legacyItem.isEmpty());
+        assertEquals("cached-write-worker", legacyItem.get("wid").s());
+
+        // Verify NOT written to lease table
+        Map<String, AttributeValue> leaseItem = getItem(LEASE_TABLE, "leaseKey", "cached-write-worker");
+        assertTrue(leaseItem == null || leaseItem.isEmpty());
+    }
+
     // --- Delete routing ---
 
     @Test

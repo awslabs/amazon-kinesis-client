@@ -53,13 +53,13 @@ public enum TableMigrationStatus {
      * This is a local state before table migration status is either
      * determined by reading the DDB status and the KCL configuration.
      */
-    TABLE_MIGRATION_STATUS_UNKNOWN(null),
+    TABLE_MIGRATION_STATUS_UNKNOWN(0L),
 
     /**
      * This is the starting version, set during the upgrade to KCLv3.5 Phase1. In this version KCL workers
      * will emit an additional SupportCode attribute in WorkerMetricStats.
      */
-    TABLE_MIGRATION_STATUS_INIT(null),
+    TABLE_MIGRATION_STATUS_INIT(0L),
     /**
      * The KCL fleet leader will monitor for the minimum support code from WorkerMetricStats
      * across the fleet and when it supports the Table Migration for a specific bake time, it transitions
@@ -74,7 +74,7 @@ public enum TableMigrationStatus {
      * Once these 2 conditions are met, leader transitions to PENDING state.
      * This state allows rollback to DEPLOYED if there were to be any regressions.
      */
-    TABLE_MIGRATION_STATUS_PENDING(null),
+    TABLE_MIGRATION_STATUS_PENDING(0L),
     /**
      * This version indicates that table migration is completed all workers will always use lease table
      * for all entities for both reads and writes and there is no rollback allowed once the

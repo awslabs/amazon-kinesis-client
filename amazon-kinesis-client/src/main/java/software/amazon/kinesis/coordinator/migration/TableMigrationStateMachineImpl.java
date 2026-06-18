@@ -458,7 +458,28 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             return;
         }
 
-        // State exists — use modifiedTimestamp (millis) converted to seconds as bake start.
+        // State exists in DDB. Check if the DDB status matches our expectation (INIT).
+        // If DDB is DEPLOYED, it means we previously wrote DEPLOYED successfully but failed to
+        // update the local provider (e.g., perceived failure at line 470). Reconcile by updating
+        // the provider to DEPLOYED so the next iteration dispatches to handleDeployedState.
+        if (stateFromDDB.getTableMigrationStatus() == TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED) {
+            log.info("INIT: DDB state is DEPLOYED (provider update was missed), updating provider to DEPLOYED");
+            statusProvider.updateTableMigrationStatus(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
+            return;
+        }
+
+        // Handle unexpected DDB states (PENDING, COMPLETE) if they can occur here.
+        // Currently, PENDING/COMPLETE should not be possible when local provider is INIT because:
+        // - PENDING requires config=true (Phase 2) which would not have local status INIT
+        // - COMPLETE is terminal and handled before dispatch
+        if (stateFromDDB.getTableMigrationStatus() != TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT) {
+            log.warn(
+                    "INIT: unexpected DDB state {} while local provider is INIT, skipping bake",
+                    stateFromDDB.getTableMigrationStatus());
+            return;
+        }
+
+        // State exists and is INIT — use modifiedTimestamp (millis) converted to seconds as bake start.
         final long steadySinceSeconds = TimeUnit.MILLISECONDS.toSeconds(stateFromDDB.getModifiedTimestamp());
         final long nowSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
         final long elapsedSeconds = nowSeconds - steadySinceSeconds;

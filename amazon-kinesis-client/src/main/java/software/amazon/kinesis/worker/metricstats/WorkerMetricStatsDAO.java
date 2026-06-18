@@ -32,20 +32,29 @@ import software.amazon.kinesis.worker.metricstats.delegate.WorkerMetricStatsDAOD
 
 /**
  * Data Access Object that routes {@link WorkerMetricStats} operations to the appropriate
- * DDB table based on the {@link TableMigrationStatus} captured at initialization time.
+ * DDB table based on the {@link TableMigrationStatus}.
  *
- * The write target is cached at startup so that it does not change dynamically during the
- * lifetime of this DAO instance. If the migration status changes, it will only reflect
- * on the next startup.
- *
- * Read Logic (getAllWorkerMetricStats):
- *   Combines results from both legacy and lease table delegates.
+ * <h2>Read Logic (getAllWorkerMetricStats):</h2>
+ *   Uses the dynamic (live) status from {@link TableMigrationStatusProvider}.
  *   If status == COMPLETE, reads only from lease table.
+ *   Otherwise combines results from both legacy and lease table delegates.
  *   Caller is responsible for determining which entries are current/latest/not expired.
  *
- * Write/Delete Logic:
- *   If status == COMPLETE or PENDING: write to lease table only.
- *   If status == INIT or DEPLOYED: write to legacy table only.
+ * <h2>Write/Delete Logic:</h2>
+ *   Uses the cached status captured at initialization time so that the write target
+ *   does not change dynamically during the lifetime of this DAO instance.
+ *   If cachedStatus == COMPLETE or PENDING: write to lease table only.
+ *   If cachedStatus == INIT or DEPLOYED: write to legacy table only.
+ *
+ * The difference between read and write are:
+ * 1. Reads are merged from both tables while writes go only to one table. This is
+ *    because when status is INIT/DEPLOYED, the application could be on a rollback
+ *    + rollforward path, so even if application is currently writing to
+ *    Legacy table, in the past workers may have written to Lease table. So its safer
+ *    to read both until the final transition to COMPLETED.
+ * 2. Reads dynamically flip on completed state, but workers flip to Lease table
+ *    when it reboots. This is to ensure the worker writes move as the deployment
+ *    progresses in the cluster fleet.
  */
 @Slf4j
 @KinesisClientInternalApi
@@ -122,7 +131,7 @@ public class WorkerMetricStatsDAO {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         ensureInitialized();
 
-        if (cachedStatus == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE) {
+        if (isTableMigrationComplete()) {
             return leaseTableDaoDelegate.getAllWorkerMetricStats();
         }
 
@@ -178,6 +187,11 @@ public class WorkerMetricStatsDAO {
             default:
                 throw new IllegalStateException("Cannot determine write delegate for status: " + cachedStatus);
         }
+    }
+
+    private boolean isTableMigrationComplete() {
+        return tableMigrationStatusProvider.getTableMigrationStatus()
+                == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
     }
 
     private void ensureInitialized() throws InvalidStateException {

@@ -253,11 +253,11 @@ public final class DynamicMigrationComponentsInitializer {
                         "{} did not shutdown in {}s, forcefully shutting down",
                         threadPoolName,
                         SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
-                lamThreadPool.shutdownNow();
+                threadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
             log.warn("Interrupted while waiting for shutdown of {} thread pool", threadPoolName, e);
-            lamThreadPool.shutdownNow();
+            threadPool.shutdownNow();
         }
     }
 
