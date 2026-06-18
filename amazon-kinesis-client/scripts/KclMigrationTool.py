@@ -21,10 +21,6 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-# DynamoDB table suffixes
-DEFAULT_COORDINATOR_STATE_TABLE_SUFFIX = "-CoordinatorState"
-DEFAULT_WORKER_METRICS_TABLE_SUFFIX = "-WorkerMetricStats"
-
 # DynamoDB attribute names and values
 CLIENT_VERSION_ATTR = 'cv'
 TIMESTAMP_ATTR = 'mts'
@@ -135,7 +131,7 @@ def table_exists(dynamodb_client, table_name):
         return False
 
 
-def validate_tables(dynamodb_client, operation, coordinator_state_table_name, lease_table_name=None):
+def validate_tables(dynamodb_client, operation, lease_table_name=None):
     """
     Validate the existence of DynamoDB tables required for KCL operations
 
@@ -150,14 +146,6 @@ def validate_tables(dynamodb_client, operation, coordinator_state_table_name, le
             f"{operation} failed. Could not find a KCL Application DDB lease table "
             f"with name {lease_table_name}. Please pass in the correct application_name "
             "and/or lease_table_name that matches your KCL application configuration."
-        )
-        return False
-
-    if not table_exists(dynamodb_client, coordinator_state_table_name):
-        print(
-            f"{operation} failed. Could not find a coordinator state table "
-            f"{coordinator_state_table_name}. Please pass in the correct application_name or"
-            f" coordinator_state_table_name that matches your KCL application configuration."
         )
         return False
 
@@ -214,7 +202,7 @@ def get_current_state(dynamodb_client, table_name):
     """
     response = dynamodb_client.get_item(
         TableName=table_name,
-        Key={'key': {'S': MIGRATION_KEY}}
+        Key={'leaseKey': {'S': MIGRATION_KEY}}
     )
     item = response.get('Item', {})
     initial_version = item.get(CLIENT_VERSION_ATTR, {}).get('S', 'Unknown')
@@ -237,7 +225,7 @@ def rollback_client_version(dynamodb_client, table_name, history):
         print(f"Rolling back client version in table '{table_name}'...")
         update_response = dynamodb_client.update_item(
             TableName=table_name,
-            Key={'key': {'S': MIGRATION_KEY}},
+            Key={'leaseKey': {'S': MIGRATION_KEY}},
             UpdateExpression=(
                 f"SET {CLIENT_VERSION_ATTR} = :rollback_client_version, "
                 f"{TIMESTAMP_ATTR} = :updated_at, "
@@ -291,7 +279,7 @@ def rollfoward_client_version(dynamodb_client, table_name, history):
         # Conditionally update client version
         dynamodb_client.update_item(
             TableName=table_name,
-            Key={'key': {'S': MIGRATION_KEY}},
+            Key={'leaseKey': {'S': MIGRATION_KEY}},
             UpdateExpression= (
                 f"SET {CLIENT_VERSION_ATTR} = :rollforward_version, "
                 f"{TIMESTAMP_ATTR} = :updated_at, "
@@ -376,46 +364,7 @@ def delete_gsi_if_exists(dynamodb_client, table_name):
               " Please manually confirm the GSI is removed from the lease table, or"
               " resolve the error and rerun the migration script.")
 
-
-def delete_worker_metrics_table_if_exists(dynamodb_client, worker_metrics_table_name):
-    """
-    Deletes worker metrics table based on application name, if it exists.
-
-    :param dynamodb_client: Boto3 DynamoDB client
-    :param worker_metrics_table_name: Name of the DynamoDB worker metrics table
-    """
-    try:
-        dynamodb_client.describe_table(TableName=worker_metrics_table_name)
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ResourceNotFoundException':
-            print(f"Worker metrics table {worker_metrics_table_name} does not exist."
-                  " It may already be successfully deleted. Please check that the application_name"
-                  " or worker_metrics_table_name is correct. If not, correct this and rerun the migration script.")
-            return
-        else:
-            print(f"An unexpected error occurred when checking if {worker_metrics_table_name} table exists: {str(e)}."
-                  " Please manually confirm the table is deleted, or resolve the error"
-                  " and rerun the migration script.")
-            return
-
-    print(f"Deleting worker metrics table {worker_metrics_table_name}...")
-    try:
-        dynamodb_client.delete_table(TableName=worker_metrics_table_name)
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'AccessDeniedException':
-            print(f"No permissions to delete table {worker_metrics_table_name}. Please manually delete it if you"
-                  " want to avoid any charges until you are ready to rollforward with migration.")
-        else:
-            print(f"An unexpected client error occurred while deleting worker metrics table: {str(e)}."
-                  " Please manually confirm the table is deleted, or resolve the error"
-                  " and rerun the migration script.")
-    except Exception as e:
-        print(f"An unexpected error occurred while deleting worker metrics table: {str(e)}."
-              " Please manually confirm the table is deleted, or resolve the error"
-              " and rerun the migration script.")
-
-
-def perform_rollback(dynamodb_client, lease_table_name, coordinator_state_table_name, worker_metrics_table_name):
+def perform_rollback(dynamodb_client, lease_table_name):
     """
     Perform KCL 3.0 migration rollback by updating MigrationState for the KCL application.
     Rolls client version back, removes GSI from lease table, deletes worker metrics table.
@@ -425,14 +374,13 @@ def perform_rollback(dynamodb_client, lease_table_name, coordinator_state_table_
     :param coordinator_state_table_name: Name of the DynamoDB coordinator state table
     :param worker_metrics_table_name: Name of the DynamoDB worker metrics table
     """
-    if not validate_tables(dynamodb_client, "Rollback", coordinator_state_table_name, lease_table_name):
+    if not validate_tables(dynamodb_client, "Rollback", lease_table_name):
         return
 
     try:
-        initial_version, new_history = get_current_state(dynamodb_client,
-                                                         coordinator_state_table_name)
+        initial_version, new_history = get_current_state(dynamodb_client, lease_table_name)
     except ClientError as e:
-        handle_get_item_client_error(e, "Rollback", coordinator_state_table_name)
+        handle_get_item_client_error(e, "Rollback", lease_table_name)
         return
 
     if not is_valid_version(version=initial_version, mode='rollback'):
@@ -441,7 +389,7 @@ def perform_rollback(dynamodb_client, lease_table_name, coordinator_state_table_
     # 1. Rollback client version
     if initial_version != KclClientVersion.VERSION_2X.value:
         rollback_succeeded, initial_version = rollback_client_version(
-            dynamodb_client, coordinator_state_table_name, new_history
+            dynamodb_client, lease_table_name, new_history
         )
         if not rollback_succeeded:
             return
@@ -451,9 +399,6 @@ def perform_rollback(dynamodb_client, lease_table_name, coordinator_state_table_
 
     # 2. Delete the GSI
     delete_gsi_if_exists(dynamodb_client, lease_table_name)
-
-    # 3. Delete worker metrics table
-    delete_worker_metrics_table_if_exists(dynamodb_client, worker_metrics_table_name)
 
     # Log success
     if initial_version == KclClientVersion.UPGRADE_FROM_2X.value:
@@ -468,30 +413,29 @@ def perform_rollback(dynamodb_client, lease_table_name, coordinator_state_table_
               " to avoid charges until the application can be rolled forward with migration.")
 
 
-def perform_rollforward(dynamodb_client, coordinator_state_table_name):
+def perform_rollforward(dynamodb_client, lease_table_name):
     """
     Perform KCL 3.0 migration roll-forward by updating MigrationState for the KCL application
 
     :param dynamodb_client: Boto3 DynamoDB client
     :param coordinator_state_table_name: Name of the DynamoDB table
     """
-    if not validate_tables(dynamodb_client, "Roll-forward", coordinator_state_table_name):
+    if not validate_tables(dynamodb_client, "Roll-forward", lease_table_name):
         return
 
     try:
-        initial_version, new_history = get_current_state(dynamodb_client,
-                                                         coordinator_state_table_name)
+        initial_version, new_history = get_current_state(dynamodb_client, lease_table_name)
     except ClientError as e:
-        handle_get_item_client_error(e, "Roll-forward", coordinator_state_table_name)
+        handle_get_item_client_error(e, "Roll-forward", lease_table_name)
         return
 
     if not is_valid_version(version=initial_version, mode='rollforward'):
         return
 
-    rollfoward_client_version(dynamodb_client, coordinator_state_table_name, new_history)
+    rollfoward_client_version(dynamodb_client, lease_table_name, new_history)
 
 
-def run_kcl_migration(mode, lease_table_name, coordinator_state_table_name, worker_metrics_table_name):
+def run_kcl_migration(mode, lease_table_name):
     """
     Update the MigrationState in CoordinatorState DDB Table
 
@@ -503,36 +447,27 @@ def run_kcl_migration(mode, lease_table_name, coordinator_state_table_name, work
     dynamodb_client = boto3.client('dynamodb', config=config)
 
     if mode == "rollback":
-        perform_rollback(
-            dynamodb_client,
-            lease_table_name,
-            coordinator_state_table_name,
-            worker_metrics_table_name
-        )
+        perform_rollback(dynamodb_client, lease_table_name)
     elif mode == "rollforward":
-        perform_rollforward(dynamodb_client, coordinator_state_table_name)
+        perform_rollforward(dynamodb_client, lease_table_name)
     else:
         print(f"Invalid mode: {mode}. Please use 'rollback' or 'rollforward'.")
 
 
 def validate_args(args):
     if args.mode == 'rollforward':
-        if not (args.application_name or args.coordinator_state_table_name):
+        if not (args.application_name):
             raise ValueError(
-                "For rollforward mode, either application_name or "
-                "coordinator_state_table_name must be provided."
+                "For rollforward mode, application_name must be provided."
             )
     else:
         if args.application_name:
             return
 
-        if not (args.lease_table_name and
-                args.coordinator_state_table_name and
-                args.worker_metrics_table_name):
+        if not (args.lease_table_name):
             raise ValueError(
-                "For rollback mode, either application_name or all three table names "
-                "(lease_table_name, coordinator_state_table_name, and "
-                "worker_metrics_table_name) must be provided."
+                "For rollback mode, either application_name or lease_table_name " +
+                "must be provided."
             )
 
 def process_table_names(args):
@@ -546,20 +481,12 @@ def process_table_names(args):
     mode_input = args.mode
     application_name_input = args.application_name
 
-    coordinator_state_table_name_input = (args.coordinator_state_table_name or
-                                          application_name_input + DEFAULT_COORDINATOR_STATE_TABLE_SUFFIX)
     lease_table_name_input = None
-    worker_metrics_table_name_input = None
 
     if mode_input == "rollback":
         lease_table_name_input = args.lease_table_name or application_name_input
-        worker_metrics_table_name_input = (args.worker_metrics_table_name or
-                                           application_name_input + DEFAULT_WORKER_METRICS_TABLE_SUFFIX)
 
-    return (mode_input,
-            lease_table_name_input,
-            coordinator_state_table_name_input,
-            worker_metrics_table_name_input)
+    return (mode_input, lease_table_name_input)
 
 
 if __name__ == "__main__":
@@ -571,7 +498,7 @@ if __name__ == "__main__":
     
         Before running this tool:
         1. Ensure you have the necessary AWS permissions configured to access and modify the following:
-            - KCL application DynamoDB tables (lease table and coordinator state table)
+            - KCL application DynamoDB tables (lease table)
     
         2. Verify that your AWS credentials are properly set up in your environment or AWS config file.
     
@@ -591,16 +518,6 @@ if __name__ == "__main__":
                         help="Name of the DynamoDB lease table (defaults to applicationName)."
                              " If LeaseTable name was specified for the application as part of "
                              "the KCL configurations, the same name must be passed here.")
-    parser.add_argument("--coordinator_state_table_name",
-                        help="Name of the DynamoDB coordinator state table "
-                             "(defaults to applicationName-CoordinatorState)."
-                             " If coordinator state table name was specified for the application "
-                             "as part of the KCL configurations, the same name must be passed here.")
-    parser.add_argument("--worker_metrics_table_name",
-                        help="Name of the DynamoDB worker metrics table "
-                             "(defaults to applicationName-WorkerMetricStats)."
-                             " If worker metrics table name was specified for the application "
-                             "as part of the KCL configurations, the same name must be passed here.")
     parser.add_argument("--region", required=True,
                         help="AWS Region where your KCL application exists")
     args = parser.parse_args()
