@@ -481,10 +481,7 @@ def process_table_names(args):
     mode_input = args.mode
     application_name_input = args.application_name
 
-    lease_table_name_input = None
-
-    if mode_input == "rollback":
-        lease_table_name_input = args.lease_table_name or application_name_input
+    lease_table_name_input = args.lease_table_name or application_name_input
 
     return (mode_input, lease_table_name_input)
 
