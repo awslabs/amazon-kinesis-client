@@ -241,7 +241,12 @@ public class CoordinatorConfig {
      * billing mode, provisioned capacity. If no table name is specified, the table name will
      * default to applicationName-CoordinatorState. If no billing more is chosen, default is
      * On-Demand.
+     * @deprecated KCL no longer creates a separate CoordinatorState table for new migrations to 3.x
+     * and for new applications on latest 3.x. Refer to Kinesis Data Streams docs for Single Table Format.
+     * Existing 3.x applications which already have created the table will continue to use this config
+     * to access the table. It is recommended to follow Table Migration guide to move to a single
+     * table.
      */
-    @NonNull
+    @Deprecated
     private final CoordinatorStateTableConfig coordinatorStateTableConfig;
 }
