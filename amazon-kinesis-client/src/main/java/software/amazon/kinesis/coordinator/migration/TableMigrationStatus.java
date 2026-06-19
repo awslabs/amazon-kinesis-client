@@ -17,6 +17,7 @@ package software.amazon.kinesis.coordinator.migration;
 import java.util.Map;
 
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.coordinator.CoordinatorConfig;
 
 /**
  * TableMigration support during upgrade from KCLv3.4 or lower to KCLv3.5 or higher.
@@ -32,20 +33,22 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
  *
  *                                                  2.x -> 3.5x Migration (go to complete)
  *   .-----------------------------------------------------------------------------------------------------------------.
- *   |                        .---------------------------------.  .---------------------------.                       |
- *   |                        |      min support code           |  |     code rollback         |                       |
- *   |                        |      not met due to rollback    |  |                           |                       |
- *   |                        V       (Best effort)             |  V                           |                       V
+ *   | .-----------------------.---------------------------------.  .---------------------------.                       |
+ *   | |                       ^      min support code           |  |     code rollback         |                       |
+ *   | |                       |      not met due to rollback    |  |                           |                       |
+ *   | V                       |       (Best effort)             |  V                           |                       V
  * Start ------------------> INIT --------------------------> DEPLOYED ------------------> PENDING ---------------> COMPLETE
- *        3.4 or lower             MinSupport                            3.5 or higher                Bake time
- *        to 3.5 or higher         Code supports                         Phase 2
- *        Phase 1                  Single table                          deployment
- *        deployment               (migrateAllEntitiesToLeaseTable       (migrateAllEntitiesToLeaseTable
- *        if MigrationState           = default/false)                      = true)
- *          .ClientVersion         + Bake time
- *          = CLIENT_VERSION_3X
- *
- * When PENDING state is entered
+ *        Phase 1                     Bake time                         3.5 or higher                Bake time
+ *        deployment                                                    Phase 2
+ *        when all workers                                              deployment
+ *        emit minSupportCode                                           (migrateAllEntitiesToLeaseTable
+ *        in WorkerMetricStats                                          = true)
+ *                                                                      When all workers emit
+ *                                                                      WorkerMetricStats to lease
+ *                                                                      and CoordinatorState entries
+ *                                                                      are moved to Lease table
+ * There is local state workers use and there is a global state that the leader manages
+ * as a {@link TableMigrationState} which is a CoordinatorState in DDB table.
  */
 @KinesisClientInternalApi
 public enum TableMigrationStatus {
@@ -56,30 +59,43 @@ public enum TableMigrationStatus {
     TABLE_MIGRATION_STATUS_UNKNOWN(0L),
 
     /**
-     * This is the starting version, set during the upgrade to KCLv3.5 Phase1. In this version KCL workers
-     * will emit an additional SupportCode attribute in WorkerMetricStats.
+     * This state in the DDB signifies all workers are emitting min support code in
+     * WorkerMetricStats and the bake time to move to DEPLOYED has started.
+     * Worker enter this state locally in phase1 deployment. In this local state
+     * workers emit min support code in WorkerMetricStats which is written
+     * to legacy table, but reads for WorkerMetricStats and CoordinatorState
+     * will be merged from both legacy and lease table.
      */
     TABLE_MIGRATION_STATUS_INIT(0L),
     /**
-     * The KCL fleet leader will monitor for the minimum support code from WorkerMetricStats
-     * across the fleet and when it supports the Table Migration for a specific bake time, it transitions
-     * to the DEPLOYED status to indicate completion of phase 1.
+     * This state in DDB signifies all workers are emitting min support code
+     * in the Worker metric stats steadily for the bake time and the application
+     * is ready to move on to phase 2 deployment.
+     * Worker enter this state locally when the ddb state transitions to it.
+     * In terms of functionality there is no difference, between INIT and DEPLOYED
+     * workers continue to emit min support code in WorkerMetricStats into legacy table
+     * and read WorkerMetricStats and CoordinatorState from both legacy and lease table.
      */
     TABLE_MIGRATION_STATUS_DEPLOYED(TableMigrationState.DEFAULT_BAKE_TIME_SECONDS),
     /**
-     * This version is used to initiate Phase 2 which allows workers to start using LeaseTable for all
-     * entities. This state transition is triggered by the fleet leader when 2 conditions are met:
-     * 1. All workers have Phase2 deployment which means they are emitted WorkerMetricsStats into LeaseTable
-     * 2. Leader successfully copied over all CoordinatorState from Legacy table to LeaseTable.
-     * Once these 2 conditions are met, leader transitions to PENDING state.
-     * This state allows rollback to DEPLOYED if there were to be any regressions.
+     * This state in DDB signifies, all workers have been deployed with phase 2
+     * cofiguration and have switched writing to workerMetricStats into lease table
+     * and the leader has moved over all other coordinatorState entries from legacy
+     * table to the lease table. This is when bake time to move to COMPLETE state starts.
+     * Locally this state is entered when phase 2 code is deployed and this indicates
+     * to workers to switch to writing all entities into lease table.
+     * In this local state workers continue to emit min support code in WorkerMetricStats
+     * written to lease table, and reads for WorkerMetricStats and CoordinatorState
+     * will from both legacy and lease table.
+     * This state allows rollback to DEPLOYED if the workers rollback to phase1
+     * deployment and switch to writing entities to the corresponding table again.
      */
     TABLE_MIGRATION_STATUS_PENDING(0L),
     /**
-     * This version indicates that table migration is completed all workers will always use lease table
-     * for all entities for both reads and writes and there is no rollback allowed once the
-     * status is COMPLETE. The bake time for this final step can be configured
-     * using {@link CoordinatorConfig.tableMigrationCompleteBakeTimeSeconds}
+     * This version indicates that table migration is completed all workers will always use
+     * lease table for all entities for both reads and writes and there is no rollback
+     * allowed once the status is COMPLETE. The bake time for this final step can be
+     * configured using {@link CoordinatorConfig.tableMigrationCompleteBakeTimeSeconds}
      */
     TABLE_MIGRATION_STATUS_COMPLETE(TableMigrationState.DEFAULT_BAKE_TIME_SECONDS);
 
