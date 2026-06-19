@@ -3,36 +3,29 @@ package software.amazon.kinesis.worker.metricstats;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import software.amazon.awssdk.core.internal.waiters.DefaultWaiterResponse;
-import software.amazon.awssdk.core.waiters.WaiterResponse;
+import org.mockito.Mockito;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbAsyncTable;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedAsyncClient;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
-import software.amazon.awssdk.services.dynamodb.model.Tag;
-import software.amazon.awssdk.services.dynamodb.model.UpdateContinuousBackupsRequest;
-import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWorkerMetricStats;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,11 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static software.amazon.awssdk.services.dynamodb.model.BillingMode.PROVISIONED;
 import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 
 class WorkerMetricsDAOTest {
@@ -57,20 +47,30 @@ class WorkerMetricsDAOTest {
     private final DynamoDbEnhancedAsyncClient dynamoDbEnhancedAsyncClient = DynamoDbEnhancedAsyncClient.builder()
             .dynamoDbClient(dynamoDbAsyncClient)
             .build();
-    private final DynamoDbAsyncTable<WorkerMetricStats> workerMetricsTable =
-            dynamoDbEnhancedAsyncClient.table(TEST_WORKER_METRICS_TABLE, TableSchema.fromBean(WorkerMetricStats.class));
+    private final DynamoDbAsyncTable<LeaseTableWorkerMetricStats> workerMetricsTable =
+            dynamoDbEnhancedAsyncClient.table(
+                    TEST_WORKER_METRICS_TABLE, TableSchema.fromBean(LeaseTableWorkerMetricStats.class));
     private WorkerMetricStatsDAO workerMetricsDAO;
 
     private void setUp() {
+        // Create the legacy worker metrics table
+        workerMetricsTable.createTable().join();
         final WorkerMetricsTableConfig tableConfig = new WorkerMetricsTableConfig(null);
-        tableConfig.tableName(TEST_WORKER_METRICS_TABLE);
         this.workerMetricsDAO = setUp(tableConfig, this.dynamoDbAsyncClient);
     }
 
     private WorkerMetricStatsDAO setUp(
             final WorkerMetricsTableConfig workerMetricsTableConfig, final DynamoDbAsyncClient dynamoDbAsyncClient) {
-        final WorkerMetricStatsDAO dao =
-                new WorkerMetricStatsDAO(dynamoDbAsyncClient, workerMetricsTableConfig, TEST_REPORTER_FREQ_MILLIS);
+        final TableMigrationStatusProvider statusProvider =
+                mock(TableMigrationStatusProvider.class, Mockito.RETURNS_MOCKS);
+        when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
+        final WorkerMetricStatsDAO dao = new WorkerMetricStatsDAO(
+                dynamoDbAsyncClient,
+                workerMetricsTableConfig,
+                TEST_WORKER_METRICS_TABLE,
+                TEST_REPORTER_FREQ_MILLIS,
+                statusProvider);
         assertDoesNotThrow(dao::initialize);
         return dao;
     }
@@ -87,80 +87,7 @@ class WorkerMetricsDAOTest {
     }
 
     @Test
-    void initialize_withDeletionProtection_assertDeletionProtection() {
-        final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig(null);
-        config.tableName(TEST_WORKER_METRICS_TABLE);
-        config.deletionProtectionEnabled(true);
-        setUp(config, dynamoDbAsyncClient);
-        final DescribeTableResponse describeTableResponse =
-                unwrappingFuture(() -> dynamoDbAsyncClient.describeTable(DescribeTableRequest.builder()
-                        .tableName(TEST_WORKER_METRICS_TABLE)
-                        .build()));
-
-        assertTrue(describeTableResponse.table().deletionProtectionEnabled());
-    }
-
-    /**
-     * DynamoDBLocal does not support PITR and tags and thus this test is using mocks.
-     */
-    @Test
-    void initialize_withTagAndPitr_assertCall() {
-        final DynamoDbAsyncWaiter waiter = mock(DynamoDbAsyncWaiter.class);
-        final WaiterResponse<?> waiterResponse = DefaultWaiterResponse.builder()
-                .response(dummyDescribeTableResponse(TableStatus.ACTIVE))
-                .attemptsExecuted(1)
-                .build();
-        when(waiter.waitUntilTableExists(any(Consumer.class), any(Consumer.class)))
-                .thenReturn(CompletableFuture.completedFuture((WaiterResponse<DescribeTableResponse>) waiterResponse));
-
-        final DynamoDbAsyncClient dbAsyncClient = mock(DynamoDbAsyncClient.class);
-        when(dbAsyncClient.waiter()).thenReturn(waiter);
-        when(dbAsyncClient.createTable(any(CreateTableRequest.class)))
-                .thenReturn(CompletableFuture.completedFuture(null));
-        when(dbAsyncClient.updateContinuousBackups(any(UpdateContinuousBackupsRequest.class)))
-                .thenReturn(CompletableFuture.completedFuture(null));
-        when(dbAsyncClient.describeTable(any(DescribeTableRequest.class)))
-                .thenThrow(ResourceNotFoundException.builder().build())
-                .thenReturn(CompletableFuture.completedFuture(dummyDescribeTableResponse(TableStatus.CREATING)))
-                .thenReturn(CompletableFuture.completedFuture(dummyDescribeTableResponse(TableStatus.ACTIVE)));
-
-        final ArgumentCaptor<CreateTableRequest> createTableRequestArgumentCaptor =
-                ArgumentCaptor.forClass(CreateTableRequest.class);
-        final ArgumentCaptor<UpdateContinuousBackupsRequest> updateContinuousBackupsRequestArgumentCaptor =
-                ArgumentCaptor.forClass(UpdateContinuousBackupsRequest.class);
-
-        final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig(null);
-        config.tableName(TEST_WORKER_METRICS_TABLE);
-        config.pointInTimeRecoveryEnabled(true);
-        config.tags(
-                Collections.singleton(Tag.builder().key("Key").value("Value").build()));
-        setUp(config, dbAsyncClient);
-
-        verify(dbAsyncClient).createTable(createTableRequestArgumentCaptor.capture());
-        verify(dbAsyncClient).updateContinuousBackups(updateContinuousBackupsRequestArgumentCaptor.capture());
-
-        assertEquals(1, createTableRequestArgumentCaptor.getValue().tags().size());
-        assertEquals(
-                "Key", createTableRequestArgumentCaptor.getValue().tags().get(0).key());
-        assertEquals(
-                "Value",
-                createTableRequestArgumentCaptor.getValue().tags().get(0).value());
-
-        assertTrue(updateContinuousBackupsRequestArgumentCaptor
-                .getAllValues()
-                .get(0)
-                .pointInTimeRecoverySpecification()
-                .pointInTimeRecoveryEnabled());
-    }
-
-    private static DescribeTableResponse dummyDescribeTableResponse(final TableStatus tableStatus) {
-        return DescribeTableResponse.builder()
-                .table(TableDescription.builder().tableStatus(tableStatus).build())
-                .build();
-    }
-
-    @Test
-    void updateStats_sanity() {
+    void updateStats_sanity() throws Exception {
         setUp();
         final WorkerMetricStats workerMetrics = createDummyWorkerMetrics(TEST_WORKER_ID);
         workerMetrics.setOperatingRange(ImmutableMap.of("C", ImmutableList.of(100L)));
@@ -233,7 +160,7 @@ class WorkerMetricsDAOTest {
     }
 
     @Test
-    void getAllWorkerMetrics_sanity() {
+    void getAllWorkerMetrics_sanity() throws Exception {
         setUp();
         populateNWorkerMetrics(10);
 
@@ -242,9 +169,14 @@ class WorkerMetricsDAOTest {
     }
 
     @Test
-    void deleteStats_sanity() {
+    void deleteStats_sanity() throws Exception {
         setUp();
         workerMetricsDAO.updateMetrics(createDummyWorkerMetrics(TEST_WORKER_ID));
+
+        assertEquals(
+                1,
+                workerMetricsDAO.getAllWorkerMetricStats().size(),
+                "WorkerMetricStatsDAO update did not create the entry");
 
         assertTrue(
                 workerMetricsDAO.deleteMetrics(createDummyWorkerMetrics(TEST_WORKER_ID)),
@@ -257,7 +189,7 @@ class WorkerMetricsDAOTest {
     }
 
     @Test
-    void deleteStats_differentLastUpdateTime_asserConditionalFailure() {
+    void deleteStats_differentLastUpdateTime_asserConditionalFailure() throws Exception {
         setUp();
         workerMetricsDAO.updateMetrics(createDummyWorkerMetrics(TEST_WORKER_ID));
 
@@ -275,27 +207,7 @@ class WorkerMetricsDAOTest {
     }
 
     @Test
-    void createProvisionedTable() {
-        final WorkerMetricsTableConfig tableConfig = new WorkerMetricsTableConfig(null);
-        tableConfig
-                .tableName(TEST_WORKER_METRICS_TABLE)
-                .billingMode(PROVISIONED)
-                .readCapacity(100L)
-                .writeCapacity(20L);
-        final WorkerMetricStatsDAO workerMetricsDAO =
-                new WorkerMetricStatsDAO(dynamoDbAsyncClient, tableConfig, 10000L);
-        assertDoesNotThrow(() -> workerMetricsDAO.initialize());
-        final DescribeTableResponse response = dynamoDbAsyncClient
-                .describeTable(DescribeTableRequest.builder()
-                        .tableName(TEST_WORKER_METRICS_TABLE)
-                        .build())
-                .join();
-        Assertions.assertEquals(20L, response.table().provisionedThroughput().writeCapacityUnits());
-        Assertions.assertEquals(100L, response.table().provisionedThroughput().readCapacityUnits());
-    }
-
-    @Test
-    void getAllWorkerMetrics_withWorkerMetricsEntryMissingFields_assertGetCallSucceeds() {
+    void getAllWorkerMetrics_withWorkerMetricsEntryMissingFields_assertGetCallSucceeds() throws Exception {
         setUp();
         workerMetricsDAO.updateMetrics(createDummyWorkerMetrics(TEST_WORKER_ID));
         createAndPutWorkerMetricsEntryAnyRandomAdditionalFieldInTable("SomeWorker2");
@@ -309,13 +221,18 @@ class WorkerMetricsDAOTest {
     }
 
     private void populateNWorkerMetrics(final int n) {
-        IntStream.range(0, n)
-                .forEach(i -> workerMetricsDAO.updateMetrics(createDummyWorkerMetrics(TEST_WORKER_ID + i)));
+        IntStream.range(0, n).forEach(i -> {
+            try {
+                workerMetricsDAO.updateMetrics(createDummyWorkerMetrics(TEST_WORKER_ID + i));
+            } catch (Exception e) {
+                assertFalse(true);
+            }
+        });
     }
 
     private WorkerMetricStats createDummyWorkerMetrics(final String workerId) {
         final long currentTime = Instant.now().getEpochSecond();
-        return WorkerMetricStats.builder()
+        return WorkerMetricStats.LeaseTableWorkerMetricStats.builder()
                 .workerId(workerId)
                 .lastUpdateTime(currentTime)
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(10D, 12D)))
@@ -327,7 +244,11 @@ class WorkerMetricsDAOTest {
         final PutItemRequest putItemRequest = PutItemRequest.builder()
                 .tableName(TEST_WORKER_METRICS_TABLE)
                 .item(ImmutableMap.of(
-                        "wid", AttributeValue.builder().s(workerId).build(),
+                        "leaseKey", AttributeValue.builder().s(workerId).build(),
+                        "entityType",
+                                AttributeValue.builder()
+                                        .s(EntityType.WORKER_METRIC_STATS.getDdbValue())
+                                        .build(),
                         "invalidField", AttributeValue.builder().s("someValue").build()))
                 .build();
 

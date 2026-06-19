@@ -14,10 +14,10 @@
  */
 package software.amazon.kinesis.coordinator.migration;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.DynamicMigrationComponentsInitializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 
@@ -27,14 +27,22 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
  * state machine and no rollbacks are supported in this state.
  */
 @KinesisClientInternalApi
-@RequiredArgsConstructor
 @Slf4j
 @ThreadSafe
-public class MigrationClientVersion3xState implements MigrationClientVersionState {
+public class MigrationClientVersion3xState extends AbstractMigrationClientVersionState {
     private final MigrationStateMachine stateMachine;
     private final DynamicMigrationComponentsInitializer initializer;
-    private boolean entered = false;
-    private boolean left = false;
+
+    public MigrationClientVersion3xState(
+            final MigrationStateMachine stateMachine,
+            final DynamicMigrationComponentsInitializer initializer,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final MigrationState migrationState,
+            final String workerIdentifier) {
+        super(migrationState, coordinatorStateDAO, workerIdentifier);
+        this.stateMachine = stateMachine;
+        this.initializer = initializer;
+    }
 
     @Override
     public ClientVersion clientVersion() {
@@ -42,14 +50,8 @@ public class MigrationClientVersion3xState implements MigrationClientVersionStat
     }
 
     @Override
-    public synchronized void enter(final ClientVersion fromClientVersion) throws DependencyException {
-        if (!entered) {
-            log.info("Entering {} from {}", this, fromClientVersion);
-            initializer.initializeClientVersionFor3x(fromClientVersion);
-            entered = true;
-        } else {
-            log.info("Not entering {}", left ? "already exited state" : "already entered state");
-        }
+    protected void doEnter(final ClientVersion fromClientVersion) throws DependencyException {
+        initializer.initializeClientVersionFor3x(fromClientVersion);
     }
 
     @Override

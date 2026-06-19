@@ -9,6 +9,7 @@ import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeP
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -102,5 +103,28 @@ class MigrationAdaptiveLeaderDeciderTest {
         // As the mode has changed, validate shutdown is called for kcl2_xLeaderDecider
         verify(kcl2xLeaderDecider, times(1)).shutdown();
         verify(kcl3xLeaderDecider, times(0)).shutdown();
+    }
+
+    @Test
+    void releaseLeadershipIfHeld_delegatesToCurrentLeaderDecider() {
+        createLeaderDecider(kcl3xLeaderDecider);
+        migrationAdaptiveLeaderDecider.releaseLeadershipIfHeld();
+        verify(kcl3xLeaderDecider, times(1)).releaseLeadershipIfHeld();
+    }
+
+    @Test
+    void releaseLeadershipIfHeld_throwsWhenUninitialized() {
+        migrationAdaptiveLeaderDecider = new MigrationAdaptiveLeaderDecider(new NullMetricsFactory());
+        assertThrows(IllegalStateException.class, () -> migrationAdaptiveLeaderDecider.releaseLeadershipIfHeld());
+    }
+
+    @Test
+    void releaseLeadershipIfHeld_afterTransition_delegatesToNewDecider() {
+        createLeaderDecider(kcl2xLeaderDecider);
+        migrationAdaptiveLeaderDecider.updateLeaderDecider(kcl3xLeaderDecider);
+        migrationAdaptiveLeaderDecider.releaseLeadershipIfHeld();
+
+        verify(kcl3xLeaderDecider, times(1)).releaseLeadershipIfHeld();
+        verify(kcl2xLeaderDecider, times(0)).releaseLeadershipIfHeld();
     }
 }

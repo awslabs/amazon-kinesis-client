@@ -19,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -44,19 +43,30 @@ import static software.amazon.kinesis.coordinator.migration.MigrationStateMachin
  * roll-forward scenario.
  */
 @KinesisClientInternalApi
-@RequiredArgsConstructor
 @Slf4j
 @ThreadSafe
-public class MigrationClientVersion2xState implements MigrationClientVersionState {
+public class MigrationClientVersion2xState extends AbstractMigrationClientVersionState {
     private final MigrationStateMachine stateMachine;
-    private final CoordinatorStateDAO coordinatorStateDAO;
     private final ScheduledExecutorService stateMachineThreadPool;
     private final DynamicMigrationComponentsInitializer initializer;
     private final Random random;
 
     private ClientVersionChangeMonitor rollForwardMonitor;
-    private boolean entered = false;
-    private boolean left = false;
+
+    public MigrationClientVersion2xState(
+            final MigrationStateMachine stateMachine,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final ScheduledExecutorService stateMachineThreadPool,
+            final DynamicMigrationComponentsInitializer initializer,
+            final Random random,
+            final MigrationState migrationState,
+            final String workerIdentifier) {
+        super(migrationState, coordinatorStateDAO, workerIdentifier);
+        this.stateMachine = stateMachine;
+        this.stateMachineThreadPool = stateMachineThreadPool;
+        this.initializer = initializer;
+        this.random = random;
+    }
 
     @Override
     public ClientVersion clientVersion() {
@@ -64,24 +74,18 @@ public class MigrationClientVersion2xState implements MigrationClientVersionStat
     }
 
     @Override
-    public synchronized void enter(final ClientVersion fromClientVersion) {
-        if (!entered) {
-            log.info("Entering {} from {}", this, fromClientVersion);
-            initializer.initializeClientVersionFor2x(fromClientVersion);
+    protected void doEnter(final ClientVersion fromClientVersion) {
+        initializer.initializeClientVersionFor2x(fromClientVersion);
 
-            log.info("Starting roll-forward monitor");
-            rollForwardMonitor = new ClientVersionChangeMonitor(
-                    initializer.metricsFactory(),
-                    coordinatorStateDAO,
-                    stateMachineThreadPool,
-                    this::onClientVersionChange,
-                    clientVersion(),
-                    random);
-            rollForwardMonitor.startMonitor();
-            entered = true;
-        } else {
-            log.info("Not entering {}", left ? "already exited state" : "already entered state");
-        }
+        log.info("Starting roll-forward monitor");
+        rollForwardMonitor = new ClientVersionChangeMonitor(
+                initializer.metricsFactory(),
+                coordinatorStateDAO,
+                stateMachineThreadPool,
+                this::onClientVersionChange,
+                clientVersion(),
+                random);
+        rollForwardMonitor.startMonitor();
     }
 
     @Override

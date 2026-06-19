@@ -60,6 +60,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
 import static software.amazon.kinesis.common.CommonCalculations.getRenewerTakerIntervalMillis;
+import static software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -299,7 +300,10 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         // KCLv3.x or applications successfully migrated to KCLv3.x, lease assignment mode will not
         // change dynamically and will always be WORKER_UTILIZATION_AWARE_ASSIGNMENT, therefore
         // don't initialize KCLv2.x lease assignment algorithm components that are not needed.
-        if (leaseAssignmentModeProvider.dynamicModeChangeSupportNeeded()) {
+        // Also start the taker when the current mode is DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT even without
+        // dynamic mode support (e.g. Phase 1 passive 2.x compatible mode).
+        if (leaseAssignmentModeProvider.dynamicModeChangeSupportNeeded()
+                || leaseAssignmentModeProvider.getLeaseAssignmentMode() == DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT) {
             // Taker runs with fixed DELAY because we want it to run slower in the event of performance degradation.
             takerFuture = leaseCoordinatorThreadPool.scheduleWithFixedDelay(
                     new TakerRunnable(leaseAssignmentModeProvider), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);

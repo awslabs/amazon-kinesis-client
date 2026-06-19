@@ -13,7 +13,7 @@ class WorkerMetricsTest {
 
     @Test
     void isAnyWorkerMetricFailing_withFailingWorkerMetric_assertTrue() {
-        final WorkerMetricStats workerMetrics = WorkerMetricStats.builder()
+        final WorkerMetricStats workerMetrics = WorkerMetricStats.LegacyWorkerMetricStats.builder()
                 .workerId("WorkerId1")
                 .lastUpdateTime(Instant.now().getEpochSecond())
                 .metricStats(ImmutableMap.of(
@@ -28,7 +28,7 @@ class WorkerMetricsTest {
 
     @Test
     void isAnyWorkerMetricFailing_withoutFailingWorkerMetric_assertFalse() {
-        final WorkerMetricStats workerMetrics = WorkerMetricStats.builder()
+        final WorkerMetricStats workerMetrics = WorkerMetricStats.LegacyWorkerMetricStats.builder()
                 .workerId("WorkerId1")
                 .lastUpdateTime(Instant.now().getEpochSecond())
                 .metricStats(ImmutableMap.of(
@@ -43,7 +43,7 @@ class WorkerMetricsTest {
 
     @Test
     void isAnyWorkerMetricFailing_withoutAnyValues_assertFalse() {
-        final WorkerMetricStats workerMetrics = WorkerMetricStats.builder()
+        final WorkerMetricStats workerMetrics = WorkerMetricStats.LegacyWorkerMetricStats.builder()
                 .workerId("WorkerId1")
                 .lastUpdateTime(Instant.now().getEpochSecond())
                 .metricStats(ImmutableMap.of("C", ImmutableList.of()))
@@ -56,16 +56,17 @@ class WorkerMetricsTest {
 
     @Test
     void isValidWorkerMetrics_sanity() {
-        final WorkerMetricStats workerMetricsEntryForDefaultWorkerMetric = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .build();
+        final WorkerMetricStats workerMetricsEntryForDefaultWorkerMetric =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .build();
 
         assertTrue(workerMetricsEntryForDefaultWorkerMetric.isValidWorkerMetric());
         assertTrue(workerMetricsEntryForDefaultWorkerMetric.isUsingDefaultWorkerMetric());
 
         final WorkerMetricStats workerMetricsEntryWithEmptyResourceMapsForDefaultWorkerMetric =
-                WorkerMetricStats.builder()
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
                         .workerId("WorkerId1")
                         .metricStats(ImmutableMap.of())
                         .operatingRange(ImmutableMap.of())
@@ -75,33 +76,36 @@ class WorkerMetricsTest {
         assertTrue(workerMetricsEntryWithEmptyResourceMapsForDefaultWorkerMetric.isValidWorkerMetric());
         assertTrue(workerMetricsEntryWithEmptyResourceMapsForDefaultWorkerMetric.isUsingDefaultWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryMissingOperatingRange = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .metricStats(ImmutableMap.of("C", ImmutableList.of()))
-                .build();
+        final WorkerMetricStats workerMetricsEntryMissingOperatingRange =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .metricStats(ImmutableMap.of("C", ImmutableList.of()))
+                        .build();
 
         assertFalse(workerMetricsEntryMissingOperatingRange.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryMissingLastUpdateTime = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
-                .build();
+        final WorkerMetricStats workerMetricsEntryMissingLastUpdateTime =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
+                        .build();
 
         assertFalse(workerMetricsEntryMissingLastUpdateTime.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryMissingResourceMetrics = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
-                .build();
+        final WorkerMetricStats workerMetricsEntryMissingResourceMetrics =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
+                        .build();
 
         assertFalse(workerMetricsEntryMissingResourceMetrics.isValidWorkerMetric());
 
         // C workerMetric has resourceStats but not operatingRange
         final WorkerMetricStats workerMetricsEntryWithMismatchWorkerStatsAndOperatingRangeKey =
-                WorkerMetricStats.builder()
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
                         .workerId("WorkerId1")
                         .lastUpdateTime(Instant.now().getEpochSecond())
                         .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
@@ -110,42 +114,46 @@ class WorkerMetricsTest {
 
         assertFalse(workerMetricsEntryWithMismatchWorkerStatsAndOperatingRangeKey.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryWithEmptyOperatingRangeValue = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of()))
-                .build();
+        final WorkerMetricStats workerMetricsEntryWithEmptyOperatingRangeValue =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of()))
+                        .build();
 
         assertFalse(workerMetricsEntryWithEmptyOperatingRangeValue.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryWithNoMetricStats = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .metricStats(ImmutableMap.of())
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
-                .build();
+        final WorkerMetricStats workerMetricsEntryWithNoMetricStats =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .metricStats(ImmutableMap.of())
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
+                        .build();
 
         assertTrue(workerMetricsEntryWithNoMetricStats.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryWithNullResourceMetrics = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
-                .build();
+        final WorkerMetricStats workerMetricsEntryWithNullResourceMetrics =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of(80L, 10L)))
+                        .build();
 
         assertFalse(workerMetricsEntryWithNullResourceMetrics.isValidWorkerMetric());
 
-        final WorkerMetricStats workerMetricsEntryWithZeroMaxUtilization = WorkerMetricStats.builder()
-                .workerId("WorkerId1")
-                .lastUpdateTime(Instant.now().getEpochSecond())
-                .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
-                .operatingRange(ImmutableMap.of("C", ImmutableList.of(0L, 10L)))
-                .build();
+        final WorkerMetricStats workerMetricsEntryWithZeroMaxUtilization =
+                WorkerMetricStats.LegacyWorkerMetricStats.builder()
+                        .workerId("WorkerId1")
+                        .lastUpdateTime(Instant.now().getEpochSecond())
+                        .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))
+                        .operatingRange(ImmutableMap.of("C", ImmutableList.of(0L, 10L)))
+                        .build();
 
         assertFalse(workerMetricsEntryWithZeroMaxUtilization.isValidWorkerMetric());
 
-        final WorkerMetricStats validWorkerMetricsEntry = WorkerMetricStats.builder()
+        final WorkerMetricStats validWorkerMetricsEntry = WorkerMetricStats.LegacyWorkerMetricStats.builder()
                 .workerId("WorkerId1")
                 .lastUpdateTime(Instant.now().getEpochSecond())
                 .metricStats(ImmutableMap.of("C", ImmutableList.of(5D, 5D)))

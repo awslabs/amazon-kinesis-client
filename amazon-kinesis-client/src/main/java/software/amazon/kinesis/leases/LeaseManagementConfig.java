@@ -617,7 +617,13 @@ public class LeaseManagementConfig {
          * billing mode, provisioned capacity. If no table name is specified, the table name will
          * default to applicationName-WorkerMetricStats. If no billing more is chosen, default is
          * On-Demand.
+         * @deprecated KCL no longer creates a separate WorkerMetrics table for new migrations to 3.x
+         * and for new applications on latest 3.x. Refer to Kinesis Data Streams docs for Single Table Format.
+         * Existing 3.x applications which already have created the table will continue to use this config
+         * to access the table. It is recommended to follow Table Migration guide to move to a single
+         * table.
          */
+        @Deprecated
         private WorkerMetricsTableConfig workerMetricsTableConfig;
 
         /**

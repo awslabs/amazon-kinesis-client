@@ -975,4 +975,310 @@ class DynamoDBLeaseRefresherTest {
 
         dynamoDbAsyncClient.putItem(putItemRequest);
     }
+
+    @Test
+    void listLeases_returnsAllLeases_whenNoLimitSpecified()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "owner1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "owner2"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease3", "owner3"));
+
+        List<Lease> result = leaseRefresher.listLeases();
+
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void listLeases_withLimit_returnsOnlyLimitedLeases()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "owner1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "owner2"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease3", "owner3"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease4", "owner4"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease5", "owner5"));
+
+        List<Lease> result = leaseRefresher.list(2, null);
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void listLeases_withLimitGreaterThanTotal_returnsAllLeases()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "owner1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "owner2"));
+
+        List<Lease> result = leaseRefresher.list(10, null);
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void listLeases_withLimit1_returnsExactlyOneLease()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "owner1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "owner2"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease3", "owner3"));
+
+        List<Lease> result = leaseRefresher.list(1, null);
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void isLeaseTableEmpty_returnsTrue_whenTableIsEmpty()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+
+        assertTrue(leaseRefresher.isLeaseTableEmpty());
+    }
+
+    @Test
+    void isLeaseTableEmpty_returnsFalse_whenTableHasLeases()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "owner1"));
+
+        assertFalse(leaseRefresher.isLeaseTableEmpty());
+    }
+
+    @Test
+    void isLeaseTableEmpty_returnsFalse_whenNonLeaseEntitiesOnFirstPageAndLeaseOnSecondPage()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        // Simulate a table with non-lease entities (e.g. WorkerMetricStats, CoordinatorState)
+        // returned on the first page, and the actual lease on the second page.
+        // The do-while loop must paginate past non-lease entities to find the lease.
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        DynamoDBLeaseSerializer serializer = new DynamoDBLeaseSerializer();
+
+        DynamoDBLeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                serializer,
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                false,
+                false,
+                new ArrayList<>());
+
+        // Non-lease entities: items with entityType != "LEASE" (e.g. "WORKER_METRIC_STATS", "COORDINATOR_STATE")
+        // fromDynamoRecord returns null for these, so they don't count toward the limit
+        Map<String, AttributeValue> workerMetricStatsItem = ImmutableMap.of(
+                "leaseKey",
+                        AttributeValue.builder()
+                                .s("AAA_workerMetricStats_worker1")
+                                .build(),
+                "entityType", AttributeValue.builder().s("WORKER_METRIC_STATS").build());
+        Map<String, AttributeValue> coordinatorStateItem = ImmutableMap.of(
+                "leaseKey",
+                        AttributeValue.builder().s("AAA_coordinatorState_key1").build(),
+                "entityType", AttributeValue.builder().s("COORDINATOR_STATE").build());
+
+        // Actual lease item on the second page
+        Map<String, AttributeValue> leaseItem = serializer.toDynamoRecord(createDummyLease("zzz_lease1", "owner1"));
+
+        // Page 1: only non-lease entities, has more pages
+        ScanResponse page1 = ScanResponse.builder()
+                .items(workerMetricStatsItem, coordinatorStateItem)
+                .lastEvaluatedKey(ImmutableMap.of(
+                        "leaseKey",
+                        AttributeValue.builder().s("AAA_coordinatorState_key1").build()))
+                .build();
+
+        // Page 2: the actual lease
+        ScanResponse page2 = ScanResponse.builder().items(leaseItem).build();
+
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(page1))
+                .thenReturn(CompletableFuture.completedFuture(page2));
+
+        // isLeaseTableEmpty uses list(1, null) - must paginate past non-lease entities
+        assertFalse(leaseRefresher.isLeaseTableEmpty());
+        // Verify both pages were fetched
+        verify(mockDdbClient, times(2)).scan(any(ScanRequest.class));
+    }
+
+    @Test
+    void isLeaseTableEmpty_returnsTrue_whenOnlyNonLeaseEntitiesExist()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        // Table has only non-lease entities (WorkerMetricStats, CoordinatorState).
+        // isLeaseTableEmpty should return true because no actual leases exist.
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        DynamoDBLeaseSerializer serializer = new DynamoDBLeaseSerializer();
+
+        DynamoDBLeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                serializer,
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                false,
+                false,
+                new ArrayList<>());
+
+        Map<String, AttributeValue> workerMetricStatsItem = ImmutableMap.of(
+                "leaseKey",
+                        AttributeValue.builder()
+                                .s("AAA_workerMetricStats_worker1")
+                                .build(),
+                "entityType", AttributeValue.builder().s("WORKER_METRIC_STATS").build());
+        Map<String, AttributeValue> coordinatorStateItem = ImmutableMap.of(
+                "leaseKey",
+                        AttributeValue.builder().s("AAA_coordinatorState_key1").build(),
+                "entityType", AttributeValue.builder().s("COORDINATOR_STATE").build());
+
+        // Single page with only non-lease entities, no more pages
+        ScanResponse page1 = ScanResponse.builder()
+                .items(workerMetricStatsItem, coordinatorStateItem)
+                .build();
+
+        when(mockDdbClient.scan(any(ScanRequest.class))).thenReturn(CompletableFuture.completedFuture(page1));
+
+        assertTrue(leaseRefresher.isLeaseTableEmpty());
+        verify(mockDdbClient, times(1)).scan(any(ScanRequest.class));
+    }
+
+    @Test
+    void listLeases_paginatesAcrossMultiplePages_returnsAllLeases()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        // Use mocks to simulate DDB pagination with lastEvaluatedKey
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        DynamoDBLeaseSerializer serializer = new DynamoDBLeaseSerializer();
+
+        DynamoDBLeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                serializer,
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                false,
+                false,
+                new ArrayList<>());
+
+        Map<String, AttributeValue> item1 = serializer.toDynamoRecord(createDummyLease("lease1", "owner1"));
+        Map<String, AttributeValue> item2 = serializer.toDynamoRecord(createDummyLease("lease2", "owner2"));
+        Map<String, AttributeValue> item3 = serializer.toDynamoRecord(createDummyLease("lease3", "owner3"));
+
+        ScanResponse page1 = ScanResponse.builder()
+                .items(item1, item2)
+                .lastEvaluatedKey(ImmutableMap.of(
+                        "leaseKey", AttributeValue.builder().s("lease2").build()))
+                .build();
+        ScanResponse page2 = ScanResponse.builder().items(item3).build();
+
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(page1))
+                .thenReturn(CompletableFuture.completedFuture(page2));
+
+        List<Lease> result = leaseRefresher.listLeases();
+
+        assertEquals(3, result.size());
+        verify(mockDdbClient, times(2)).scan(any(ScanRequest.class));
+    }
+
+    @Test
+    void listLeases_paginationStopsWhenLimitReached_doesNotFetchNextPage()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        // Use mocks to simulate DDB pagination and verify limit stops pagination
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        DynamoDBLeaseSerializer serializer = new DynamoDBLeaseSerializer();
+
+        DynamoDBLeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                serializer,
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                false,
+                false,
+                new ArrayList<>());
+
+        Map<String, AttributeValue> item1 = serializer.toDynamoRecord(createDummyLease("lease1", "owner1"));
+        Map<String, AttributeValue> item2 = serializer.toDynamoRecord(createDummyLease("lease2", "owner2"));
+        Map<String, AttributeValue> item3 = serializer.toDynamoRecord(createDummyLease("lease3", "owner3"));
+
+        // Page 1 has 2 items and indicates more pages
+        ScanResponse page1 = ScanResponse.builder()
+                .items(item1, item2)
+                .lastEvaluatedKey(ImmutableMap.of(
+                        "leaseKey", AttributeValue.builder().s("lease2").build()))
+                .build();
+        ScanResponse page2 = ScanResponse.builder().items(item3).build();
+
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(page1))
+                .thenReturn(CompletableFuture.completedFuture(page2));
+
+        // Limit=2 should be satisfied on first page, no second scan
+        List<Lease> result = leaseRefresher.list(2, null);
+
+        assertEquals(2, result.size());
+        verify(mockDdbClient, times(1)).scan(any(ScanRequest.class));
+    }
+
+    @Test
+    void listLeases_paginationContinuesAcrossPages_untilLimitReached()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        // Use mocks to verify pagination continues until limit is satisfied
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        DynamoDBLeaseSerializer serializer = new DynamoDBLeaseSerializer();
+
+        DynamoDBLeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                serializer,
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                false,
+                false,
+                new ArrayList<>());
+
+        Map<String, AttributeValue> item1 = serializer.toDynamoRecord(createDummyLease("lease1", "owner1"));
+        Map<String, AttributeValue> item2 = serializer.toDynamoRecord(createDummyLease("lease2", "owner2"));
+        Map<String, AttributeValue> item3 = serializer.toDynamoRecord(createDummyLease("lease3", "owner3"));
+
+        // 1 item per page, 3 pages total
+        ScanResponse page1 = ScanResponse.builder()
+                .items(item1)
+                .lastEvaluatedKey(ImmutableMap.of(
+                        "leaseKey", AttributeValue.builder().s("lease1").build()))
+                .build();
+        ScanResponse page2 = ScanResponse.builder()
+                .items(item2)
+                .lastEvaluatedKey(ImmutableMap.of(
+                        "leaseKey", AttributeValue.builder().s("lease2").build()))
+                .build();
+        ScanResponse page3 = ScanResponse.builder().items(item3).build();
+
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(page1))
+                .thenReturn(CompletableFuture.completedFuture(page2))
+                .thenReturn(CompletableFuture.completedFuture(page3));
+
+        // Limit=2, needs 2 pages (1 item each)
+        List<Lease> result = leaseRefresher.list(2, null);
+
+        assertEquals(2, result.size());
+        verify(mockDdbClient, times(2)).scan(any(ScanRequest.class));
+    }
 }

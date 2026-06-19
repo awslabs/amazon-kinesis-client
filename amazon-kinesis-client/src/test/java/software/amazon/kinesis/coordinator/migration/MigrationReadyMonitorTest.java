@@ -446,7 +446,7 @@ public class MigrationReadyMonitorTest {
                                         null))
                                 .collect(Collectors.toList()),
                         IntStream.range(0, 10)
-                                .mapToObj(i -> WorkerMetricStats.builder()
+                                .mapToObj(i -> WorkerMetricStats.LegacyWorkerMetricStats.builder()
                                         .workerId("MigrationReadyMonitorTestWorker" + i)
                                         .lastUpdateTime(ACTIVE_WORKER_STATS_LAST_UPDATE_TIME)
                                         .build())
@@ -482,7 +482,7 @@ public class MigrationReadyMonitorTest {
                 new TestData(
                         TEST_DATA_MAP.get(TestDataType.WORKER_READY_CONDITION_MET).leaseList,
                         IntStream.range(0, 10)
-                                .mapToObj(i -> WorkerMetricStats.builder()
+                                .mapToObj(i -> WorkerMetricStats.LegacyWorkerMetricStats.builder()
                                         .workerId("MigrationReadyMonitorTestWorker" + i)
                                         .lastUpdateTime(EXPIRED_WORKER_STATS_LAST_UPDATE_TIME)
                                         .build())
@@ -493,7 +493,7 @@ public class MigrationReadyMonitorTest {
                 new TestData(
                         TEST_DATA_MAP.get(TestDataType.WORKER_READY_CONDITION_MET).leaseList,
                         IntStream.range(0, 10)
-                                .mapToObj(i -> WorkerMetricStats.builder()
+                                .mapToObj(i -> WorkerMetricStats.LegacyWorkerMetricStats.builder()
                                         .workerId("MigrationReadyMonitorTestWorker" + i)
                                         .lastUpdateTime(
                                                 random.nextDouble() > 0.5
@@ -528,7 +528,7 @@ public class MigrationReadyMonitorTest {
 
         final ArrayList<WorkerMetricStats> newWorkerMetrics =
                 new ArrayList<>(TEST_DATA_MAP.get(TestDataType.WORKER_READY_CONDITION_MET).workerMetrics);
-        newWorkerMetrics.add(WorkerMetricStats.builder()
+        newWorkerMetrics.add(WorkerMetricStats.LegacyWorkerMetricStats.builder()
                 .workerId("ExpiredLeaseWorker")
                 .lastUpdateTime(EXPIRED_WORKER_STATS_LAST_UPDATE_TIME)
                 .build());

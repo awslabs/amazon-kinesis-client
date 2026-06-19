@@ -14,513 +14,446 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import java.time.Duration;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.concurrent.ThreadSafe;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonDynamoDBLockClientOptionsBuilder;
-import com.google.common.collect.ImmutableMap;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.MapUtils;
-import software.amazon.awssdk.core.waiters.WaiterResponse;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
-import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
-import software.amazon.awssdk.services.dynamodb.model.BillingMode;
-import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.CreateTableResponse;
-import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
-import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
-import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
-import software.amazon.awssdk.services.dynamodb.model.KeyType;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
-import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
-import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
-import software.amazon.awssdk.services.dynamodb.model.TableDescription;
-import software.amazon.awssdk.services.dynamodb.model.TableStatus;
-import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
-import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
-import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
-import software.amazon.kinesis.coordinator.migration.MigrationState;
-import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
-import software.amazon.kinesis.leases.DynamoUtils;
+import software.amazon.kinesis.coordinator.delegate.CoordinatorStateDAODelegate;
+import software.amazon.kinesis.coordinator.delegate.LeaseTableCoordinatorStateDAODelegate;
+import software.amazon.kinesis.coordinator.delegate.LegacyTableCoordinatorStateDAODelegate;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.utils.DdbUtil;
-
-import static java.util.Objects.nonNull;
-import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
-import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
 
 /**
- * Data Access Object to abstract accessing {@link CoordinatorState} from
- * the CoordinatorState DDB table.
+ * Data Access Object that routes {@link CoordinatorState} operations to the appropriate
+ * DDB table based on the current {@link TableMigrationStatus}.
+ *
+ * <h2>Read Logic</h2>
+ * <ul>
+ *   <li>If status != COMPLETE: read from legacy table first; if found, return it. Otherwise read from lease table.
+ *       The legacy delegate handles the case where the table doesn't exist (returns null/empty).</li>
+ *   <li>If status == COMPLETE: read only from lease table.</li>
+ * </ul>
+ *
+ * <h2>Write Logic</h2>
+ * <ul>
+ *   <li>cache table migration startup upon initialize(). </li>
+ *   <li>If cachedStatus == COMPLETE or PENDING: write to lease table only.</li>
+ *   <li>If cachedStatus == INIT or DEPLOYED: write to legacy table only.</li>
+ * </ul>
+ *
+ * The difference between read and write are:
+ * 1. Reads are merged from both tables while writes go only to one table. This is
+ *    because when status is INIT/DEPLOYED, the application could be on a rollback
+ *    + rollforward path, so even if application is currently writing to
+ *    Legacy table, in the past workers may have written to Lease table. So its safer
+ *    to read both until the final transition to COMPLETED.
+ * 2. Reads dynamically flip on completed state, but wokers flip to Lease table
+ *    when it reboots. This is to ensure the worker writes move as the deployment
+ *    progresses in the cluster fleet.
+ *
+ * <h2>Special Cases</h2>
+ * <ul>
+ *   <li>The table migration state machine directly uses the {@link #leaseTableDaoDelegate} field
+ *       for its reads/writes and sets the {@link TableMigrationStatusProvider} before calling initialize().</li>
+ *   <li>All operations require {@link #initialize()} to have been called first.</li>
+ * </ul>
+ *
+ * <h2>Lock Client</h2>
+ * The lock client options builder routes based on status:
+ * <ul>
+ *   <li>COMPLETE: lease table lock</li>
+ *   <li>All others (INIT, DEPLOYED, PENDING, UNKNOWN): legacy table lock</li>
+ * </ul>
+ * During transition from PENDING to COMPLETE, its possible workers that are caught up to COMPLETE
+ * state will grab lock from lease table however those that grab the lock when their local state
+ * is still PENDING will grab from the legacy lock. However TableMigrationStateMachine guarantees
+ * that it performs a post leadership acquire check where if the local state is different from the
+ * DDB state it will force the lock to be relinquished and then return false to is caller on
+ * isLeader method. The next isLeader call will use the COMPLETED status to grab the lock correctly.
+ * Given that you can never rollback from COMPLETED means that we dont have a rollback scenario
+ * to handle correct lock acquision that guarantees only a single leader at a time. Refer to
+ * {@link TableMigrationStateMachine.handleLeaderLockResult}
+ *
+ * <h2>TODO</h2>
+ * Update and delete operations currently route based on the table migration status which may not
+ * match where the entry was originally read from. If a caller reads from legacy but the status
+ * transitions to PENDING/COMPLETE before the update, the update targets the lease table where
+ * the entry may not yet exist. Consider tracking read-source per entry and routing to the
+ * appropriate delegate based on the source. For now, the routing is best-effort and
+ * callers that perform read-then-update must handle conditional check failures gracefully.
+ * There is no usecase for an update coordinator state except for the migration state and
+ * table migration state. Table Migration state is always updated from state machine using
+ * appropriate delegate class directly and never through this DOA.
+ * For more details refer to TableMigrationStateMachine.
+ * And for migration state the assumption is both state machines are not running concurrently.
  */
 @Slf4j
 @KinesisClientInternalApi
+@ThreadSafe
 public class CoordinatorStateDAO {
+
     private final DynamoDbAsyncClient dynamoDbAsyncClient;
-    private final DynamoDbClient dynamoDbSyncClient;
+    private final LeaseTableCoordinatorStateDAODelegate leaseTableDaoDelegate;
+    private final LegacyTableCoordinatorStateDAODelegate legacyTableDaoDelegate;
+    private final TableMigrationStatusProvider tableMigrationStatusProvider;
+    private volatile TableMigrationStatus cachedStatus;
+    private volatile boolean initialized;
 
-    private final CoordinatorStateTableConfig config;
+    public LegacyTableCoordinatorStateDAODelegate getLegacyTableDaoDelegate() {
+        return legacyTableDaoDelegate;
+    }
 
-    private static final String ENTITY_TYPE = "entityType";
-    private static final String DDB_ENTITY_TYPE = ":entityType";
+    public LeaseTableCoordinatorStateDAODelegate getLeaseTableDaoDelegate() {
+        return leaseTableDaoDelegate;
+    }
 
     public CoordinatorStateDAO(
-            final DynamoDbAsyncClient dynamoDbAsyncClient, final CoordinatorStateTableConfig config) {
+            final DynamoDbAsyncClient dynamoDbAsyncClient,
+            final CoordinatorStateTableConfig coordinatorStateTableConfig,
+            final String leaseTableName,
+            final TableMigrationStatusProvider tableMigrationStatusProvider) {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
-        this.config = config;
-        this.dynamoDbSyncClient = createDelegateClient();
-    }
-
-    public void initialize() throws DependencyException {
-        createTableIfNotExists();
-    }
-
-    private DynamoDbClient createDelegateClient() {
-        return new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient);
-    }
-
-    public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder() {
-        return AmazonDynamoDBLockClientOptions.builder(dynamoDbSyncClient, config.tableName())
-                .withPartitionKeyName(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME);
+        this.leaseTableDaoDelegate = new LeaseTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, leaseTableName);
+        this.legacyTableDaoDelegate =
+                new LegacyTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, coordinatorStateTableConfig);
+        this.tableMigrationStatusProvider = tableMigrationStatusProvider;
+        this.initialized = false;
     }
 
     /**
-     * List all the {@link CoordinatorState} from the DDB table synchronously
+     * Initialize the delegates for read operations. This must be called early in startup
+     * (before the TableMigrationStatusProvider is initialized) so that reads can work
+     * during the table migration state machine bootstrap.
      *
-     * @throws DependencyException if DynamoDB scan fails in an unexpected way
-     * @throws InvalidStateException if ddb table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     * The legacy delegate checks if the table exists and disables itself if not.
+     * This breaks the circular dependency: delegates can serve reads before the
+     * TableMigrationStatusProvider knows the final status.
      *
-     * @return list of state
+     * @throws DependencyException if unable to determine legacy table existence
      */
-    public List<CoordinatorState> listCoordinatorState()
-            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
-        log.debug("Listing coordinatorState");
+    public void initializeDelegates() throws DependencyException {
+        legacyTableDaoDelegate.initialize();
+        leaseTableDaoDelegate.initialize();
+        log.info("CoordinatorStateDAO delegates initialized. Legacy enabled: {}", legacyTableDaoDelegate.isEnabled());
+    }
 
-        final ScanRequest request =
-                ScanRequest.builder().tableName(config.tableName()).build();
-
-        try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(request));
-            final List<CoordinatorState> stateList = new ArrayList<>();
-            while (Objects.nonNull(response)) {
-                log.debug("Scan response {}", response);
-
-                response.items().stream().map(this::fromDynamoRecord).forEach(stateList::add);
-                if (!CollectionUtils.isNullOrEmpty(response.lastEvaluatedKey())) {
-                    final ScanRequest continuationRequest = request.toBuilder()
-                            .exclusiveStartKey(response.lastEvaluatedKey())
-                            .build();
-                    log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
-                } else {
-                    log.debug("Scan finished");
-                    response = null;
-                }
-            }
-            return stateList;
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
-                            + " on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
+    /**
+     * Initialize the DAO for write operations. Must be called after
+     * {@link #initializeDelegates()} and after the TableMigrationStatusProvider
+     * has moved past UNKNOWN.
+     *
+     * @throws InvalidStateException if the TableMigrationStatusProvider is still UNKNOWN
+     */
+    public void initialize() throws InvalidStateException {
+        if (initialized) {
+            log.info("CoordinatorStateDAO already initialized");
+            return;
+        }
+        cachedStatus = tableMigrationStatusProvider.getTableMigrationStatus();
+        if (cachedStatus == TableMigrationStatus.TABLE_MIGRATION_STATUS_UNKNOWN) {
             throw new InvalidStateException(
-                    String.format("Cannot list coordinatorState, because table %s does not exist", config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
+                    "Cannot initialize CoordinatorStateDAO: TableMigrationStatusProvider is still UNKNOWN");
         }
+        initialized = true;
+        log.info("CoordinatorStateDAO initialized for writes with cached migration status: {}", cachedStatus);
     }
 
-    /**
-     * List all the {@link CoordinatorState} from the DDB table synchronously
-     *
-     * @throws DependencyException if DynamoDB scan fails in an unexpected way
-     * @throws InvalidStateException if ddb table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
-     *
-     * @return list of state
-     */
-    public List<CoordinatorState> listCoordinatorStateByEntityType(String entityType)
-            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
-        log.debug("Listing coordinatorState");
-
-        final Map<String, AttributeValue> expressionAttributeValues = ImmutableMap.of(
-                DDB_ENTITY_TYPE, AttributeValue.builder().s(entityType).build());
-
-        ScanRequest scanRequest = ScanRequest.builder()
-                .tableName(config.tableName())
-                .filterExpression(ENTITY_TYPE + " = " + DDB_ENTITY_TYPE)
-                .expressionAttributeValues(expressionAttributeValues)
-                .build();
-
-        try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(scanRequest));
-            final List<CoordinatorState> stateList = new ArrayList<>();
-
-            while (Objects.nonNull(response)) {
-                log.debug("Scan response {}", response);
-                response.items().stream().map(this::fromDynamoRecord).forEach(stateList::add);
-
-                if (!CollectionUtils.isNullOrEmpty(response.lastEvaluatedKey())) {
-                    final ScanRequest continuationRequest = scanRequest.toBuilder()
-                            .exclusiveStartKey(response.lastEvaluatedKey())
-                            .build();
-                    log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
-                } else {
-                    log.debug("Scan finished");
-                    response = null;
-                }
-            }
-            return stateList;
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
-            throw new InvalidStateException(
-                    String.format("Cannot list coordinatorState, because table %s does not exist", config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
-        }
-    }
+    // ==================== Read Operations ====================
+    // Reads are always allowed after DAO is initialization
+    // The legacy delegate handles the disabled case internally (returns null/empty).
 
     /**
-     * Create a new {@link CoordinatorState} if it does not exist.
-     * @param state the state to create
-     * @return true if state was created, false if it already exists
+     * Get a single {@link CoordinatorState} by key.
+     * Uses the fallback read pattern: if status != COMPLETE, tries legacy first then lease table.
+     * If status == COMPLETE, reads only from lease table.
      *
-     * @throws DependencyException if DynamoDB put fails in an unexpected way
-     * @throws InvalidStateException if lease table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB put fails due to lack of capacity
-     */
-    public boolean createCoordinatorStateIfNotExists(final CoordinatorState state)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        log.debug("Creating coordinatorState {}", state);
-
-        final PutItemRequest request = PutItemRequest.builder()
-                .tableName(config.tableName())
-                .item(toDynamoRecord(state))
-                .expected(getDynamoNonExistentExpectation())
-                .build();
-
-        try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.putItem(request));
-        } catch (final ConditionalCheckFailedException e) {
-            log.info("Not creating coordinator state because the key already exists");
-            return false;
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
-                            + " on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
-            throw new InvalidStateException(String.format(
-                    "Cannot create coordinatorState %s, because table %s does not exist", state, config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
-        }
-
-        log.info("Created CoordinatorState: {}", state);
-        return true;
-    }
-
-    /**
-     * @param key Get the CoordinatorState for this key
-     *
-     * @throws InvalidStateException if ddb table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
-     * @throws DependencyException if DynamoDB get fails in an unexpected way
-     *
-     * @return state for the specified key, or null if one doesn't exist
+     * @param key the coordinator state key
+     * @return the state, or null if not found in any table
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if a required table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
      */
     public CoordinatorState getCoordinatorState(@NonNull final String key)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        log.debug("Getting coordinatorState with key {}", key);
-
-        final GetItemRequest request = GetItemRequest.builder()
-                .tableName(config.tableName())
-                .key(getCoordinatorStateKey(key))
-                .consistentRead(true)
-                .build();
-
-        try {
-            final GetItemResponse result = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.getItem(request));
-
-            final Map<String, AttributeValue> dynamoRecord = result.item();
-            if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
-                log.debug("No coordinatorState found with key {}, returning null.", key);
-                return null;
-            }
-            return fromDynamoRecord(dynamoRecord);
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
-                            + " on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
-            throw new InvalidStateException(String.format(
-                    "Cannot get coordinatorState for key %s, because table %s does not exist",
-                    key, config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
+        ensureInitialized();
+        if (isTableMigrationComplete()) {
+            return leaseTableDaoDelegate.getCoordinatorState(key);
         }
+
+        // Try legacy first (returns null if disabled), fallback to lease table
+        final CoordinatorState legacyResult = legacyTableDaoDelegate.getCoordinatorState(key);
+        if (legacyResult != null) {
+            return legacyResult;
+        }
+        return leaseTableDaoDelegate.getCoordinatorState(key);
     }
 
     /**
-     * Create a new {@link CoordinatorState} if it does not exist.
-     * @param key the key to delete
-     * @return true if state was deleted, false if you cannot be deleted
+     * List all coordinator states.
+     * Uses the fallback read pattern with merge: if status != COMPLETE, reads from both tables.
+     * Based on the write implementation there should not be any duplicate, if there is, it should
+     * be identical and all copies are returned to the caller without deduplication.
      *
-     * @throws DependencyException if DynamoDB delete fails in an unexpected way
-     * @throws InvalidStateException if lease table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB delete fails due to lack of capacity
+     * @return list of all coordinator states
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if a required table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
      */
-    public boolean deleteCoordinatorState(@NonNull final String key)
-            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        log.debug("Deleting item with key {}", key);
-        final DeleteItemRequest request = DeleteItemRequest.builder()
-                .tableName(config.tableName())
-                .key(getCoordinatorStateKey(key))
-                .build();
-        try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.deleteItem(request));
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
-                            + " on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
-            throw new InvalidStateException(String.format(
-                    "Cannot delete coordinatorState for key %s, because table %s does not exist",
-                    key, config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
+    public List<CoordinatorState> listCoordinatorState()
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        ensureInitialized();
+        if (isTableMigrationComplete()) {
+            return leaseTableDaoDelegate.listCoordinatorState();
         }
-        log.debug("Coordinator state deleted {}", key);
-        return true;
+
+        // Legacy returns empty list if disabled
+        final List<CoordinatorState> result = new ArrayList<>(legacyTableDaoDelegate.listCoordinatorState());
+        result.addAll(leaseTableDaoDelegate.listCoordinatorState());
+
+        return result;
     }
 
     /**
-     * Update fields of the given coordinator state in DynamoDB. Conditional on the provided expectation.
+     * List coordinator states by entity type.
      *
-     * @return true if update succeeded, false otherwise when expectations are not met
+     * @param entityType the entity type to filter by
+     * @return list of matching coordinator states for the given entityType
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if a required table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
+     */
+    public List<CoordinatorState> listCoordinatorStateByEntityType(final EntityType.CoordinatorStateType entityType)
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        ensureInitialized();
+
+        if (isTableMigrationComplete()) {
+            return leaseTableDaoDelegate.listCoordinatorStateByEntityType(entityType);
+        }
+
+        final List<CoordinatorState> result =
+                new ArrayList<>(legacyTableDaoDelegate.listCoordinatorStateByEntityType(entityType));
+        result.addAll(leaseTableDaoDelegate.listCoordinatorStateByEntityType(entityType));
+        return result;
+    }
+
+    // ==================== Write Operations ====================
+    // Writes require initialization and dont dynamically flip the table target, it only
+    // initializes on startup.
+
+    /**
+     * Create a coordinator state if it does not already exist.
      *
-     * @throws InvalidStateException if table does not exist
-     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
-     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     * @param state the state to create
+     * @return true if created, false if the key already exists
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if not initialized or table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
+     */
+    public boolean createCoordinatorStateIfNotExists(@NonNull final CoordinatorState state)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        ensureInitialized();
+        return getWriteDelegate().createCoordinatorStateIfNotExists(state);
+    }
+
+    /**
+     * Update a coordinator state with expectations.
+     *
+     * @param state the state to update
+     * @param expectations conditional expectations for the update
+     * @return true if updated, false if expectations not met
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if not initialized or table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
      */
     public boolean updateCoordinatorStateWithExpectation(
             @NonNull final CoordinatorState state, final Map<String, ExpectedAttributeValue> expectations)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final Map<String, ExpectedAttributeValue> expectationMap = getDynamoExistentExpectation(state.getKey());
-        expectationMap.putAll(MapUtils.emptyIfNull(expectations));
-
-        final Map<String, AttributeValueUpdate> updateMap = getDynamoCoordinatorStateUpdate(state);
-
-        final UpdateItemRequest request = UpdateItemRequest.builder()
-                .tableName(config.tableName())
-                .key(getCoordinatorStateKey(state.getKey()))
-                .expected(expectationMap)
-                .attributeUpdates(updateMap)
-                .build();
-
-        try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
-        } catch (final ConditionalCheckFailedException e) {
-            log.debug("CoordinatorState update {} failed because conditions were not met", state);
-            return false;
-        } catch (final ProvisionedThroughputExceededException e) {
-            log.warn(
-                    "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
-                            + " on the table.",
-                    config.tableName());
-            throw new ProvisionedThroughputException(e);
-        } catch (final ResourceNotFoundException e) {
-            throw new InvalidStateException(String.format(
-                    "Cannot update coordinatorState for key %s, because table %s does not exist",
-                    state.getKey(), config.tableName()));
-        } catch (final DynamoDbException e) {
-            throw new DependencyException(e);
-        }
-
-        log.info("Coordinator state updated {}", state);
-        return true;
+        ensureInitialized();
+        // TODO: Update routing may not match where the entry was read from if status changed.
+        // Callers must handle conditional check failures and retry.
+        return getWriteDelegate().updateCoordinatorStateWithExpectation(state, expectations);
     }
 
-    private void createTableIfNotExists() throws DependencyException {
-        TableDescription tableDescription = getTableDescription();
-        if (tableDescription == null) {
-            final CreateTableResponse response = unwrappingFuture(() -> dynamoDbAsyncClient.createTable(getRequest()));
-            tableDescription = response.tableDescription();
-            log.info("DDB Table: {} created", config.tableName());
-        } else {
-            log.info("Skipping DDB table {} creation as it already exists", config.tableName());
+    /**
+     * Delete a coordinator state by key.
+     *
+     * @param key the key to delete
+     * @return true if deleted
+     * @throws DependencyException if DDB fails unexpectedly
+     * @throws InvalidStateException if not initialized or table does not exist
+     * @throws ProvisionedThroughputException if DDB lacks capacity
+     */
+    public boolean deleteCoordinatorState(@NonNull final String key)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        ensureInitialized();
+        // TODO: Delete routing may not match where the entry exists. Same concern as update.
+        return getWriteDelegate().deleteCoordinatorState(key);
+    }
+
+    // ==================== Lock Client ====================
+
+    private AmazonDynamoDBLockClient leaseTableLockClient;
+    private AmazonDynamoDBLockClient legacyTableLockClient;
+
+    /**
+     * Initialize the DDB lock clients for leader election. Creates lock clients for both
+     * the legacy table and the lease table, unless migration is already COMPLETE (in which
+     * case only the lease table lock client is created).
+     *
+     * <p>The lock clients have background heartbeat threads that keep acquired locks alive.
+     * An idle lock client (one that hasn't acquired a lock) will have a running heartbeat
+     * thread but it will be effectively a no-op since there are no locks to heartbeat.</p>
+     *
+     * <p>This method is called once during startup and is not thread-safe with respect to
+     * concurrent calls. It must be called before any calls to {@link #getDDBLockClient()}.</p>
+     *
+     * @param leaseDurationMillis the lock lease duration in milliseconds
+     * @param heartbeatPeriodMillis the heartbeat period in milliseconds
+     * @param workerId the owner name for the lock
+     */
+    public void initializeLockClients(
+            final long leaseDurationMillis, final long heartbeatPeriodMillis, final String workerId) {
+        leaseTableLockClient = new AmazonDynamoDBLockClient(leaseTableDaoDelegate
+                .getDDBLockClientOptionsBuilder()
+                .withTimeUnit(TimeUnit.MILLISECONDS)
+                .withLeaseDuration(leaseDurationMillis)
+                .withHeartbeatPeriod(heartbeatPeriodMillis)
+                .withCreateHeartbeatBackgroundThread(true)
+                .withOwnerName(workerId)
+                .build());
+
+        if (!isTableMigrationComplete()) {
+            legacyTableLockClient = new AmazonDynamoDBLockClient(legacyTableDaoDelegate
+                    .getDDBLockClientOptionsBuilder()
+                    .withTimeUnit(TimeUnit.MILLISECONDS)
+                    .withLeaseDuration(leaseDurationMillis)
+                    .withHeartbeatPeriod(heartbeatPeriodMillis)
+                    .withCreateHeartbeatBackgroundThread(true)
+                    .withOwnerName(workerId)
+                    .build());
         }
 
-        if (tableDescription.tableStatus() != TableStatus.ACTIVE) {
-            log.info("Waiting for DDB Table: {} to become active", config.tableName());
-            try (final DynamoDbAsyncWaiter waiter = dynamoDbAsyncClient.waiter()) {
-                final WaiterResponse<DescribeTableResponse> response =
-                        unwrappingFuture(() -> waiter.waitUntilTableExists(
-                                r -> r.tableName(config.tableName()), o -> o.waitTimeout(Duration.ofMinutes(10))));
-                response.matched()
-                        .response()
-                        .orElseThrow(() -> new DependencyException(new IllegalStateException(
-                                "Creating CoordinatorState table timed out",
-                                response.matched().exception().orElse(null))));
+        log.info(
+                "Lock clients initialized. LeaseTable lock client: created, Legacy lock client: {}",
+                legacyTableLockClient != null ? "created" : "not created (migration already complete)");
+    }
+
+    /**
+     * Get the active DDB lock client based on the current table migration status.
+     * Routes to the lease table lock client when migration status is COMPLETE,
+     * otherwise routes to the legacy table lock client.
+     *
+     * <p>Thread-safe: the fields are assigned once during {@link #initializeLockClients} (startup)
+     * and never reassigned. The routing decision is based on the {@link TableMigrationStatusProvider}
+     * which is updated atomically. The caller ({@code isLeader()}) is synchronized,
+     * providing happens-before guarantees.</p>
+     *
+     * @return the appropriate {@link AmazonDynamoDBLockClient} for the current migration state
+     */
+    public AmazonDynamoDBLockClient getDDBLockClient() {
+        if (isTableMigrationComplete()) {
+            return leaseTableLockClient;
+        }
+        return legacyTableLockClient;
+    }
+
+    /**
+     * Shutdown both lock clients, closing their background heartbeat threads.
+     * Should be called during scheduler shutdown to ensure no background threads
+     * remain running.
+     */
+    public void shutdownLockClients() {
+        if (legacyTableLockClient != null) {
+            try {
+                log.info("Closing legacy table lock client");
+                legacyTableLockClient.close();
+            } catch (final IOException e) {
+                log.error("Failed to close legacy table lock client", e);
             }
-            unwrappingFuture(() -> DdbUtil.pitrEnabler(config, dynamoDbAsyncClient));
+        }
+        if (leaseTableLockClient != null) {
+            try {
+                log.info("Closing lease table lock client");
+                leaseTableLockClient.close();
+            } catch (final IOException e) {
+                log.error("Failed to close lease table lock client", e);
+            }
         }
     }
 
-    private CreateTableRequest getRequest() {
-        final CreateTableRequest.Builder requestBuilder = CreateTableRequest.builder()
-                .tableName(config.tableName())
-                .keySchema(KeySchemaElement.builder()
-                        .attributeName(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME)
-                        .keyType(KeyType.HASH)
-                        .build())
-                .attributeDefinitions(AttributeDefinition.builder()
-                        .attributeName(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME)
-                        .attributeType(ScalarAttributeType.S)
-                        .build())
-                .deletionProtectionEnabled(config.deletionProtectionEnabled());
+    // ==================== Transactional Operations ====================
 
-        if (nonNull(config.tags()) && !config.tags().isEmpty()) {
-            requestBuilder.tags(config.tags());
-        }
-
-        switch (config.billingMode()) {
-            case PAY_PER_REQUEST:
-                requestBuilder.billingMode(BillingMode.PAY_PER_REQUEST);
-                break;
-            case PROVISIONED:
-                requestBuilder.billingMode(BillingMode.PROVISIONED);
-
-                final ProvisionedThroughput throughput = ProvisionedThroughput.builder()
-                        .readCapacityUnits(config.readCapacity())
-                        .writeCapacityUnits(config.writeCapacity())
-                        .build();
-                requestBuilder.provisionedThroughput(throughput);
-                break;
-        }
-        return requestBuilder.build();
-    }
-
-    private Map<String, AttributeValue> getCoordinatorStateKey(@NonNull final String key) {
-        return Collections.singletonMap(
-                COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(key));
-    }
-
-    private CoordinatorState fromDynamoRecord(final Map<String, AttributeValue> dynamoRecord) {
-        final HashMap<String, AttributeValue> attributes = new HashMap<>(dynamoRecord);
-        final String keyValue =
-                DynamoUtils.safeGetString(attributes.remove(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME));
-
-        final MigrationState migrationState = MigrationState.deserialize(keyValue, attributes);
-        if (migrationState != null) {
-            log.debug("Retrieved MigrationState {}", migrationState);
-            return migrationState;
-        }
-
-        final CoordinatorState c =
-                CoordinatorState.builder().key(keyValue).attributes(attributes).build();
-        log.debug("Retrieved coordinatorState {}", c);
-
-        return c;
-    }
-
-    private Map<String, AttributeValue> toDynamoRecord(final CoordinatorState state) {
-        final Map<String, AttributeValue> result = new HashMap<>();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, DynamoUtils.createAttributeValue(state.getKey()));
-        if (state instanceof MigrationState) {
-            result.putAll(((MigrationState) state).serialize());
-        }
-        if (state instanceof StreamInfo) {
-            result.putAll(((StreamInfo) state).serialize());
-        }
-        if (!CollectionUtils.isNullOrEmpty(state.getAttributes())) {
-            result.putAll(state.getAttributes());
-        }
-        return result;
-    }
-
-    private Map<String, ExpectedAttributeValue> getDynamoNonExistentExpectation() {
-        final Map<String, ExpectedAttributeValue> result = new HashMap<>();
-
-        final ExpectedAttributeValue expectedAV =
-                ExpectedAttributeValue.builder().exists(false).build();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, expectedAV);
-
-        return result;
-    }
-
-    private Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String keyValue) {
-        final Map<String, ExpectedAttributeValue> result = new HashMap<>();
-
-        final ExpectedAttributeValue expectedAV = ExpectedAttributeValue.builder()
-                .value(AttributeValue.fromS(keyValue))
+    /**
+     * Execute a DynamoDB TransactWriteItems request with the given list of {@link TransactWriteItem}s.
+     * Used by the table migration state machine to atomically move entries between tables
+     * (put into lease table + delete from legacy table in a single transaction).
+     *
+     * @param transactWriteItems the list of transact write items (max 100 per DDB limit)
+     * @throws DependencyException if DDB fails unexpectedly or the transaction is cancelled
+     */
+    public void executeTransactWrite(final List<TransactWriteItem> transactWriteItems) throws DependencyException {
+        final TransactWriteItemsRequest request = TransactWriteItemsRequest.builder()
+                .transactItems(transactWriteItems)
                 .build();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, expectedAV);
-
-        return result;
-    }
-
-    private Map<String, AttributeValueUpdate> getDynamoCoordinatorStateUpdate(final CoordinatorState state) {
-        final HashMap<String, AttributeValueUpdate> updates = new HashMap<>();
-        if (state instanceof MigrationState) {
-            updates.putAll(((MigrationState) state).getDynamoUpdate());
-        }
-        state.getAttributes()
-                .forEach((attribute, value) -> updates.put(
-                        attribute,
-                        AttributeValueUpdate.builder()
-                                .value(value)
-                                .action(AttributeAction.PUT)
-                                .build()));
-        return updates;
-    }
-
-    private TableDescription getTableDescription() {
         try {
-            final DescribeTableResponse response = unwrappingFuture(() -> dynamoDbAsyncClient.describeTable(
-                    DescribeTableRequest.builder().tableName(config.tableName()).build()));
-            return response.table();
-        } catch (final ResourceNotFoundException e) {
-            return null;
+            dynamoDbAsyncClient.transactWriteItems(request).get();
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DependencyException("TransactWriteItems interrupted", e);
+        } catch (final ExecutionException e) {
+            final Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof TransactionCanceledException) {
+                throw new DependencyException(
+                        "TransactWriteItems cancelled: " + ((TransactionCanceledException) cause).cancellationReasons(),
+                        cause);
+            }
+            throw new DependencyException("TransactWriteItems failed", cause);
+        }
+    }
+
+    // ==================== Private Helpers ====================
+
+    private boolean isTableMigrationComplete() {
+        return tableMigrationStatusProvider.getTableMigrationStatus()
+                == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
+    }
+
+    private CoordinatorStateDAODelegate getWriteDelegate() {
+        switch (cachedStatus) {
+            case TABLE_MIGRATION_STATUS_COMPLETE:
+            case TABLE_MIGRATION_STATUS_PENDING:
+                return leaseTableDaoDelegate;
+            case TABLE_MIGRATION_STATUS_INIT:
+            case TABLE_MIGRATION_STATUS_DEPLOYED:
+                return legacyTableDaoDelegate;
+            default:
+                throw new IllegalStateException("Cannot determine write delegate for cached status: " + cachedStatus);
+        }
+    }
+
+    private void ensureInitialized() throws InvalidStateException {
+        if (!initialized) {
+            throw new InvalidStateException("CoordinatorStateDAO is not initialized. Call initialize() first.");
         }
     }
 }

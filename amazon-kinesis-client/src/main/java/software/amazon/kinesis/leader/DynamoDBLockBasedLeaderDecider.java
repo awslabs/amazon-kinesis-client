@@ -15,7 +15,8 @@
 
 package software.amazon.kinesis.leader;
 
-import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,30 +29,38 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.coordinator.LeaderDecider;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
-import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
-
 /**
  * Implementation for LeaderDecider to elect leader using lock on dynamo db table. This class uses
  * AmazonDynamoDBLockClient library to perform the leader election.
+ *
+ * <p>The lock client is obtained from {@link CoordinatorStateDAO#getDDBLockClient()} on each
+ * {@code isLeader()} call, which routes to the appropriate table based on the current
+ * {@link software.amazon.kinesis.coordinator.migration.TableMigrationStatus}. When migration
+ * completes (PENDING → COMPLETE), the DAO transparently switches from the legacy table lock
+ * client to the lease table lock client.</p>
  */
 @RequiredArgsConstructor
 @Slf4j
 @KinesisClientInternalApi
 public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
-    private final CoordinatorStateDAO coordinatorStateDao;
-    private final AmazonDynamoDBLockClient dynamoDBLockClient;
+    private final CoordinatorStateDAO coordinatorStateDAO;
     private final Long heartbeatPeriodMillis;
     private final String workerId;
     private final MetricsFactory metricsFactory;
+    private final TableMigrationStateMachine tableMigrationStateMachine;
 
     private long lastCheckTimeInMillis = 0L;
     private boolean lastIsLeaderResult = false;
@@ -63,18 +72,12 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final String workerId,
             final Long leaseDuration,
             final Long heartbeatPeriod,
-            final MetricsFactory metricsFactory) {
-        final AmazonDynamoDBLockClient dynamoDBLockClient = new AmazonDynamoDBLockClient(coordinatorStateDao
-                .getDDBLockClientOptionsBuilder()
-                .withTimeUnit(TimeUnit.MILLISECONDS)
-                .withLeaseDuration(leaseDuration)
-                .withHeartbeatPeriod(heartbeatPeriod)
-                .withCreateHeartbeatBackgroundThread(true)
-                .withOwnerName(workerId)
-                .build());
+            final MetricsFactory metricsFactory,
+            final TableMigrationStateMachine tableMigrationStateMachine) {
+        coordinatorStateDao.initializeLockClients(leaseDuration, heartbeatPeriod, workerId);
 
         return new DynamoDBLockBasedLeaderDecider(
-                coordinatorStateDao, dynamoDBLockClient, heartbeatPeriod, workerId, metricsFactory);
+                coordinatorStateDao, heartbeatPeriod, workerId, metricsFactory, tableMigrationStateMachine);
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
@@ -82,8 +85,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final String workerId,
             final MetricsFactory metricsFactory,
             long leaseDurationInMillis,
-            long heartbeatPeriodInMillis) {
-        return create(coordinatorStateDao, workerId, leaseDurationInMillis, heartbeatPeriodInMillis, metricsFactory);
+            long heartbeatPeriodInMillis,
+            final TableMigrationStateMachine tableMigrationStateMachine) {
+        return create(
+                coordinatorStateDao,
+                workerId,
+                leaseDurationInMillis,
+                heartbeatPeriodInMillis,
+                metricsFactory,
+                tableMigrationStateMachine);
     }
 
     @Override
@@ -113,28 +123,37 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             publishIsLeaderMetrics(lastIsLeaderResult);
             return lastIsLeaderResult;
         }
+
+        // Get the lock client once for this entire cycle. This ensures that if handleLeaderLockResult
+        // updates the migration status to COMPLETE (flipping the DAO routing), we still use the same
+        // client for releaseLeadershipIfHeld within this cycle.
+        final AmazonDynamoDBLockClient lockClient = coordinatorStateDAO.getDDBLockClient();
         boolean response;
-        // Get the lockItem from storage (if present
-        final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LEADER_HASH_KEY, Optional.empty());
-        lockItem.ifPresent(item -> log.info("Worker : {} is the current leader.", item.getOwnerName()));
+
+        // Get the lockItem from storage (if present)
+        final Optional<LockItem> lockItem = lockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
+        lockItem.ifPresent(
+                item -> log.info("Worker : {} is the current {}.", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
 
         // If the lockItem is present and is expired, that means either current worker is not leader.
         if (!lockItem.isPresent() || lockItem.get().isExpired()) {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
                 final Optional<LockItem> leaderLockItem =
-                        dynamoDBLockClient.tryAcquireLock(AcquireLockOptions.builder(LEADER_HASH_KEY)
+                        lockClient.tryAcquireLock(AcquireLockOptions.builder(LeaderLock.LEADER_HASH_KEY)
                                 .withRefreshPeriod(heartbeatPeriodMillis)
                                 .withTimeUnit(TimeUnit.MILLISECONDS)
                                 .withShouldSkipBlockingWait(true)
+                                .withAdditionalAttributes(getLockAttributes())
                                 .build());
-                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new leader", item.getOwnerName()));
+                leaderLockItem.ifPresent(
+                        item -> log.info("Worker : {} is new {}", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
             } catch (final InterruptedException e) {
                 // Something bad happened, don't assume leadership and also release lock just in case the
                 // lock was granted and still interrupt happened.
-                releaseLeadershipIfHeld();
+                releaseLeadershipIfHeld(lockClient);
                 log.error("Acquiring lock was interrupted in between", e);
                 response = false;
 
@@ -146,10 +165,25 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             response = lockItem.get().getOwnerName().equals(workerId);
         }
 
+        try {
+            tableMigrationStateMachine.handleLeaderLockResult(response);
+        } catch (final DependencyException | InvalidStateException e) {
+            log.warn("handleLeaderLockResult failed, releasing lock and returning false", e);
+            releaseLeadershipIfHeld(lockClient);
+            response = false;
+        }
+
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
         return response;
+    }
+
+    private Map<String, AttributeValue> getLockAttributes() {
+        Map<String, AttributeValue> map = new HashMap<>();
+        map.putAll(new LeaderLock().serialize());
+
+        return map;
     }
 
     private void publishIsLeaderMetrics(final boolean response) {
@@ -161,31 +195,36 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     /**
-     * Shuts down the leader decider, releasing any held lock and closing the lock client.
+     * Shuts down the leader decider, releasing any held lock and closing all lock clients.
      * <p>
      * This method releases the leadership lock if held and then closes the underlying
-     * DynamoDB lock client to stop its background heartbeat thread. This ensures that
-     * no locks are kept alive after shutdown.
+     * DynamoDB lock clients (both legacy and lease table) via the DAO to stop their
+     * background heartbeat threads. This ensures that no locks are kept alive after shutdown.
      */
     @Override
     public synchronized void shutdown() {
         if (!isShutdown.getAndSet(true)) {
             releaseLeadershipIfHeld();
 
-            // Close the any lock client to stop any potential background heartbeat thread.
-            try {
-                log.info("Closing DynamoDB lock client for worker {}", workerId);
-                dynamoDBLockClient.close();
-            } catch (final IOException e) {
-                log.error("Failed to close DynamoDB lock client for worker {}", workerId, e);
-            }
+            // Close all lock clients to stop background heartbeat threads.
+            log.info("Shutting down DynamoDB lock clients for worker {}", workerId);
+            coordinatorStateDAO.shutdownLockClients();
         }
     }
 
     @Override
     public synchronized void releaseLeadershipIfHeld() {
+        releaseLeadershipIfHeld(coordinatorStateDAO.getDDBLockClient());
+    }
+
+    /**
+     * Release the leader lock on the specified lock client if this worker holds it.
+     *
+     * @param lockClient the lock client to check and release on
+     */
+    private void releaseLeadershipIfHeld(final AmazonDynamoDBLockClient lockClient) {
         try {
-            final Optional<LockItem> lockItem = dynamoDBLockClient.getLock(LEADER_HASH_KEY, Optional.empty());
+            final Optional<LockItem> lockItem = lockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
             if (lockItem.isPresent()
                     && !lockItem.get().isExpired()
                     && lockItem.get().getOwnerName().equals(workerId)) {

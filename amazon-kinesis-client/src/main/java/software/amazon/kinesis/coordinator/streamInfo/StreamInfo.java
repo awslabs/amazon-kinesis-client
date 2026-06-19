@@ -1,6 +1,5 @@
 package software.amazon.kinesis.coordinator.streamInfo;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import lombok.Getter;
@@ -9,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
+import software.amazon.kinesis.leases.EntityType;
 
 /**
  * Data model of the StreamInfo state. This is used to track StreamMetadata
@@ -20,27 +20,33 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 public class StreamInfo extends CoordinatorState {
     public static final String STREAM_ID_ATTRIBUTE_NAME = "streamId";
     public static final String ENTITY_TYPE_ATTRIBUTE_NAME = "entityType";
-    public static final String ENTITY_TYPE = "STREAM";
 
     private final String streamId;
 
     public StreamInfo(final String key, final String streamId) {
-        setKey(key);
+        super(key, EntityType.CoordinatorStateType.STREAM_INFO, null);
         this.streamId = streamId;
-        setEntityType(ENTITY_TYPE);
     }
 
-    public HashMap<String, AttributeValue> serialize() {
-        final HashMap<String, AttributeValue> result = new HashMap<>();
-        result.put(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(getKey())));
-        result.put(STREAM_ID_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(streamId)));
-        result.put(ENTITY_TYPE_ATTRIBUTE_NAME, AttributeValue.fromS(String.valueOf(entityType)));
+    @Override
+    public Map<String, AttributeValue> serialize() {
+        // super.serialize() handles entityType, and generic attributes
+        final Map<String, AttributeValue> result = super.serialize();
+        result.put(STREAM_ID_ATTRIBUTE_NAME, AttributeValue.fromS(streamId));
         return result;
     }
 
     public static StreamInfo deserialize(final String key, final Map<String, AttributeValue> attributes) {
-        final String streamId = attributes.get(STREAM_ID_ATTRIBUTE_NAME).s();
-        return new StreamInfo(key, streamId);
+        if (attributes == null) {
+            return null;
+        }
+        try {
+            final String streamId = attributes.get(STREAM_ID_ATTRIBUTE_NAME).s();
+            return new StreamInfo(key, streamId);
+        } catch (final Exception e) {
+            log.warn("Unable to deserialize StreamInfo with key {} and attributes {}", key, attributes, e);
+            return null;
+        }
     }
 
     public static String multiStreamLeaseKeyToStreamIdentifier(String multiStreamLeaseKey) {

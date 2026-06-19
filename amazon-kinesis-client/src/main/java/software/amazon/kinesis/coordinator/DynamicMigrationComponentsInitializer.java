@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
+import software.amazon.kinesis.coordinator.assignment.LAMDataManager;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
@@ -44,11 +45,11 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsReporter;
 
 import static software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT;
 import static software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT;
-import static software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager.DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD;
+import static software.amazon.kinesis.coordinator.assignment.MigrationAwareLAMDataManager.DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD;
 
 /**
  * This class is responsible for initializing the KCL components that supports
- * seamless upgrade from v2.x to v3.x.
+ * 3-phase upgrade from v2.x to v3.x.
  * During specific versions, it also dynamically switches the functionality
  * to be either vanilla 3.x or 2.x compatible.
  *
@@ -83,7 +84,6 @@ public final class DynamicMigrationComponentsInitializer {
     @Getter
     private final LeaseRefresher leaseRefresher;
 
-    private final CoordinatorStateDAO coordinatorStateDAO;
     private final ScheduledExecutorService workerMetricsThreadPool;
 
     @Getter
@@ -115,11 +115,12 @@ public final class DynamicMigrationComponentsInitializer {
     private boolean dualMode;
     private boolean initialized;
 
+    private final LAMDataManager lamDataManager;
+
     @Builder(access = AccessLevel.PACKAGE)
     DynamicMigrationComponentsInitializer(
             final MetricsFactory metricsFactory,
             final LeaseRefresher leaseRefresher,
-            final CoordinatorStateDAO coordinatorStateDAO,
             final ScheduledExecutorService workerMetricsThreadPool,
             final WorkerMetricStatsDAO workerMetricsDAO,
             final WorkerMetricStatsManager workerMetricsManager,
@@ -130,10 +131,10 @@ public final class DynamicMigrationComponentsInitializer {
             final Supplier<DynamoDBLockBasedLeaderDecider> ddbLockBasedLeaderDeciderCreator,
             final String workerIdentifier,
             final WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider) {
+            final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider,
+            final LAMDataManager lamDataManager) {
         this.metricsFactory = metricsFactory;
         this.leaseRefresher = leaseRefresher;
-        this.coordinatorStateDAO = coordinatorStateDAO;
         this.workerIdentifier = workerIdentifier;
         this.workerUtilizationAwareAssignmentConfig = workerUtilizationAwareAssignmentConfig;
         this.workerMetricsExpirySeconds = Duration.ofMillis(DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD
@@ -148,67 +149,84 @@ public final class DynamicMigrationComponentsInitializer {
         this.deterministicLeaderDeciderCreator = deterministicLeaderDeciderCreator;
         this.ddbLockBasedLeaderDeciderCreator = ddbLockBasedLeaderDeciderCreator;
         this.leaseModeChangeConsumer = leaseAssignmentModeProvider;
+        this.lamDataManager = lamDataManager;
     }
 
-    public void initialize(final ClientVersion migrationStateMachineStartingClientVersion) throws DependencyException {
+    /**
+     * Shared startup logic for all init methods. Centralizes leader-decider wiring, optional LAM
+     * creation, optional workerMetrics startup, and mode-provider initialization so they cannot
+     * diverge. Every path that sets {@code initialized = true} goes through this method.
+     *
+     * @param dualMode              whether migration dual-mode is active
+     * @param assignmentMode        the initial lease assignment mode
+     * @param leaderDeciderSupplier supplier for the initial leader decider; in dual mode it will be
+     *                              wrapped in a {@link MigrationAdaptiveLeaderDecider}, otherwise used directly
+     * @param createLamAndStartMetrics whether to start workerMetrics collection and create the LAM;
+     *                              false only for Phase 1 (passive 2.x compatible mode)
+     */
+    private void initializeStartupComponents(
+            final boolean dualMode,
+            final LeaseAssignmentMode assignmentMode,
+            final Supplier<? extends LeaderDecider> leaderDeciderSupplier,
+            final boolean createLamAndStartMetrics) {
+        this.dualMode = dualMode;
+        this.currentAssignmentMode = assignmentMode;
+
+        if (createLamAndStartMetrics) {
+            log.info("Start collection of WorkerMetricStats");
+            workerMetricsManager.startManager();
+        }
+
+        log.info("Initializing dualMode {} assignmentMode {}", dualMode, assignmentMode);
+
+        if (dualMode) {
+            final LeaderDecider initialLeaderDecider = leaderDeciderSupplier.get();
+            final MigrationAdaptiveLeaderDecider adaptiveLeaderDecider = adaptiveLeaderDeciderCreator.get();
+            log.info(
+                    "Initializing MigrationAdaptiveLeaderDecider with {}",
+                    initialLeaderDecider.getClass().getSimpleName());
+            adaptiveLeaderDecider.updateLeaderDecider(initialLeaderDecider);
+            this.leaderDecider = adaptiveLeaderDecider;
+        } else {
+            this.leaderDecider = leaderDeciderSupplier.get();
+        }
+
+        log.info("Initializing {}", leaderDecider.getClass().getSimpleName());
+        leaderDecider.initialize();
+
+        if (createLamAndStartMetrics) {
+            log.info("Creating LAM");
+            leaseAssignmentManager = lamCreator.apply(lamThreadPool, leaderDecider);
+        }
+
+        log.info("Initializing {}", leaseModeChangeConsumer.getClass().getSimpleName());
+        leaseModeChangeConsumer.initialize(dualMode, assignmentMode);
+        initialized = true;
+    }
+
+    /**
+     * Phase 1 initialization (CLIENT_VERSION_INIT): Purely passive 2.x compatible mode.
+     * No WorkerMetrics collection/reporting, no GSI, no LAM.
+     * Uses deterministic leader decider and lease-count-based assignment.
+     */
+    public synchronized void initializeClientVersionForPhase1() {
         if (initialized) {
             log.info("Already initialized, nothing to do");
             return;
         }
-
-        // always collect metrics so that when we flip to start reporting we will have accurate historical data.
-        log.info("Start collection of WorkerMetricStats");
-        workerMetricsManager.startManager();
-        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3X) {
-            initializeComponentsFor3x();
-        } else {
-            initializeComponentsForMigration(migrationStateMachineStartingClientVersion);
-        }
-        log.info("Initialized dual mode {} current assignment mode {}", dualMode, currentAssignmentMode);
-
-        log.info("Creating LAM");
-        leaseAssignmentManager = lamCreator.apply(lamThreadPool, leaderDecider);
-        log.info("Initializing {}", leaseModeChangeConsumer.getClass().getSimpleName());
-        leaseModeChangeConsumer.initialize(dualMode, currentAssignmentMode);
-        initialized = true;
-    }
-
-    private void initializeComponentsFor3x() {
-        log.info("Initializing for 3x functionality");
-        dualMode = false;
-        currentAssignmentMode = WORKER_UTILIZATION_AWARE_ASSIGNMENT;
-        log.info("Initializing dualMode {} assignmentMode {}", dualMode, currentAssignmentMode);
-        leaderDecider = ddbLockBasedLeaderDeciderCreator.get();
-        log.info("Initializing {}", leaderDecider.getClass().getSimpleName());
-        leaderDecider.initialize();
-    }
-
-    private void initializeComponentsForMigration(final ClientVersion migrationStateMachineStartingClientVersion) {
-        log.info("Initializing for migration to 3x");
-        dualMode = true;
-        final LeaderDecider initialLeaderDecider;
-        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK) {
-            currentAssignmentMode = WORKER_UTILIZATION_AWARE_ASSIGNMENT;
-            initialLeaderDecider = ddbLockBasedLeaderDeciderCreator.get();
-        } else {
-            currentAssignmentMode = DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT;
-            initialLeaderDecider = deterministicLeaderDeciderCreator.get();
-        }
-        log.info("Initializing dualMode {} assignmentMode {}", dualMode, currentAssignmentMode);
-
-        final MigrationAdaptiveLeaderDecider adaptiveLeaderDecider = adaptiveLeaderDeciderCreator.get();
-        log.info(
-                "Initializing MigrationAdaptiveLeaderDecider with {}",
-                initialLeaderDecider.getClass().getSimpleName());
-        adaptiveLeaderDecider.updateLeaderDecider(initialLeaderDecider);
-        this.leaderDecider = adaptiveLeaderDecider;
+        log.info("Initializing for Phase 1 (passive 2.x compatible mode) - no LAM, no WorkerMetrics, no GSI");
+        initializeStartupComponents(
+                false, DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT, deterministicLeaderDeciderCreator, false);
     }
 
     void shutdown() {
         log.info("Shutting down components");
         if (initialized) {
             log.info("Stopping LAM, LeaderDecider, workerMetrics reporting and collection");
-            leaseAssignmentManager.stop();
+            if (leaseAssignmentManager != null) {
+                leaseAssignmentManager.stop();
+            }
+            lamDataManager.shutdown();
             // leader decider is shut down later when scheduler is doing a final shutdown
             // since scheduler still accesses the leader decider while shutting down
             stopWorkerMetricsReporter();
@@ -235,11 +253,11 @@ public final class DynamicMigrationComponentsInitializer {
                         "{} did not shutdown in {}s, forcefully shutting down",
                         threadPoolName,
                         SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
-                lamThreadPool.shutdownNow();
+                threadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
             log.warn("Interrupted while waiting for shutdown of {} thread pool", threadPoolName, e);
-            lamThreadPool.shutdownNow();
+            threadPool.shutdownNow();
         }
     }
 
@@ -301,6 +319,11 @@ public final class DynamicMigrationComponentsInitializer {
             throws DependencyException {
         log.info("Initializing KCL components for upgrade from 2x from {}", fromClientVersion);
 
+        if (fromClientVersion == ClientVersion.CLIENT_VERSION_INIT) {
+            initializeStartupComponents(
+                    true, DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT, deterministicLeaderDeciderCreator, true);
+        }
+
         createGsi(false);
         startWorkerMetricsReporting();
         // LAM is not started until the dynamic flip to 3xWithRollback
@@ -309,15 +332,17 @@ public final class DynamicMigrationComponentsInitializer {
     /**
      * Initialize KCL with components and configuration to run vanilla 3x functionality. This can happen
      * at KCL Worker startup when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3X, or dynamically
-     * during a new deployment when existing worker are in ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK
+     * during a new deployment when existing workers are in ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK.
+     * Also used by Phase 3 of migration and by new applications starting directly in 3.x.
      */
     public synchronized void initializeClientVersionFor3x(final ClientVersion fromClientVersion)
             throws DependencyException {
         log.info("Initializing KCL components for 3x from {}", fromClientVersion);
 
-        log.info("Initializing LeaseAssignmentManager, DDB-lock-based leader decider, WorkerMetricStats manager"
-                + " and creating the Lease table GSI if it does not exist");
         if (fromClientVersion == ClientVersion.CLIENT_VERSION_INIT) {
+            initializeStartupComponents(
+                    false, WORKER_UTILIZATION_AWARE_ASSIGNMENT, ddbLockBasedLeaderDeciderCreator, true);
+
             // gsi may already exist and be active for migrated application.
             createGsi(true);
             startWorkerMetricsReporting();
@@ -336,7 +361,10 @@ public final class DynamicMigrationComponentsInitializer {
     public synchronized void initializeClientVersionFor2x(final ClientVersion fromClientVersion) {
         log.info("Initializing KCL components for rollback to 2x from {}", fromClientVersion);
 
-        if (fromClientVersion != ClientVersion.CLIENT_VERSION_INIT) {
+        if (fromClientVersion == ClientVersion.CLIENT_VERSION_INIT) {
+            initializeStartupComponents(
+                    true, DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT, deterministicLeaderDeciderCreator, true);
+        } else {
             // dynamic rollback
             stopWorkerMetricsReporter();
             // Migration Tool will delete the lease table LeaseOwner GSI
@@ -370,7 +398,11 @@ public final class DynamicMigrationComponentsInitializer {
             throws DependencyException {
         log.info("Initializing KCL components for 3x with rollback from {}", fromClientVersion);
 
-        if (fromClientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X) {
+        if (fromClientVersion == ClientVersion.CLIENT_VERSION_INIT) {
+            initializeStartupComponents(
+                    true, WORKER_UTILIZATION_AWARE_ASSIGNMENT, ddbLockBasedLeaderDeciderCreator, true);
+            startWorkerMetricsReporting();
+        } else if (fromClientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X) {
             // dynamic flip
             currentAssignmentMode = WORKER_UTILIZATION_AWARE_ASSIGNMENT;
             notifyLeaseAssignmentModeChange();

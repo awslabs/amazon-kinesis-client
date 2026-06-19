@@ -104,18 +104,31 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
     public void initialize() throws DependencyException {
         if (startingClientVersion == null) {
             log.info("Initializing MigrationStateMachine");
-            // Coordinator table exists at this point. This line can potentially be removed in future
-            coordinatorStateDAO.initialize();
+
+            // Read-only determination of starting state from DDB + config.
+            // CoordinatorStateDAO is already fully initialized (delegates + writes enabled)
+            // by the TableMigrationStateMachine which runs before this in Scheduler.
             final MigrationClientVersionStateInitializer startingStateInitializer =
                     new MigrationClientVersionStateInitializer(
-                            timeProvider, coordinatorStateDAO, clientVersionConfig, random, workerId);
+                            coordinatorStateDAO, clientVersionConfig, random, workerId);
             final SimpleEntry<ClientVersion, MigrationState> dataForInitialization =
                     startingStateInitializer.getInitialState();
-            initializer.initialize(dataForInitialization.getKey());
-            transitionTo(dataForInitialization.getKey(), dataForInitialization.getValue());
             startingClientVersion = dataForInitialization.getKey();
             startingMigrationState = dataForInitialization.getValue();
+
+            // Create and enter the starting state. The state's enter() method
+            // writes MigrationState to DDB (except CLIENT_VERSION_INIT which skips DDB)
+            // and initializes components. If enter() throws DependencyException, Scheduler
+            // retries the whole initialization loop.
+            final MigrationClientVersionState startingState =
+                    createMigrationClientVersionState(startingClientVersion, startingMigrationState);
+            startingState.enter(ClientVersion.CLIENT_VERSION_INIT);
+            currentMigrationClientVersionState = startingState;
             log.info("MigrationStateMachine initial clientVersion {}", startingClientVersion);
+
+            if (startingClientVersion == ClientVersion.CLIENT_VERSION_3X) {
+                terminate();
+            }
         } else {
             log.info("MigrationStateMachine already initialized with clientVersion {}", startingClientVersion);
         }
@@ -221,9 +234,17 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
     private MigrationClientVersionState createMigrationClientVersionState(
             final ClientVersion clientVersion, final MigrationState migrationState) {
         switch (clientVersion) {
+            case CLIENT_VERSION_INIT:
+                return new MigrationClientVersionInitState(initializer);
             case CLIENT_VERSION_2X:
                 return new MigrationClientVersion2xState(
-                        this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
+                        this,
+                        coordinatorStateDAO,
+                        stateMachineThreadPool,
+                        initializer,
+                        random,
+                        migrationState,
+                        workerId);
             case CLIENT_VERSION_UPGRADE_FROM_2X:
                 return new MigrationClientVersionUpgradeFrom2xState(
                         this,
@@ -233,12 +254,20 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
                         initializer,
                         random,
                         migrationState,
-                        flipTo3XStabilizerTimeInSeconds);
+                        flipTo3XStabilizerTimeInSeconds,
+                        workerId);
             case CLIENT_VERSION_3X_WITH_ROLLBACK:
                 return new MigrationClientVersion3xWithRollbackState(
-                        this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
+                        this,
+                        coordinatorStateDAO,
+                        stateMachineThreadPool,
+                        initializer,
+                        random,
+                        migrationState,
+                        workerId);
             case CLIENT_VERSION_3X:
-                return new MigrationClientVersion3xState(this, initializer);
+                return new MigrationClientVersion3xState(
+                        this, initializer, coordinatorStateDAO, migrationState, workerId);
         }
         throw new IllegalStateException(String.format("Unknown client version %s", clientVersion));
     }

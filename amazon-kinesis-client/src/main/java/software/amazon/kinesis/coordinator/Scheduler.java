@@ -63,14 +63,19 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
+import software.amazon.kinesis.coordinator.assignment.MigrationAwareLAMDataManager;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leader.MigrationAdaptiveLeaderDecider;
+import software.amazon.kinesis.leases.EntityDAO;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
@@ -87,6 +92,7 @@ import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseTableDao;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -107,6 +113,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.OtelMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.StreamTracker;
@@ -119,7 +126,6 @@ import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 
-import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
 
 /**
@@ -203,6 +209,9 @@ public class Scheduler implements Runnable {
     private final ConsumerTaskFactory taskFactory;
 
     @Getter(AccessLevel.NONE)
+    private final TableMigrationStateMachine tableMigrationStateMachine;
+
+    @Getter(AccessLevel.NONE)
     private final MigrationStateMachine migrationStateMachine;
 
     @Getter(AccessLevel.NONE)
@@ -225,6 +234,9 @@ public class Scheduler implements Runnable {
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
 
     private boolean leasesSyncedOnAppInit = false;
+
+    @Getter(AccessLevel.NONE)
+    private final EntityDAO entityDAO;
 
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
@@ -300,8 +312,21 @@ public class Scheduler implements Runnable {
 
         final LeaseManagementFactory leaseManagementFactory =
                 this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
+        final TableMigrationStatusProvider tableMigrationStatusProvider = new TableMigrationStatusProvider();
         this.coordinatorStateDAO = new CoordinatorStateDAO(
-                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
+                leaseManagementConfig.dynamoDBClient(),
+                coordinatorConfig().coordinatorStateTableConfig(),
+                leaseManagementConfig.tableName(),
+                tableMigrationStatusProvider);
+        this.tableMigrationStateMachine = new TableMigrationStateMachineImpl(
+                tableMigrationStatusProvider,
+                coordinatorStateDAO,
+                leaseManagementConfig.workerIdentifier(),
+                coordinatorConfig,
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
+                        .setNameFormat("table-migration-async-copy")
+                        .setDaemon(true)
+                        .build()));
         final StreamInfoDAO streamInfoDAO =
                 new StreamInfoDAO(coordinatorStateDAO, leaseManagementConfig.kinesisClient());
         this.streamInfoManager = leaseManagementFactory.createStreamInfoManager(
@@ -323,7 +348,17 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
-        this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer();
+
+        this.entityDAO = new DynamoDBLeaseTableDao(
+                leaseManagementConfig.dynamoDBClient(),
+                leaseManagementConfig.tableName(),
+                leaseSerializer,
+                coordinatorStateDAO.getLeaseTableDaoDelegate(),
+                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
+                Runtime.getRuntime().availableProcessors());
+
+        this.migrationComponentsInitializer =
+                createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
         this.migrationStateMachine = new MigrationStateMachineImpl(
                 metricsFactory,
                 System::currentTimeMillis,
@@ -406,7 +441,8 @@ public class Scheduler implements Runnable {
     /**
      * Depends on LeaseCoordinator and LeaseRefresher to be created first
      */
-    private DynamicMigrationComponentsInitializer createDynamicMigrationComponentsInitializer() {
+    private DynamicMigrationComponentsInitializer createDynamicMigrationComponentsInitializer(
+            final LeaseSerializer leaseSerializer, final TableMigrationStatusProvider tableMigrationStatusProvider) {
         selectWorkerMetricsIfAvailable(leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
 
         final WorkerMetricStatsManager workerMetricsManager = new WorkerMetricStatsManager(
@@ -420,12 +456,19 @@ public class Scheduler implements Runnable {
         final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
                 leaseManagementConfig.dynamoDBClient(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+                leaseManagementConfig.tableName(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
+                tableMigrationStatusProvider);
+        final MigrationAwareLAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
+                entityDAO,
+                workerMetricsDAO,
+                tableMigrationStatusProvider,
+                ((TableMigrationStateMachineImpl) tableMigrationStateMachine)::updateMigrationSummary,
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)
                 .leaseRefresher(leaseRefresher)
-                .coordinatorStateDAO(coordinatorStateDAO)
                 .workerMetricsThreadPool(Executors.newScheduledThreadPool(
                         1,
                         new ThreadFactoryBuilder()
@@ -436,21 +479,23 @@ public class Scheduler implements Runnable {
                 .lamThreadPool(Executors.newScheduledThreadPool(
                         1,
                         new ThreadFactoryBuilder().setNameFormat("lam-thread").build()))
-                .lamCreator((lamThreadPool, leaderDecider) -> new LeaseAssignmentManager(
-                        leaseRefresher,
-                        workerMetricsDAO,
-                        leaderDecider,
-                        leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
-                        leaseCoordinator.workerIdentifier(),
-                        leaseManagementConfig.failoverTimeMillis(),
-                        metricsFactory,
-                        lamThreadPool,
-                        System::nanoTime,
-                        leaseManagementConfig.maxLeasesForWorker(),
-                        leaseManagementConfig.gracefulLeaseHandoffConfig(),
-                        leaseManagementConfig.leaseAssignmentStrategy(),
-                        leaseManagementConfig.leaseAssignmentIntervalMillis(),
-                        streamIdCacheManager))
+                .lamCreator((lamThreadPool, leaderDecider) -> {
+                    return new LeaseAssignmentManager(
+                            leaseRefresher,
+                            leaderDecider,
+                            leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
+                            leaseCoordinator.workerIdentifier(),
+                            leaseManagementConfig.failoverTimeMillis(),
+                            metricsFactory,
+                            lamThreadPool,
+                            System::nanoTime,
+                            leaseManagementConfig.maxLeasesForWorker(),
+                            leaseManagementConfig.gracefulLeaseHandoffConfig(),
+                            leaseManagementConfig.leaseAssignmentStrategy(),
+                            leaseManagementConfig.leaseAssignmentIntervalMillis(),
+                            streamIdCacheManager,
+                            lamDataManager);
+                })
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
@@ -459,10 +504,12 @@ public class Scheduler implements Runnable {
                         leaseCoordinator.workerIdentifier(),
                         metricsFactory,
                         leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
-                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis()))
+                        leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
+                        tableMigrationStateMachine))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
+                .lamDataManager(lamDataManager)
                 .build();
     }
 
@@ -510,10 +557,17 @@ public class Scheduler implements Runnable {
                 try {
                     log.info("Initializing LeaseCoordinator attempt {}", (i + 1));
                     leaseCoordinator.initialize();
-                    coordinatorStateDAO.initialize();
+
+                    // Initialize table migration state machine first. This:
+                    // 1. Calls coordinatorStateDAO.initializeDelegates() (legacy checks table existence)
+                    // 2. Determines TableMigrationStatus and sets the TableMigrationStatusProvider
+                    // 3. Calls coordinatorStateDAO.initialize() to enable writes
+                    // After this, CoordinatorStateDAO is fully operational for reads and writes.
+                    tableMigrationStateMachine.initialize();
+
                     StreamIdCache.initialize(streamIdCacheManager, leaseManagementConfig.streamIdOnboardingState());
 
-                    // Initialize the state machine after lease table has been initialized
+                    // Initialize the client version state machine after CoordinatorStateDAO is ready.
                     // Migration state machine creates and waits for GSI if necessary,
                     // it must be initialized before starting leaseCoordinator, which runs LeaseDiscoverer
                     // and that requires GSI to be present and active. (migrationStateMachine.initialize is idempotent)
@@ -1084,6 +1138,10 @@ public class Scheduler implements Runnable {
 
             migrationStateMachine.shutdown();
             migrationComponentsInitializer.shutdown();
+            tableMigrationStateMachine.shutdown();
+            // Call after migrationComponentsInitializer which perform LAM shutdown
+            // so it is not using the DAO anymore.
+            entityDAO.shutdown();
             // Stop lease coordinator, so leases are not renewed or stolen from other workers.
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().

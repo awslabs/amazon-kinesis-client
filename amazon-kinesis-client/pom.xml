@@ -566,6 +566,12 @@
               <failOnWarning>true</failOnWarning>
               <!-- Ignore Runtime/Provided/Test/System scopes for unused dependency analysis. -->
               <ignoreNonCompile>true</ignoreNonCompile>
+              <ignoredUnusedDeclaredDependencies>
+                <ignoredUnusedDeclaredDependency>com.google.code.findbugs:jsr305</ignoredUnusedDeclaredDependency>
+                <ignoredUnusedDeclaredDependency>software.amazon.awssdk:annotations</ignoredUnusedDeclaredDependency>
+                <ignoredUnusedDeclaredDependency>software.amazon.awssdk:aws-core</ignoredUnusedDeclaredDependency>
+                <ignoredUnusedDeclaredDependency>org.apache.commons:commons-collections4</ignoredUnusedDeclaredDependency>
+              </ignoredUnusedDeclaredDependencies>
             </configuration>
           </execution>
         </executions>

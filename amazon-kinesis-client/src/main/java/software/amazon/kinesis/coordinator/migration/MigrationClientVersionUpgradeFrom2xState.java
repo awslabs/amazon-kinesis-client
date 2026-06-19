@@ -19,7 +19,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -51,23 +50,37 @@ import static software.amazon.kinesis.coordinator.migration.MigrationStateMachin
  * (including itself), it will transition to CLIENT_VERSION_3X_WITH_ROLLBACK.
  */
 @KinesisClientInternalApi
-@RequiredArgsConstructor
 @Slf4j
 @ThreadSafe
-public class MigrationClientVersionUpgradeFrom2xState implements MigrationClientVersionState {
+public class MigrationClientVersionUpgradeFrom2xState extends AbstractMigrationClientVersionState {
     private final MigrationStateMachine stateMachine;
     private final Callable<Long> timeProvider;
-    private final CoordinatorStateDAO coordinatorStateDAO;
     private final ScheduledExecutorService stateMachineThreadPool;
     private final DynamicMigrationComponentsInitializer initializer;
     private final Random random;
-    private final MigrationState currentMigrationState;
     private final long flipTo3XStabilizerTimeInSeconds;
 
     private MigrationReadyMonitor migrationMonitor;
     private ClientVersionChangeMonitor clientVersionChangeMonitor;
-    private boolean entered = false;
-    private boolean left = false;
+
+    public MigrationClientVersionUpgradeFrom2xState(
+            final MigrationStateMachine stateMachine,
+            final Callable<Long> timeProvider,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final ScheduledExecutorService stateMachineThreadPool,
+            final DynamicMigrationComponentsInitializer initializer,
+            final Random random,
+            final MigrationState migrationState,
+            final long flipTo3XStabilizerTimeInSeconds,
+            final String workerIdentifier) {
+        super(migrationState, coordinatorStateDAO, workerIdentifier);
+        this.stateMachine = stateMachine;
+        this.timeProvider = timeProvider;
+        this.stateMachineThreadPool = stateMachineThreadPool;
+        this.initializer = initializer;
+        this.random = random;
+        this.flipTo3XStabilizerTimeInSeconds = flipTo3XStabilizerTimeInSeconds;
+    }
 
     @Override
     public ClientVersion clientVersion() {
@@ -75,38 +88,32 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
     }
 
     @Override
-    public synchronized void enter(final ClientVersion fromClientVersion) throws DependencyException {
-        if (!entered) {
-            log.info("Entering state {} from {}", this, fromClientVersion);
-            initializer.initializeClientVersionForUpgradeFrom2x(fromClientVersion);
+    protected void doEnter(final ClientVersion fromClientVersion) throws DependencyException {
+        initializer.initializeClientVersionForUpgradeFrom2x(fromClientVersion);
 
-            log.info("Starting migration ready monitor to monitor 3.x compliance of the KCL workers");
-            migrationMonitor = new MigrationReadyMonitor(
-                    initializer.metricsFactory(),
-                    timeProvider,
-                    initializer.leaderDecider(),
-                    initializer.workerIdentifier(),
-                    initializer.workerMetricsDAO(),
-                    initializer.workerMetricsExpirySeconds(),
-                    initializer.leaseRefresher(),
-                    stateMachineThreadPool,
-                    this::onMigrationReady,
-                    flipTo3XStabilizerTimeInSeconds);
-            migrationMonitor.startMonitor();
+        log.info("Starting migration ready monitor to monitor 3.x compliance of the KCL workers");
+        migrationMonitor = new MigrationReadyMonitor(
+                initializer.metricsFactory(),
+                timeProvider,
+                initializer.leaderDecider(),
+                initializer.workerIdentifier(),
+                initializer.workerMetricsDAO(),
+                initializer.workerMetricsExpirySeconds(),
+                initializer.leaseRefresher(),
+                stateMachineThreadPool,
+                this::onMigrationReady,
+                flipTo3XStabilizerTimeInSeconds);
+        migrationMonitor.startMonitor();
 
-            log.info("Starting monitor for rollback and flip to 3.x");
-            clientVersionChangeMonitor = new ClientVersionChangeMonitor(
-                    initializer.metricsFactory(),
-                    coordinatorStateDAO,
-                    stateMachineThreadPool,
-                    this::onClientVersionChange,
-                    clientVersion(),
-                    random);
-            clientVersionChangeMonitor.startMonitor();
-            entered = true;
-        } else {
-            log.info("Not entering {}", left ? "already exited state" : "already entered state");
-        }
+        log.info("Starting monitor for rollback and flip to 3.x");
+        clientVersionChangeMonitor = new ClientVersionChangeMonitor(
+                initializer.metricsFactory(),
+                coordinatorStateDAO,
+                stateMachineThreadPool,
+                this::onClientVersionChange,
+                clientVersion(),
+                random);
+        clientVersionChangeMonitor.startMonitor();
     }
 
     @Override
@@ -220,12 +227,11 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
         final MetricsScope scope =
                 MetricsUtil.createMetricsWithOperation(initializer.metricsFactory(), METRICS_OPERATION);
         try {
-            final MigrationState newMigrationState = currentMigrationState
-                    .copy()
-                    .update(CLIENT_VERSION_3X_WITH_ROLLBACK, initializer.workerIdentifier());
-            log.info("Updating Migration State in DDB with {} prev state {}", newMigrationState, currentMigrationState);
+            final MigrationState newMigrationState =
+                    curentMigrationState.copy().update(CLIENT_VERSION_3X_WITH_ROLLBACK, initializer.workerIdentifier());
+            log.info("Updating Migration State in DDB with {} prev state {}", newMigrationState, curentMigrationState);
             return coordinatorStateDAO.updateCoordinatorStateWithExpectation(
-                    newMigrationState, currentMigrationState.getDynamoClientVersionExpectation());
+                    newMigrationState, curentMigrationState.getDynamoClientVersionExpectation());
         } catch (final Exception e) {
             log.warn(
                     "Exception occurred when toggling to {}, upgradeReadyMonitor will retry the update"

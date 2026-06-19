@@ -666,7 +666,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 synchronized (response) {
                     for (final Map<String, AttributeValue> item : scanResult.items()) {
                         try {
-                            response.add(serializer.fromDynamoRecord(item));
+                            Lease lease = serializer.fromDynamoRecord(item);
+                            if (lease != null) {
+                                response.add(lease);
+                            }
                         } catch (final Exception e) {
                             // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
                             // do not fail all list call. Capture failed deserialize item and return to caller.
@@ -698,7 +701,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean isLeaseTableEmpty()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1, 1, null).isEmpty();
+        return list(1, null).isEmpty();
     }
 
     /**
@@ -713,23 +716,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      */
     List<Lease> list(Integer limit, StreamIdentifier streamIdentifier)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(limit, Integer.MAX_VALUE, streamIdentifier);
-    }
-
-    /**
-     * List with the given page size. Package access for integration testing.
-     *
-     * @param limit number of items to consider at a time - used by integration tests to force paging.
-     * @param maxPages mad paginated scan calls
-     * @param streamIdentifier streamIdentifier for multi-stream mode. Can be null.
-     * @return list of leases
-     * @throws InvalidStateException if table does not exist
-     * @throws DependencyException if DynamoDB scan fail in an unexpected way
-     * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
-     */
-    private List<Lease> list(Integer limit, Integer maxPages, StreamIdentifier streamIdentifier)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         log.debug("Listing leases from table {}", table);
+
+        final int effectiveLimit = (limit == null) ? Integer.MAX_VALUE : limit;
 
         ScanRequest.Builder scanRequestBuilder = ScanRequest.builder().tableName(table);
 
@@ -742,9 +731,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                     .expressionAttributeValues(expressionAttributeValues);
         }
 
-        if (limit != null) {
-            scanRequestBuilder = scanRequestBuilder.limit(limit);
-        }
         ScanRequest scanRequest = scanRequestBuilder.build();
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
@@ -753,31 +739,44 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                ScanResponse scanResult =
-                        FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
                 List<Lease> result = new ArrayList<>();
+                Map<String, AttributeValue> lastEvaluatedKey = null;
 
-                while (scanResult != null) {
+                do {
+                    ScanResponse scanResult =
+                            FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
+
                     for (Map<String, AttributeValue> item : scanResult.items()) {
                         log.debug("Got item {} from DynamoDB.", item.toString());
-                        result.add(serializer.fromDynamoRecord(item));
+                        try {
+                            Lease lease = serializer.fromDynamoRecord(item);
+                            // ignore non-lease entity types
+                            if (lease != null) {
+                                result.add(lease);
+                            }
+                            if (result.size() >= effectiveLimit) {
+                                break;
+                            }
+                        } catch (final Exception e) {
+                            // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
+                            // do not fail all list call.
+                            log.error("Failed to deserialize lease", e);
+                        }
                     }
 
-                    Map<String, AttributeValue> lastEvaluatedKey = scanResult.lastEvaluatedKey();
-                    if (CollectionUtils.isNullOrEmpty(lastEvaluatedKey) || --maxPages <= 0) {
-                        // Signify that we're done.
-                        scanResult = null;
-                        log.debug("lastEvaluatedKey was null - scan finished.");
-                    } else {
+                    lastEvaluatedKey = scanResult.lastEvaluatedKey();
+                    if (!CollectionUtils.isNullOrEmpty(lastEvaluatedKey) && result.size() < effectiveLimit) {
                         // Make another request, picking up where we left off.
                         scanRequest = scanRequest.toBuilder()
                                 .exclusiveStartKey(lastEvaluatedKey)
                                 .build();
                         log.debug("lastEvaluatedKey was {}, continuing scan.", lastEvaluatedKey);
-                        scanResult = FutureUtils.resolveOrCancelFuture(
-                                dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
+                    } else {
+                        lastEvaluatedKey = null;
+                        log.debug("Scan finished.");
                     }
-                }
+                } while (lastEvaluatedKey != null);
+
                 log.debug("Listed {} leases from table {}", result.size(), table);
                 return result;
             } catch (ExecutionException e) {
