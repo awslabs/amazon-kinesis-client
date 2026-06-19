@@ -15,10 +15,16 @@ import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
+import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
@@ -69,17 +75,21 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     @BeforeEach
     void setup() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
-        c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
-        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
-        when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
         leaseRefresher.createLeaseTableIfNotExists();
-        final CoordinatorStateDAO dao = new CoordinatorStateDAO(
-                dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, provider);
-        dao.initialize();
         mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
+            final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
+            c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
+            final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
+            when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+            final CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                    dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, provider);
+            try {
+                dao.initialize();
+            } catch (final InvalidStateException e) {
+                throw new RuntimeException(e);
+            }
             workerIdToLeaderDeciderMap.put(
                     workerId,
                     DynamoDBLockBasedLeaderDecider.create(
@@ -212,15 +222,94 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertFalse(decider.isLeader(workerId));
     }
 
+    /**
+     * Verifies that when handleLeaderLockResult throws InvalidStateException (signaling migration
+     * to COMPLETE):
+     * 1. isLeader returns false and the lock is released
+     * 2. The lock client switches from the legacy table to the lease table
+     *
+     * Scenario:
+     * 1. Start with PENDING status → DAO routes to legacy table lock client
+     * 2. Worker acquires lock on legacy table, handleLeaderLockResult throws → returns false
+     * 3. Status flips to COMPLETE → DAO routes to lease table lock client
+     * 4. Next isLeader() acquires lock on lease table → returns true
+     * 5. Verify lock exists on lease table with correct owner
+     */
     @Test
-    void isLeader_returnsFalse_whenHandleLeaderLockResultThrowsInvalidStateException() throws Exception {
-        doThrow(new InvalidStateException("migration complete"))
-                .when(mockTableMigrationStateMachine)
-                .handleLeaderLockResult(anyBoolean());
+    void isLeader_returnsFalseAndSwitchesLockClient_whenHandleLeaderLockResultThrowsInvalidStateException()
+            throws Exception {
+        // Create a separate legacy coordinator state table with "key" as partition key
+        final String legacyTableName = "LegacyCoordinatorStateTable";
+        dynamoDBAsyncClient
+                .createTable(CreateTableRequest.builder()
+                        .tableName(legacyTableName)
+                        .keySchema(KeySchemaElement.builder()
+                                .attributeName("key")
+                                .keyType(KeyType.HASH)
+                                .build())
+                        .attributeDefinitions(AttributeDefinition.builder()
+                                .attributeName("key")
+                                .attributeType(ScalarAttributeType.S)
+                                .build())
+                        .billingMode(BillingMode.PAY_PER_REQUEST)
+                        .build())
+                .join();
 
-        final String workerId = getWorkerId(1);
-        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+        // Set up TableMigrationStatusProvider starting at PENDING
+        final TableMigrationStatusProvider mockProvider = mock(TableMigrationStatusProvider.class);
+        when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING);
 
-        assertFalse(decider.isLeader(workerId));
+        // Create DAO with PENDING status (both legacy and lease table lock clients will be created)
+        final CoordinatorConfig c = new CoordinatorConfig("TestMigrationApp");
+        c.coordinatorStateTableConfig().tableName(legacyTableName);
+        final CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, mockProvider);
+        dao.initializeDelegates();
+        dao.initialize();
+
+        // Create a mock table migration state machine that throws on first call (simulating COMPLETE flip)
+        final TableMigrationStateMachine mockMigrationSM = mock(TableMigrationStateMachine.class);
+        doThrow(new InvalidStateException("migration complete - switch lock client"))
+                .when(mockMigrationSM)
+                .handleLeaderLockResult(true);
+
+        // Create the leader decider
+        final String workerId = "migrationTestWorker";
+        final DynamoDBLockBasedLeaderDecider decider = DynamoDBLockBasedLeaderDecider.create(
+                dao, workerId, 100L, 10L, new NullMetricsFactory(), mockMigrationSM);
+        decider.initialize();
+
+        // Step 1: isLeader() acquires lock on legacy table, but handleLeaderLockResult throws
+        // → lock is released, returns false
+        assertFalse(
+                decider.isLeader(workerId), "Expected false: handleLeaderLockResult threw, lock should be released");
+
+        // Step 2: Flip migration status to COMPLETE
+        when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        // Reset the mock to allow handleLeaderLockResult to succeed on next call
+        org.mockito.Mockito.reset(mockMigrationSM);
+
+        // Wait for heartbeat period to expire so the cached false result is not returned
+        Thread.sleep(15);
+
+        // Step 3: Next isLeader() should use lease table lock client and succeed
+        assertTrue(
+                decider.isLeader(workerId),
+                "Expected true: after status flip to COMPLETE, lock should be acquired on lease table");
+
+        // Verify the lock is held on the LEASE table (not the legacy table)
+        final GetItemResponse leaseTableLockItem = dynamoDBSyncClient.getItem(GetItemRequest.builder()
+                .tableName(TEST_LOCK_TABLE_NAME)
+                .key(Collections.singletonMap(
+                        DynamoDBLeaseSerializer.LEASE_KEY_KEY,
+                        AttributeValue.builder().s(LeaderLock.LEADER_HASH_KEY).build()))
+                .build());
+        assertTrue(leaseTableLockItem.hasItem(), "Lock should exist in lease table");
+        assertEquals(
+                workerId,
+                leaseTableLockItem.item().get("ownerName").s(),
+                "Lock in lease table should be owned by our worker");
+
+        decider.shutdown();
     }
 }

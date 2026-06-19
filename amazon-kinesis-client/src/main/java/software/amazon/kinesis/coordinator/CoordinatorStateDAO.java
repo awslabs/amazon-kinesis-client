@@ -14,13 +14,15 @@
  */
 package software.amazon.kinesis.coordinator;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.ThreadSafe;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions.AmazonDynamoDBLockClientOptionsBuilder;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
@@ -310,17 +312,93 @@ public class CoordinatorStateDAO {
 
     // ==================== Lock Client ====================
 
+    private AmazonDynamoDBLockClient leaseTableLockClient;
+    private AmazonDynamoDBLockClient legacyTableLockClient;
+
     /**
-     * Get the DDB Lock Client options builder pointing to the appropriate table.
-     * Routes based on table migration status:
-     * - COMPLETE: lease table lock
-     * - All others: legacy table lock
+     * Initialize the DDB lock clients for leader election. Creates lock clients for both
+     * the legacy table and the lease table, unless migration is already COMPLETE (in which
+     * case only the lease table lock client is created).
+     *
+     * <p>The lock clients have background heartbeat threads that keep acquired locks alive.
+     * An idle lock client (one that hasn't acquired a lock) will have a running heartbeat
+     * thread but it will be effectively a no-op since there are no locks to heartbeat.</p>
+     *
+     * <p>This method is called once during startup and is not thread-safe with respect to
+     * concurrent calls. It must be called before any calls to {@link #getDDBLockClient()}.</p>
+     *
+     * @param leaseDurationMillis the lock lease duration in milliseconds
+     * @param heartbeatPeriodMillis the heartbeat period in milliseconds
+     * @param workerId the owner name for the lock
      */
-    public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder() {
-        if (isTableMigrationComplete()) {
-            return leaseTableDaoDelegate.getDDBLockClientOptionsBuilder();
+    public void initializeLockClients(
+            final long leaseDurationMillis, final long heartbeatPeriodMillis, final String workerId) {
+        leaseTableLockClient = new AmazonDynamoDBLockClient(leaseTableDaoDelegate
+                .getDDBLockClientOptionsBuilder()
+                .withTimeUnit(TimeUnit.MILLISECONDS)
+                .withLeaseDuration(leaseDurationMillis)
+                .withHeartbeatPeriod(heartbeatPeriodMillis)
+                .withCreateHeartbeatBackgroundThread(true)
+                .withOwnerName(workerId)
+                .build());
+
+        if (!isTableMigrationComplete()) {
+            legacyTableLockClient = new AmazonDynamoDBLockClient(legacyTableDaoDelegate
+                    .getDDBLockClientOptionsBuilder()
+                    .withTimeUnit(TimeUnit.MILLISECONDS)
+                    .withLeaseDuration(leaseDurationMillis)
+                    .withHeartbeatPeriod(heartbeatPeriodMillis)
+                    .withCreateHeartbeatBackgroundThread(true)
+                    .withOwnerName(workerId)
+                    .build());
         }
-        return legacyTableDaoDelegate.getDDBLockClientOptionsBuilder();
+
+        log.info(
+                "Lock clients initialized. LeaseTable lock client: created, Legacy lock client: {}",
+                legacyTableLockClient != null ? "created" : "not created (migration already complete)");
+    }
+
+    /**
+     * Get the active DDB lock client based on the current table migration status.
+     * Routes to the lease table lock client when migration status is COMPLETE,
+     * otherwise routes to the legacy table lock client.
+     *
+     * <p>Thread-safe: the fields are assigned once during {@link #initializeLockClients} (startup)
+     * and never reassigned. The routing decision is based on the {@link TableMigrationStatusProvider}
+     * which is updated atomically. The caller ({@code isLeader()}) is synchronized,
+     * providing happens-before guarantees.</p>
+     *
+     * @return the appropriate {@link AmazonDynamoDBLockClient} for the current migration state
+     */
+    public AmazonDynamoDBLockClient getDDBLockClient() {
+        if (isTableMigrationComplete()) {
+            return leaseTableLockClient;
+        }
+        return legacyTableLockClient;
+    }
+
+    /**
+     * Shutdown both lock clients, closing their background heartbeat threads.
+     * Should be called during scheduler shutdown to ensure no background threads
+     * remain running.
+     */
+    public void shutdownLockClients() {
+        if (legacyTableLockClient != null) {
+            try {
+                log.info("Closing legacy table lock client");
+                legacyTableLockClient.close();
+            } catch (final IOException e) {
+                log.error("Failed to close legacy table lock client", e);
+            }
+        }
+        if (leaseTableLockClient != null) {
+            try {
+                log.info("Closing lease table lock client");
+                leaseTableLockClient.close();
+            } catch (final IOException e) {
+                log.error("Failed to close lease table lock client", e);
+            }
+        }
     }
 
     // ==================== Transactional Operations ====================

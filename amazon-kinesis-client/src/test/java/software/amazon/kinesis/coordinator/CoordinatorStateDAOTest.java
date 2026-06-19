@@ -95,6 +95,7 @@ public class CoordinatorStateDAOTest {
         doaUnderTest.createCoordinatorStateIfNotExists(migrationState);
 
         final AmazonDynamoDBLockClient dynamoDBLockClient = new AmazonDynamoDBLockClient(doaUnderTest
+                .getLeaseTableDaoDelegate()
                 .getDDBLockClientOptionsBuilder()
                 .withOwnerName("TEST_WORKER")
                 .withCreateHeartbeatBackgroundThread(true)
@@ -108,6 +109,7 @@ public class CoordinatorStateDAOTest {
         Assertions.assertTrue(optionalItem.isPresent(), "Lock was not acquired");
 
         final AmazonDynamoDBLockClient worker2DynamoDBLockClient = new AmazonDynamoDBLockClient(doaUnderTest
+                .getLeaseTableDaoDelegate()
                 .getDDBLockClientOptionsBuilder()
                 .withOwnerName("TEST_WORKER_2")
                 .withCreateHeartbeatBackgroundThread(true)

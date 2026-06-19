@@ -162,48 +162,59 @@ public class CoordinatorConfig {
     private ClientVersionConfig clientVersionConfig = ClientVersionConfig.CLIENT_VERSION_CONFIG_3X;
 
     /**
-     * Controls whether we should migrate all KCLv3 entities such as WorkerMetricStats and the
-     * CoordinatorState into the lease table.
-     * This is used for existing v3 applications running the legacy multi-table setup (separate
-     * CoordinatorState and WorkerMetricStats tables).
+     * Controls whether to migrate all KCLv3 entities (WorkerMetricStats and CoordinatorState)
+     * from separate DDB tables into the Lease table. This is only applicable for existing v3 applications
+     * running the legacy multi-table setup (separate CoordinatorState and WorkerMetricStats tables).
      *
-     * Migration follows a 2 phase deployment and is recommended to be done only after
-     * ClientVersionConfig is in CLIENT_VERSION_CONFIG_3X to avoid performing 2 migrations at once.
+     * <p>Migration follows a 2-phase deployment and is recommended to be done only after
+     * ClientVersionConfig is in CLIENT_VERSION_CONFIG_3X to avoid performing 2 migrations at once.</p>
+     * <ul>
+     *   <li>Phase 1: Upgrade to KCLv3.5+ with this config set to false (default). Workers emit
+     *       a min support code in WorkerMetricStats to signal readiness. Once all workers are
+     *       emitting the min support code steadily for a bake period, the DDB state advances
+     *       to DEPLOYED.</li>
+     *   <li>Phase 2: Deploy KCLv3.5+ with this config set to true. Workers switch to writing
+     *       WorkerMetricStats and CoordinatorState entries into the Lease table. Once all workers
+     *       are writing exclusively to the Lease table the leader moves existing CoordinatorState
+     *       entries from legacy table to the lease table, and then the leader allows
+     *       for a bake time of {@link #tableMigrationCompleteBakeTimeSeconds()}, after which the
+     *       state machine moves to COMPLETE.</li>
+     * </ul>
      *
-     * Phase 1 is just an upgrade to latest KCL version with the default value for this config.
-     * This prepares for table migration. Phase 2 is a second deployement where this config
-     * should be set to true. During second phase the workers start writing WorkerMetricStats
-     * and CoordinatorState entries into Lease table.
-     * Once all workers start writing exclusively to Lease table the leader allows for a
-     * bake time of {@link tableMigrationCompleteBakeTimeSeconds}, after which the state machine
-     * moves to a completed state. Ensure the bake time is sufficient to detect any regressions
-     * and rollback.
-     * After the state transitions to a COMPLETE state, rollbacks will not be possible and all
-     * workers will only use lease table. A very large bake time also means two reads for every
-     * read of a coordinator table.
+     * <p>Ensure the bake time is sufficient to detect any regressions and rollback.
+     * After the state transitions to COMPLETE, rollbacks will not be possible and all
+     * workers will only use the lease table. A very large bake time also means two reads for
+     * every read of a coordinator table during the PENDING state.</p>
      *
-     * <p>This flag is only relevant for 3.5+ upgrades where source version has the legacy
-     * multi-table setup. For 2.x → 3.x migrations client version migration, it will land
-     * by default into a single table and no migration is needed and this flag will be ignored.</p>
+     * <p>This flag is only relevant for 3.5+ upgrades where the source version has the legacy
+     * multi-table setup. For 2.x → 3.x client version migrations, it will land by default
+     * into a single table and no table migration is needed — this flag will be ignored.</p>
      *
      * <p>Default value: false</p>
+     *
+     * @see software.amazon.kinesis.coordinator.migration.TableMigrationStatus
+     * @see software.amazon.kinesis.coordinator.migration.TableMigrationStateMachineImpl
      */
     private boolean migrateAllEntitiesToLeaseTable = false;
 
     /**
      * Bake time in seconds before transitioning from PENDING to COMPLETE during table migration.
-     * Once in PENDING state, the leader monitors that all worker metrics are actively being emitted
-     * in the lease table and no active metrics remain in the legacy table. When this condition is
-     * satisfied, the leader records a steadySinceEpoch (seconds) timestamp in DDB. Once the bake
-     * time elapses from that steady timestamp, the leader transitions to COMPLETE.
+     * Once in PENDING state, the leader monitors that all worker metrics are being emitted
+     * exclusively in the lease table and no active metrics or coordinator state entries remain
+     * in the legacy table. The bake timer starts from the {@code modifiedTimestamp} of the
+     * PENDING state entry written to DDB. Once the bake time elapses from that timestamp,
+     * the leader transitions to COMPLETE.
      *
      * <p>If the steady condition is broken (e.g., a worker rolls back and starts writing to legacy),
-     * the steadySinceEpoch resets and the bake time countdown starts over.</p>
+     * the DDB state is rolled back to DEPLOYED. Once all workers converge again, the leader
+     * writes PENDING again (resetting the timestamp), effectively restarting the bake time.</p>
      *
      * <p>Ensure this bake time is sufficient to detect regressions and rollback if needed.
      * Minimum: 1 hour. Maximum: 1 week.</p>
      *
      * <p>Default value: 86400 seconds (1 day)</p>
+     *
+     * @see software.amazon.kinesis.coordinator.migration.TableMigrationStatus#TABLE_MIGRATION_STATUS_COMPLETE
      */
     private long tableMigrationCompleteBakeTimeSeconds = TimeUnit.DAYS.toSeconds(1);
 

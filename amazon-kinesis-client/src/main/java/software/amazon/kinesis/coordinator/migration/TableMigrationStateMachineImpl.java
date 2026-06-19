@@ -111,7 +111,7 @@ import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.Featu
  * <h2>Worker behavior (config-driven):</h2>
  * <p>Workers determine their effective local status from DDB state + config. Only COMPLETE from
  * DDB changes behavior unconditionally. All other states are overridden by config:</p>
- * Refer to <@code determineAndPersistStatus()> javadoc for more details.
+ * <p>Refer to {@code determineStatusForInitialization()} javadoc for more details.</p>
  *
  * <h2>Rollback handling:</h2>
  * <h3>Phase 2 to Phase 1 (PENDING to DEPLOYED):</h3>
@@ -124,8 +124,12 @@ import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.Featu
  * rollforward, Phase 1 code evaluates from whatever state was left. Customers should not initiate
  * a second deployment until the first has fully succeeded across all workers.</p>
  *
- * ThreadSafety - This class methods are called by primarily called from
- * LeaderDecider from Scheduler thread and from LAM thread via the LAMDataManager.
+ * <p>ThreadSafety: This class's methods are primarily called from the LeaderDecider on the
+ * Scheduler thread and from the LAM thread via the LAMDataManager.</p>
+ *
+ * @see TableMigrationStatus
+ * @see CoordinatorConfig#migrateAllEntitiesToLeaseTable()
+ * @see CoordinatorConfig#tableMigrationCompleteBakeTimeSeconds()
  */
 @Slf4j
 @KinesisClientInternalApi
