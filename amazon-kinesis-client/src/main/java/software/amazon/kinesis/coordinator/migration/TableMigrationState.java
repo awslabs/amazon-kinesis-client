@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
@@ -49,9 +50,9 @@ public class TableMigrationState extends CoordinatorState {
     public static final String TABLE_MIGRATION_HASH_KEY = "TableMigration3.5";
     /**
      * Attribute name in migration state item, whose value is used during
-     * the KCL v3.x migration process to know whether the workers need to
-     * perform KCL v2.x compatible operations or can perform native KCL v3.x
-     * operations.
+     * the KCL v3.4 -> v3.5+ table migration process to track whether the
+     * workers have completed migrating all entities to the lease table
+     * or are still performing migration operations.
      */
     public static final String TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME = "tm";
 
@@ -61,9 +62,9 @@ public class TableMigrationState extends CoordinatorState {
     private static final int MAX_HISTORY_ENTRIES = 10;
 
     /**
-     * Default bake time in seconds (60 seconds).
+     * Default bake time in seconds (60 minutes).
      */
-    public static final long DEFAULT_BAKE_TIME_SECONDS = 60L;
+    public static final long DEFAULT_BAKE_TIME_SECONDS =  TimeUnit.HOURS.toSeconds(1);
 
     private TableMigrationStatus tableMigrationStatus;
     private String modifiedBy;
