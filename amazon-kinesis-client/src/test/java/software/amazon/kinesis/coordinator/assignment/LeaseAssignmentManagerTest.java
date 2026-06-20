@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +71,6 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.RETURNS_MOCKS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -126,7 +126,7 @@ class LeaseAssignmentManagerTest {
 
         final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig("applicationName");
         config.tableName(WORKER_METRICS_TABLE_NAME);
-        mockProvider = mock(TableMigrationStatusProvider.class, RETURNS_MOCKS);
+        mockProvider = mock(TableMigrationStatusProvider.class);
         when(mockProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
         workerMetricsDAO =
                 new WorkerMetricStatsDAO(dynamoDbAsyncClient, config, LEASE_TABLE_NAME, 10000L, mockProvider);
@@ -1322,7 +1322,12 @@ class LeaseAssignmentManagerTest {
             final LeaseAssignmentStrategy strategy) {
 
         final LAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
-                entityDAO, workerMetricStatsDao, mockProvider, mock(Consumer.class), config);
+                entityDAO,
+                workerMetricStatsDao,
+                mockProvider,
+                mock(Consumer.class),
+                config,
+                MoreExecutors.newDirectExecutorService());
 
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
@@ -1535,7 +1540,7 @@ class LeaseAssignmentManagerTest {
                 .join();
 
         // Simulate DEPLOYED state: 3.5 workers write to lease table, 3.4 workers write to legacy table
-        final TableMigrationStatusProvider deployedProvider = mock(TableMigrationStatusProvider.class, RETURNS_MOCKS);
+        final TableMigrationStatusProvider deployedProvider = mock(TableMigrationStatusProvider.class);
         when(deployedProvider.getTableMigrationStatus())
                 .thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
         when(deployedProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);

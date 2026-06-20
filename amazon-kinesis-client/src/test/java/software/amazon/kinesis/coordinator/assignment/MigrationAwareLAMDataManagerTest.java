@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -95,7 +96,12 @@ class MigrationAwareLAMDataManagerTest {
         config.workerMetricsReporterFreqInMillis(REPORTER_FREQ_MILLIS);
         config.staleWorkerMetricsEntryCleanupDuration(Duration.ofDays(1000));
         return new MigrationAwareLAMDataManager(
-                entityDAO, workerMetricsDAO, tableMigrationStatusProvider, summaryConsumer, config);
+                entityDAO,
+                workerMetricsDAO,
+                tableMigrationStatusProvider,
+                summaryConsumer,
+                config,
+                MoreExecutors.newDirectExecutorService());
     }
 
     private Lease createLease(String leaseKey, String owner) {

@@ -64,7 +64,7 @@ public class TableMigrationState extends CoordinatorState {
     /**
      * Default bake time in seconds (60 minutes).
      */
-    public static final long DEFAULT_BAKE_TIME_SECONDS =  TimeUnit.HOURS.toSeconds(1);
+    public static final long DEFAULT_BAKE_TIME_SECONDS = TimeUnit.HOURS.toSeconds(1);
 
     private TableMigrationStatus tableMigrationStatus;
     private String modifiedBy;

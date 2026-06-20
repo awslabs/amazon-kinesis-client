@@ -27,11 +27,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -103,7 +101,8 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
             final WorkerMetricStatsDAO workerMetricsDAO,
             final TableMigrationStatusProvider tableMigrationStatusProvider,
             final Consumer<TableMigrationSummary> migrationSummaryConsumer,
-            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config) {
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final ExecutorService executorService) {
         this.entityDAO = entityDAO;
         this.workerMetricsDAO = workerMetricsDAO;
         this.tableMigrationStatusProvider = tableMigrationStatusProvider;
@@ -112,9 +111,7 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD * config.workerMetricsReporterFreqInMillis());
         this.supportCodeExpiryThreshold = Duration.ofMillis(config.workerMetricsReporterFreqInMillis() * 3);
         this.staleWorkerMetricsCleanupDuration = config.staleWorkerMetricsEntryCleanupDuration();
-        this.executorService = Executors.newFixedThreadPool(
-                Runtime.getRuntime().availableProcessors(),
-                new ThreadFactoryBuilder().setNameFormat("lam-data-load-%d").build());
+        this.executorService = executorService;
     }
 
     @Override

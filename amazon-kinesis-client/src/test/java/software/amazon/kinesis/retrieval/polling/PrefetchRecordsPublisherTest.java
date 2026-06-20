@@ -61,6 +61,7 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardObjectHelper;
@@ -127,8 +128,11 @@ public class PrefetchRecordsPublisherTest {
     @Mock
     private DataFetcher dataFetcher;
 
-    @Mock
-    private InitialPositionInStreamExtended initialPosition;
+    // DEFAULT_POSITION_IN_STREAM holds a shared InitialPositionInStreamExtended instance, and mocking
+    // the InitialPositionInStreamExtended class causes the inline mock-maker to null that shared instance's
+    // position field JVM-wides. Use a real instance.
+    private final InitialPositionInStreamExtended initialPosition =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     @Mock
     private ExtendedSequenceNumber sequenceNumber;

@@ -166,6 +166,12 @@ public class MultiLangDaemonConfiguration {
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private CoordinatorConfig.ClientVersionConfig clientVersionConfig;
 
+    @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
+    private boolean migrateAllEntitiesToLeaseTable;
+
+    @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
+    private long tableMigrationCompleteBakeTimeSeconds;
+
     @ConfigurationSettable(configurationClass = LifecycleConfig.class)
     private long taskBackoffTimeMillis;
 

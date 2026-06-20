@@ -27,7 +27,6 @@ import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -517,7 +516,7 @@ public class CoordinatorStateDAOTest {
             throws Exception {
         leaseRefresher.createLeaseTableIfNotExists();
 
-        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class, Mockito.RETURNS_MOCKS);
+        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
         when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
         return new CoordinatorStateDAO(client, config, LEASE_TABLE_NAME, provider);
     }
