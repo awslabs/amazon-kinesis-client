@@ -323,6 +323,7 @@ public class Scheduler implements Runnable {
                 coordinatorStateDAO,
                 leaseManagementConfig.workerIdentifier(),
                 coordinatorConfig,
+                metricsFactory,
                 Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
                         .setNameFormat("table-migration-async-copy")
                         .setDaemon(true)
@@ -469,7 +470,8 @@ public class Scheduler implements Runnable {
                         Runtime.getRuntime().availableProcessors(),
                         new ThreadFactoryBuilder()
                                 .setNameFormat("lam-data-load-%d")
-                                .build()));
+                                .build()),
+                metricsFactory);
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)

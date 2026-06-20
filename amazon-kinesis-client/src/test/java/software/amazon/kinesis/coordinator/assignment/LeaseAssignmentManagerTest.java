@@ -1327,7 +1327,8 @@ class LeaseAssignmentManagerTest {
                 mockProvider,
                 mock(Consumer.class),
                 config,
-                MoreExecutors.newDirectExecutorService());
+                MoreExecutors.newDirectExecutorService(),
+                new NullMetricsFactory());
 
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,

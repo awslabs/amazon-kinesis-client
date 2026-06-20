@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ConditionCheck;
 import software.amazon.awssdk.services.dynamodb.model.Put;
@@ -38,6 +39,10 @@ import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
+import software.amazon.kinesis.metrics.MetricsUtil;
 
 import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.Features.SINGLE_TABLE_MIGRATION;
 
@@ -138,6 +143,19 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
 
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 30L;
 
+    // Metric constants
+    private static final String TABLE_MIGRATION_OPERATION = "TableMigration";
+    private static final String TABLE_MIGRATION_INITIALIZE_OPERATION = "TableMigrationInitialize";
+    private static final String TABLE_MIGRATION_ASYNC_MOVE_OPERATION = "TableMigrationAsyncMove";
+    private static final String STATUS_ORDINAL_METRIC = "StatusOrdinal";
+    private static final String PHASE1_WORKER_METRIC = "Phase1Worker";
+    private static final String PHASE2_WORKER_METRIC = "Phase2Worker";
+    private static final String PRE_PHASE1_WORKER_METRIC = "PrePhase1Worker";
+    private static final String READ_FAULT_METRIC = "ReadFault";
+    private static final String WRITE_FAULT_METRIC = "WriteFault";
+    private static final String COMPLETION_FAULT_METRIC = "CompletionFault";
+    private static final String MOVE_BATCH_COUNT_METRIC = "BatchCount";
+
     private final TableMigrationStatusProvider statusProvider;
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final LegacyTableCoordinatorStateDAODelegate legacyDao;
@@ -148,6 +166,8 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private final boolean migrateAllEntitiesToLeaseTable;
     /** Override map of configured bake time for migration status transitions */
     private final Map<TableMigrationStatus, Long> bakeTimeOverrides;
+
+    private final MetricsFactory metricsFactory;
 
     /**
      * Dedicated executor for running the async copy operation. Owned and shut down
@@ -186,6 +206,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             final CoordinatorStateDAO coordinatorStateDAO,
             final String workerId,
             final CoordinatorConfig coordinatorConfig,
+            final MetricsFactory metricsFactory,
             final ExecutorService migrationExecutor) {
         this.statusProvider = statusProvider;
         this.coordinatorStateDAO = coordinatorStateDAO;
@@ -194,6 +215,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
         this.workerId = workerId;
         this.migrateAllEntitiesToLeaseTable = coordinatorConfig.migrateAllEntitiesToLeaseTable();
         this.bakeTimeOverrides = buildBakeTimeOverrides(coordinatorConfig);
+        this.metricsFactory = metricsFactory;
         this.migrationExecutor = migrationExecutor;
     }
 
@@ -224,91 +246,160 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                 "Initializing TableMigrationStateMachine (migrateAllEntitiesToLeaseTable={})",
                 migrateAllEntitiesToLeaseTable);
 
-        // 1. Let delegates initialize based on table existence so reads work before we know
-        // the table migration status.
-        coordinatorStateDAO.initializeDelegates();
+        final MetricsScope scope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, TABLE_MIGRATION_INITIALIZE_OPERATION);
+        final long startTime = System.currentTimeMillis();
+        boolean success = false;
 
-        // 2. Read current state from legacy DDB table.
-        final TableMigrationState stateFromDDB = readStateFromLegacy();
+        try {
+            // 1. Let delegates initialize based on table existence so reads work before we know
+            // the table migration status.
+            coordinatorStateDAO.initializeDelegates();
 
-        // 3. Determine current status and perform any worker-driven transition + write.
-        final TableMigrationStatus effectiveStatus = determineStatusForInitialization(stateFromDDB);
+            // 2. Read current state from legacy DDB table.
+            final TableMigrationState stateFromDDB = readStateFromLegacy(scope);
 
-        // 4. Publish status so routing and downstream components work.
-        statusProvider.initialize(
-                effectiveStatus != TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, effectiveStatus);
+            // 3. Determine current status and perform any worker-driven transition + write.
+            final TableMigrationStatus effectiveStatus = determineStatusForInitialization(stateFromDDB);
 
-        // 5. Initialize and enable reads and writes in the DAO (status is no longer UNKNOWN).
-        coordinatorStateDAO.initialize();
+            // 4. Publish status so routing and downstream components work.
+            statusProvider.initialize(
+                    effectiveStatus != TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, effectiveStatus);
 
-        initialized = true;
-        log.info("TableMigrationStateMachine initialized: {}", effectiveStatus);
+            // 5. Initialize and enable reads and writes in the DAO (status is no longer UNKNOWN).
+            coordinatorStateDAO.initialize();
+
+            initialized = true;
+            success = true;
+            log.info("TableMigrationStateMachine initialized: {}", effectiveStatus);
+        } finally {
+            MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(scope);
+        }
     }
 
+    /**
+     * Perform Table Migration Status transitions.
+     *
+     * @throws DependencyException when not able to read TableMigrationState from DDB
+     * @throws InvalidStateException when leader result can be invalid due to the
+     *         TableMigrationStatus transition.
+     */
     @Override
     public synchronized void handleLeaderLockResult(final boolean isLeader)
             throws DependencyException, InvalidStateException {
         if (!initialized) {
             throw new IllegalStateException("TableMigrationStateMachine not initialized");
         }
+        final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TABLE_MIGRATION_OPERATION);
+
         if (statusProvider.getTableMigrationStatus() == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE) {
+            if (isLeader) {
+                scope.addData(
+                        STATUS_ORDINAL_METRIC,
+                        TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE.ordinal(),
+                        StandardUnit.NONE,
+                        MetricsLevel.SUMMARY);
+            }
+            MetricsUtil.endScope(scope);
             return;
         }
+        final long startTime = System.currentTimeMillis();
+        boolean success = false;
 
-        // Refresh from legacy DDB and re-apply config override to determine effective local status.
-        // This ensures we detect external state advances (e.g., another leader wrote DEPLOYED)
-        // and apply the config override consistently (e.g., DDB=PENDING + config=false → DEPLOYED).
-        // If we cannot read from DDB we dont know if we have the correct lock so we propagate
-        // DependencyException which will return isLeader = false.
-        final TableMigrationState stateFromDDB = readStateFromLegacy();
-        if (stateFromDDB != null) {
-            final TableMigrationStatus statusFromDDB = stateFromDDB.getTableMigrationStatus();
-            if (statusFromDDB == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE) {
-                statusProvider.updateTableMigrationStatus(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
-                // Migration completed by another leader. Throw to release current lock so the
-                // next cycle acquires lock from lease table.
-                throw new InvalidStateException(
-                        "Table migration completed by another leader. Release lock to acquire from lease table on next call.");
+        try {
+            // Refresh from legacy DDB and re-apply config override to determine effective local status.
+            // This ensures we detect external state advances (e.g., another leader wrote DEPLOYED)
+            // and apply the config override consistently (e.g., DDB=PENDING + config=false → DEPLOYED).
+            // If we cannot read from DDB we dont know if we have the correct lock so we propagate
+            // DependencyException which will return isLeader = false.
+            final TableMigrationState stateFromDDB = readStateFromLegacy(scope);
+
+            if (stateFromDDB != null) {
+                final TableMigrationStatus statusFromDDB = stateFromDDB.getTableMigrationStatus();
+                if (statusFromDDB == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE) {
+                    statusProvider.updateTableMigrationStatus(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+                    // Migration completed by another leader. Throw to release current lock so the
+                    // next cycle acquires lock from lease table.
+                    throw new InvalidStateException(
+                            "Table migration completed by another leader. Release lock to acquire from lease table on next call.");
+                }
+                // Okay to ignore exceptions here because we will only remain in INIT state and
+                // dont need to force the leader to give up the lock because all worker will
+                // run into it
+                final TableMigrationStatus effectiveStatus = applyConfigOverrideSafe(statusFromDDB);
+                if (effectiveStatus != statusProvider.getTableMigrationStatus()) {
+                    log.info(
+                            "Refreshed local status: {} -> {} (DDB={})",
+                            statusProvider.getTableMigrationStatus(),
+                            effectiveStatus,
+                            statusFromDDB);
+                    statusProvider.updateTableMigrationStatus(effectiveStatus);
+                    // lock is still valid since lock changes only on transition to COMPLETED
+                }
             }
-            // Okay to ignore exceptions here because we will only remain in INIT state and
-            // dont need to force the leader to give up the lock because all worker will
-            // run into it
-            final TableMigrationStatus effectiveStatus = applyConfigOverrideSafe(statusFromDDB);
-            if (effectiveStatus != statusProvider.getTableMigrationStatus()) {
-                log.info(
-                        "Refreshed local status: {} -> {} (DDB={})",
-                        statusProvider.getTableMigrationStatus(),
-                        effectiveStatus,
-                        statusFromDDB);
-                statusProvider.updateTableMigrationStatus(effectiveStatus);
-                // lock is still valid since lock changes only on transition to COMPLETED
+
+            if (!isLeader) {
+                // If we lost leadership while an async move is in progress, cancel it.
+                if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
+                    log.info("Lost leadership, cancelling in-progress async move.");
+                    pendingMoveFuture.cancel(true);
+                    pendingMoveFuture = null;
+                }
+                success = true;
+                return;
             }
+
+            emitLeaderMetrics(stateFromDDB, scope);
+
+            // Leader uses local effective status to drive state transitions.
+            // Each handler reads the DDB state (passed in) to perform necessary state transitions
+            // using conditional writes to make sure state did not change in the meanwhile.
+            switch (statusProvider.getTableMigrationStatus()) {
+                case TABLE_MIGRATION_STATUS_INIT:
+                    handleInitState(stateFromDDB, scope);
+                    break;
+                case TABLE_MIGRATION_STATUS_DEPLOYED:
+                    handleDeployedState(stateFromDDB, scope);
+                    break;
+                case TABLE_MIGRATION_STATUS_PENDING:
+                    handlePendingState(stateFromDDB, scope);
+                    break;
+                default:
+                    break;
+            }
+
+            success = true;
+        } finally {
+            MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(scope);
         }
+    }
 
-        if (!isLeader) {
-            // If we lost leadership while an async move is in progress, cancel it.
-            if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
-                log.info("Lost leadership, cancelling in-progress async move.");
-                pendingMoveFuture.cancel(true);
-                pendingMoveFuture = null;
-            }
-            return;
-        }
+    /**
+     * Emits leader-only metrics (StatusOrdinal, phase worker counts) to the provided scope.
+     * StatusOrdinal reflects the DDB state (not the local config-overridden state) so
+     * customers can track migration progress.
+     */
+    private synchronized void emitLeaderMetrics(final TableMigrationState ddbState, final MetricsScope scope) {
+        final TableMigrationStatus ddbStatus = ddbState == null
+                ? TableMigrationStatus.TABLE_MIGRATION_STATUS_UNKNOWN
+                : ddbState.getTableMigrationStatus();
+        scope.addData(STATUS_ORDINAL_METRIC, ddbStatus.ordinal(), StandardUnit.NONE, MetricsLevel.SUMMARY);
 
-        // Leader uses local effective status to drive state transitions.
-        // Each handler reads the DDB state (passed in) to perform conditional writes.
-        switch (statusProvider.getTableMigrationStatus()) {
-            case TABLE_MIGRATION_STATUS_INIT:
-                handleInitState(stateFromDDB);
-                break;
-            case TABLE_MIGRATION_STATUS_DEPLOYED:
-                handleDeployedState(stateFromDDB);
-                break;
-            case TABLE_MIGRATION_STATUS_PENDING:
-                handlePendingState(stateFromDDB);
-                break;
-            default:
-                break;
+        if (latestMigrationSummary != null) {
+            final Map<Integer, Integer> distribution = latestMigrationSummary.getSupportCodeDistribution();
+            final int workersWithTableMigrationCode =
+                    distribution != null ? distribution.getOrDefault(SINGLE_TABLE_MIGRATION.ordinal(), 0) : 0;
+            final int phase2Workers = latestMigrationSummary.getActiveWorkersWithMetricsInLeaseTable();
+            final int phase1Workers = Math.max(0, workersWithTableMigrationCode - phase2Workers);
+            final int prePhase1Workers =
+                    latestMigrationSummary.getTotalWorkersWithLeases() - workersWithTableMigrationCode;
+
+            scope.addData(PHASE1_WORKER_METRIC, phase1Workers, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData(PHASE2_WORKER_METRIC, phase2Workers, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData(
+                    PRE_PHASE1_WORKER_METRIC, Math.max(0, prePhase1Workers), StandardUnit.COUNT, MetricsLevel.SUMMARY);
         }
     }
 
@@ -359,7 +450,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * </pre>
      */
     private TableMigrationStatus determineStatusForInitialization(final TableMigrationState stateFromDDB)
-            throws DependencyException, InvalidStateException {
+            throws InvalidStateException {
 
         // Case 1: No state in DDB.
         if (stateFromDDB == null) {
@@ -439,13 +530,13 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      *
      * Called from synchronized context.
      */
-    private void handleInitState(final TableMigrationState stateFromDDB) {
+    private void handleInitState(final TableMigrationState stateFromDDB, final MetricsScope scope) {
         if (!isMinSupportCodeMet()) {
             if (stateFromDDB != null) {
                 // Min support code regressed (rollback scenario). Delete state so bake restarts.
                 // Best-effort: during actual rollback, 3.4 workers can't do this.
                 log.info("INIT: min support code NOT met but DDB has INIT — deleting state (best effort).");
-                deleteStateSafe(stateFromDDB);
+                deleteStateSafe(stateFromDDB, scope);
             }
             log.debug("INIT: waiting for min support code across all workers.");
             return;
@@ -458,7 +549,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             log.info("INIT: min support code met, writing INIT to legacy DDB");
             // If we encounter error while writing to DDB, no need to fail isLeader call
             // we can retry writing next time.
-            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, null);
+            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, null, scope);
             return;
         }
 
@@ -492,7 +583,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
 
         if (elapsedSeconds >= bakeTimeSeconds) {
             log.info("INIT -> DEPLOYED: bake time elapsed ({}s >= {}s)", elapsedSeconds, bakeTimeSeconds);
-            if (writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB)) {
+            if (writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB, scope)) {
                 // only update status if we are able to successfully write to DDB.
                 statusProvider.updateTableMigrationStatus(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED);
             }
@@ -514,13 +605,13 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      *   <li>Otherwise: no-op, waiting for Phase 2 deployment.</li>
      * </ul>
      */
-    private void handleDeployedState(final TableMigrationState stateFromDDB) {
+    private void handleDeployedState(final TableMigrationState stateFromDDB, final MetricsScope scope) {
         if (stateFromDDB != null
                 && stateFromDDB.getTableMigrationStatus() == TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING) {
             // DDB has PENDING but we're locally DEPLOYED (config=false → Phase 1 rollback).
             // Write DEPLOYED back to legacy DDB.
             log.info("DEPLOYED: DDB has PENDING but config=false, writing DEPLOYED back to legacy DDB.");
-            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB);
+            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB, scope);
         } else {
             log.debug("DEPLOYED: Phase 1 leader, steady state. Waiting for Phase 2 deployment.");
         }
@@ -549,13 +640,14 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * @throws InvalidStateException when the PENDING → COMPLETE transition succeeds, signaling
      *         the caller to release the current lock so the correct lock can be acquired
      */
-    private void handlePendingState(final TableMigrationState stateFromDDB) throws InvalidStateException {
+    private void handlePendingState(final TableMigrationState stateFromDDB, final MetricsScope scope)
+            throws InvalidStateException {
         if (stateFromDDB == null) {
             // No DDB state — should not happen normally (requires DDB=DEPLOYED or PENDING to be locally
             // in PENDING). This can only occur if state was manually deleted. Create DEPLOYED state so
             // the state machine re-evaluates from the correct starting point.
             log.warn("PENDING: no state in DDB (manually deleted?). Creating DEPLOYED state to unblock.");
-            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, null);
+            writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, null, scope);
             return;
         }
 
@@ -597,7 +689,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                         log.info("PENDING: async move succeeded and legacy table verified empty, "
                                 + "writing PENDING to legacy DDB to start bake.");
                         if (writeStatusToLegacySafe(
-                                TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING, stateFromDDB)) {
+                                TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING, stateFromDDB, scope)) {
                             // if we cannot update DDB we can reevaluate the status of the future
                             // in the next handleLeaderLockResult call
                             pendingMoveFuture = null;
@@ -625,7 +717,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                 // to be moved to lease table.
                 // Write DEPLOYED back to legacy DDB. Don't change local status (still PENDING/Phase 2).
                 log.info("PENDING: DDB=PENDING but legacy non-empty — writing DEPLOYED to legacy DDB (rollback).");
-                writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB);
+                writeStatusToLegacySafe(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, stateFromDDB, scope);
                 // Cancel any in-progress move since we're rolling back.
                 if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
                     pendingMoveFuture.cancel(true);
@@ -647,7 +739,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                         "PENDING -> COMPLETE: bake time elapsed ({}s >= {}s), finalizing transition.",
                         elapsedSeconds,
                         bakeTimeSeconds);
-                finalizeMigrationComplete(stateFromDDB);
+                finalizeMigrationComplete(stateFromDDB, scope);
                 // finalizeMigrationComplete throws InvalidStateException — we won't reach here
             } else {
                 log.debug(
@@ -754,44 +846,60 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      */
     private boolean moveCoordinatorStateEntries()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final List<CoordinatorState> legacyEntries = legacyDao.listCoordinatorState();
-        final List<CoordinatorState> entriesToMove = new ArrayList<>();
+        final MetricsScope scope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, TABLE_MIGRATION_ASYNC_MOVE_OPERATION);
+        final long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int batchesMoved = 0;
 
-        for (final CoordinatorState entry : legacyEntries) {
-            // Skip lock entries — they are not migrated
-            if (LeaderLock.LEADER_HASH_KEY.equals(entry.getKey())) {
-                log.debug("Skipping lock entry: {}", entry.getKey());
-                continue;
+        try {
+            final List<CoordinatorState> legacyEntries = legacyDao.listCoordinatorState();
+            final List<CoordinatorState> entriesToMove = new ArrayList<>();
+
+            for (final CoordinatorState entry : legacyEntries) {
+                // Skip lock entries — they are not migrated
+                if (LeaderLock.LEADER_HASH_KEY.equals(entry.getKey())) {
+                    log.debug("Skipping lock entry: {}", entry.getKey());
+                    continue;
+                }
+                // Skip the migration state itself — it will be written separately with COMPLETE status
+                if (TableMigrationState.TABLE_MIGRATION_HASH_KEY.equals(entry.getKey())) {
+                    log.debug("Skipping migration state entry — will be written with COMPLETE status");
+                    continue;
+                }
+                entriesToMove.add(entry);
             }
-            // Skip the migration state itself — it will be written separately with COMPLETE status
-            if (TableMigrationState.TABLE_MIGRATION_HASH_KEY.equals(entry.getKey())) {
-                log.debug("Skipping migration state entry — will be written with COMPLETE status");
-                continue;
+
+            log.info(
+                    "Moving {} coordinator state entries from legacy to lease table in batches of {}",
+                    entriesToMove.size(),
+                    TRANSACTION_BATCH_SIZE);
+
+            // Process in batches, checking for interruption between each batch so that
+            // cancel(true) from the main thread (e.g., on rollback or leadership loss) stops
+            // the move promptly rather than continuing to process remaining batches.
+            for (int i = 0; i < entriesToMove.size(); i += TRANSACTION_BATCH_SIZE) {
+                if (Thread.currentThread().isInterrupted()) {
+                    log.info(
+                            "Async move interrupted after processing {} of {} entries, aborting.",
+                            i,
+                            entriesToMove.size());
+                    return false;
+                }
+                final int end = Math.min(i + TRANSACTION_BATCH_SIZE, entriesToMove.size());
+                final List<CoordinatorState> batch = entriesToMove.subList(i, end);
+                moveBatch(batch);
+                batchesMoved++;
             }
-            entriesToMove.add(entry);
+
+            log.info("Successfully moved all {} coordinator state entries to lease table", entriesToMove.size());
+            success = true;
+            return true;
+        } finally {
+            scope.addData(MOVE_BATCH_COUNT_METRIC, batchesMoved, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(scope);
         }
-
-        log.info(
-                "Moving {} coordinator state entries from legacy to lease table in batches of {}",
-                entriesToMove.size(),
-                TRANSACTION_BATCH_SIZE);
-
-        // Process in batches, checking for interruption between each batch so that
-        // cancel(true) from the main thread (e.g., on rollback or leadership loss) stops
-        // the move promptly rather than continuing to process remaining batches.
-        for (int i = 0; i < entriesToMove.size(); i += TRANSACTION_BATCH_SIZE) {
-            if (Thread.currentThread().isInterrupted()) {
-                log.info(
-                        "Async move interrupted after processing {} of {} entries, aborting.", i, entriesToMove.size());
-                return false;
-            }
-            final int end = Math.min(i + TRANSACTION_BATCH_SIZE, entriesToMove.size());
-            final List<CoordinatorState> batch = entriesToMove.subList(i, end);
-            moveBatch(batch);
-        }
-
-        log.info("Successfully moved all {} coordinator state entries to lease table", entriesToMove.size());
-        return true;
     }
 
     /**
@@ -866,7 +974,8 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * @param existingState the current PENDING state from the legacy table
      * @throws InvalidStateException always thrown on success to signal lock release
      */
-    private void finalizeMigrationComplete(final TableMigrationState existingState) throws InvalidStateException {
+    private void finalizeMigrationComplete(final TableMigrationState existingState, final MetricsScope scope)
+            throws InvalidStateException {
         // Build COMPLETE state for both tables
         final TableMigrationState leaseTableState = existingState.copy();
         leaseTableState.update(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, workerId);
@@ -900,8 +1009,10 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
         try {
             coordinatorStateDAO.executeTransactWrite(transactItems);
             log.info("Transactionally wrote COMPLETE to both lease table and legacy table.");
+            scope.addData(COMPLETION_FAULT_METRIC, 0, StandardUnit.COUNT, MetricsLevel.SUMMARY);
         } catch (final DependencyException e) {
             // Transaction failed — either leadership lost or conditional check failed
+            scope.addData(COMPLETION_FAULT_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             log.warn("Failed to write COMPLETE transactionally ({}). Will retry next cycle.", e.getMessage());
             return;
         }
@@ -1021,15 +1132,19 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * Read state from the legacy table only. The state machine always uses the legacy
      * coordinator DAO for its own state management.
      */
-    private TableMigrationState readStateFromLegacy() throws DependencyException {
+    private TableMigrationState readStateFromLegacy(final MetricsScope scope) throws DependencyException {
+        boolean success = false;
         try {
             final CoordinatorState state = legacyDao.getCoordinatorState(TableMigrationState.TABLE_MIGRATION_HASH_KEY);
+            success = true;
             if (state instanceof TableMigrationState) {
                 return (TableMigrationState) state;
             }
             return null;
         } catch (final InvalidStateException | ProvisionedThroughputException e) {
             throw new DependencyException("Failed to read table migration state from legacy table", e);
+        } finally {
+            scope.addData(READ_FAULT_METRIC, success ? 0 : 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
         }
     }
 
@@ -1037,22 +1152,26 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * Delete state from legacy DDB. Best-effort — logs a warning on failure but does not throw.
      * Used during Phase 1 rollback detection to reset the bake timer.
      */
-    private void deleteStateSafe(final TableMigrationState state) {
+    private void deleteStateSafe(final TableMigrationState state, final MetricsScope scope) {
+        boolean success = false;
         try {
             legacyDao.deleteCoordinatorState(state.getKey());
             log.info("Deleted table migration state from legacy (best effort reset). Previous state: {}", state);
+            success = true;
         } catch (final ProvisionedThroughputException | InvalidStateException | DependencyException e) {
             log.warn(
                     "Failed to delete table migration state from legacy (best effort), will retry next cycle. State: {}",
                     state,
                     e);
+        } finally {
+            scope.addData(WRITE_FAULT_METRIC, success ? 0 : 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
         }
     }
 
     private boolean writeStatusToLegacySafe(
-            final TableMigrationStatus status, final TableMigrationState existingState) {
+            final TableMigrationStatus status, final TableMigrationState existingState, final MetricsScope scope) {
         try {
-            writeStatusToLegacy(status, existingState);
+            writeStatusToLegacy(status, existingState, scope);
             return true;
         } catch (DependencyException e) {
             log.warn("Unable to write table migration status {}, existing state {}", status, existingState, e);
@@ -1065,14 +1184,17 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * - If existingState is null: creates the entry (conditional on key not existing).
      * - If existingState is non-null: updates conditionally (key exists AND previous status matches).
      */
-    private void writeStatusToLegacy(final TableMigrationStatus status, final TableMigrationState existingState)
+    private void writeStatusToLegacy(
+            final TableMigrationStatus status, final TableMigrationState existingState, final MetricsScope scope)
             throws DependencyException {
+        boolean success = false;
         try {
             if (existingState == null) {
                 final TableMigrationState newState = new TableMigrationState(workerId);
                 newState.update(status, workerId);
                 if (legacyDao.createCoordinatorStateIfNotExists(newState)) {
                     log.info("Created table migration state in legacy: {}", status);
+                    success = true;
                 } else {
                     log.info("Table migration state already exists in legacy, another worker created it.");
                 }
@@ -1082,12 +1204,15 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                 if (legacyDao.updateCoordinatorStateWithExpectation(
                         updated, existingState.getDynamoTableMigrationStatusExpectation())) {
                     log.info("Updated table migration state in legacy: {}", status);
+                    success = true;
                 } else {
                     log.warn("Conditional write to legacy failed for {}. Another worker advanced state.", status);
                 }
             }
         } catch (final InvalidStateException | ProvisionedThroughputException e) {
             throw new DependencyException("Failed to write table migration status " + status + " to legacy", e);
+        } finally {
+            scope.addData(WRITE_FAULT_METRIC, success ? 0 : 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
         }
     }
 }

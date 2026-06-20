@@ -42,6 +42,7 @@ import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsScope;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
@@ -101,7 +102,8 @@ class MigrationAwareLAMDataManagerTest {
                 tableMigrationStatusProvider,
                 summaryConsumer,
                 config,
-                MoreExecutors.newDirectExecutorService());
+                MoreExecutors.newDirectExecutorService(),
+                new NullMetricsFactory());
     }
 
     private Lease createLease(String leaseKey, String owner) {
@@ -272,10 +274,10 @@ class MigrationAwareLAMDataManagerTest {
     }
 
     @Test
-    void loadData_migrationSummary_noLeaseOwners_minSupportCodeIsNegativeOne() throws Exception {
+    void loadData_migrationSummary_noLeaseOwners_minSupportCodeIsZero() throws Exception {
         manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
 
-        // No leases, so no lease owners to evaluate
+        // No leases, so no lease owners to evaluate — returns 0 (conservative: no support data)
         WorkerMetricStats wm = createActiveWorkerMetrics("worker1");
         when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
                 .thenReturn(buildScanResult(Collections.emptyList(), Collections.singletonList(wm)));
@@ -284,7 +286,7 @@ class MigrationAwareLAMDataManagerTest {
 
         TableMigrationSummary summary = capturedSummary.get();
         assertNotNull(summary);
-        assertEquals(-1, summary.getMinSupportCode());
+        assertEquals(0, summary.getMinSupportCode());
     }
 
     @Test
