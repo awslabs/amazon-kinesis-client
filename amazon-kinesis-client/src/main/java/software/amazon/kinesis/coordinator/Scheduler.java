@@ -464,7 +464,12 @@ public class Scheduler implements Runnable {
                 workerMetricsDAO,
                 tableMigrationStatusProvider,
                 ((TableMigrationStateMachineImpl) tableMigrationStateMachine)::updateMigrationSummary,
-                leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
+                Executors.newFixedThreadPool(
+                        Runtime.getRuntime().availableProcessors(),
+                        new ThreadFactoryBuilder()
+                                .setNameFormat("lam-data-load-%d")
+                                .build()));
 
         return DynamicMigrationComponentsInitializer.builder()
                 .metricsFactory(metricsFactory)

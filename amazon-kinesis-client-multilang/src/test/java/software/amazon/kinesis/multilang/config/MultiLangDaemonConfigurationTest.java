@@ -17,6 +17,7 @@ package software.amazon.kinesis.multilang.config;
 
 import java.util.Arrays;
 import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
@@ -502,6 +503,58 @@ public class MultiLangDaemonConfigurationTest {
         assertEquals(
                 getTestConfigsBuilder().coordinatorConfig().clientVersionConfig(),
                 coordinatorConfig.clientVersionConfig());
+    }
+
+    @Test
+    public void testMigrateAllEntitiesToLeaseTable() {
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setMigrateAllEntitiesToLeaseTable(true);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertTrue(coordinatorConfig.migrateAllEntitiesToLeaseTable());
+    }
+
+    @Test
+    public void testMigrateAllEntitiesToLeaseTableUsesDefault() {
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                baseConfiguration().resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertEquals(
+                getTestConfigsBuilder().coordinatorConfig().migrateAllEntitiesToLeaseTable(),
+                coordinatorConfig.migrateAllEntitiesToLeaseTable());
+    }
+
+    @Test
+    public void testTableMigrationCompleteBakeTimeSeconds() {
+        final long testBakeTimeSeconds = TimeUnit.HOURS.toSeconds(2);
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setTableMigrationCompleteBakeTimeSeconds(testBakeTimeSeconds);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertEquals(testBakeTimeSeconds, coordinatorConfig.tableMigrationCompleteBakeTimeSeconds());
+    }
+
+    @Test
+    public void testTableMigrationCompleteBakeTimeSecondsUsesDefault() {
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                baseConfiguration().resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertEquals(
+                getTestConfigsBuilder().coordinatorConfig().tableMigrationCompleteBakeTimeSeconds(),
+                coordinatorConfig.tableMigrationCompleteBakeTimeSeconds());
     }
 
     @Test

@@ -25,7 +25,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -113,7 +112,7 @@ class CoordinatorStateDAODelegateRoutingTest {
 
     @BeforeEach
     void setUp() {
-        statusProvider = mock(TableMigrationStatusProvider.class, Mockito.RETURNS_MOCKS);
+        statusProvider = mock(TableMigrationStatusProvider.class);
     }
 
     private CoordinatorStateDAO createDao() {

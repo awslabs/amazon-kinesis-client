@@ -10,7 +10,6 @@ import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbAsyncTable;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedAsyncClient;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
@@ -61,8 +60,7 @@ class WorkerMetricsDAOTest {
 
     private WorkerMetricStatsDAO setUp(
             final WorkerMetricsTableConfig workerMetricsTableConfig, final DynamoDbAsyncClient dynamoDbAsyncClient) {
-        final TableMigrationStatusProvider statusProvider =
-                mock(TableMigrationStatusProvider.class, Mockito.RETURNS_MOCKS);
+        final TableMigrationStatusProvider statusProvider = mock(TableMigrationStatusProvider.class);
         when(statusProvider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
         when(statusProvider.dynamicModeChangeSupportNeeded()).thenReturn(true);
         final WorkerMetricStatsDAO dao = new WorkerMetricStatsDAO(
