@@ -1701,6 +1701,52 @@ public class SchedulerTest {
                         retrievalConfig));
     }
 
+    @Test
+    public void testLeaseTableScanTotalSegmentsUsesConfiguredValue() throws Exception {
+        final int configuredSegments = 7;
+        leaseManagementConfig.leaseTableScanTotalSegments(configuredSegments);
+
+        final Scheduler localScheduler = new Scheduler(
+                checkpointConfig,
+                coordinatorConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig);
+
+        // The configured value is threaded into the EntityDAO's segment resolver.
+        assertEquals(configuredSegments, getEntityDaoConfiguredSegments(localScheduler));
+    }
+
+    @Test
+    public void testLeaseTableScanTotalSegmentsDefaultsToDynamic() throws Exception {
+        // setup() builds the scheduler with the default config (0), signaling the resolver to use
+        // dynamic, table-size-based sizing.
+        assertEquals(0, getEntityDaoConfiguredSegments(scheduler));
+    }
+
+    @Test
+    public void testLeaseTableScanTotalSegmentsRejectsNonPositive() {
+        assertThrows(IllegalArgumentException.class, () -> leaseManagementConfig.leaseTableScanTotalSegments(-1));
+        assertThrows(IllegalArgumentException.class, () -> leaseManagementConfig.leaseTableScanTotalSegments(0));
+    }
+
+    private int getEntityDaoConfiguredSegments(final Scheduler targetScheduler)
+            throws NoSuchFieldException, IllegalAccessException {
+        final Field entityDaoField = Scheduler.class.getDeclaredField("entityDAO");
+        entityDaoField.setAccessible(true);
+        final Object entityDao = entityDaoField.get(targetScheduler);
+
+        final Field resolverField = entityDao.getClass().getDeclaredField("scanSegmentResolver");
+        resolverField.setAccessible(true);
+        final Object resolver = resolverField.get(entityDao);
+
+        final Field configuredField = resolver.getClass().getDeclaredField("configuredTotalSegments");
+        configuredField.setAccessible(true);
+        return (int) configuredField.get(resolver);
+    }
+
     private void setSchedulerFieldToAccessible(final String varName, final Object mockComponent)
             throws NoSuchFieldException, IllegalAccessException {
         Field field = Scheduler.class.getDeclaredField(varName);

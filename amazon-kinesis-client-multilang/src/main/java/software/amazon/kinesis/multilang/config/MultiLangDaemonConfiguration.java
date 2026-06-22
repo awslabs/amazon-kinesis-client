@@ -122,6 +122,9 @@ public class MultiLangDaemonConfiguration {
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int initialLeaseTableWriteCapacity;
 
+    @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
+    private int leaseTableScanTotalSegments;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class, methodName = "initialPositionInStream")
     @ConfigurationSettable(configurationClass = RetrievalConfig.class)
     private InitialPositionInStreamExtended initialPositionInStreamExtended;

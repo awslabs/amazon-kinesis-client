@@ -210,6 +210,21 @@ public class LeaseManagementConfig {
     private int maxLeaseRenewalThreads = 20;
 
     /**
+     * Number of segments for parallel lease-table scans. A positive value is used as-is (overriding
+     * the dynamic upper bound). Leave unset (default) for automatic, table-size-based sizing.
+     */
+    private int leaseTableScanTotalSegments = 0;
+
+    public LeaseManagementConfig leaseTableScanTotalSegments(final int leaseTableScanTotalSegments) {
+        if (leaseTableScanTotalSegments <= 0) {
+            throw new IllegalArgumentException(
+                    "leaseTableScanTotalSegments must be a positive number; leave unset for automatic sizing");
+        }
+        this.leaseTableScanTotalSegments = leaseTableScanTotalSegments;
+        return this;
+    }
+
+    /**
      *
      */
     private boolean ignoreUnexpectedChildShards = false;
@@ -541,7 +556,8 @@ public class LeaseManagementConfig {
                     leaseCleanupConfig(),
                     workerUtilizationAwareAssignmentConfig(),
                     gracefulLeaseHandoffConfig,
-                    leaseAssignmentIntervalMillis());
+                    leaseAssignmentIntervalMillis(),
+                    leaseTableScanTotalSegments());
         }
         return leaseManagementFactory;
     }

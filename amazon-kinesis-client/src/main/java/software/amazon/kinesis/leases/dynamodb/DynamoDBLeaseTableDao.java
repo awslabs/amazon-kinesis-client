@@ -31,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
@@ -76,7 +78,7 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
     private final CoordinatorStateDAODelegate coordinatorStateDAODelegate;
     private final TableSchema<WorkerMetricStats.LeaseTableWorkerMetricStats> workerMetricStatsSchema;
     private final ExecutorService executorService;
-    private final int totalSegments;
+    private final LeaseTableScanSegmentResolver scanSegmentResolver;
 
     public DynamoDBLeaseTableDao(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
@@ -84,19 +86,20 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
             final LeaseSerializer leaseSerializer,
             final CoordinatorStateDAODelegate coordinatorStateDAODelegate,
             final ExecutorService executorService,
-            final int totalSegments) {
+            final int leaseTableScanTotalSegments) {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.tableName = tableName;
         this.leaseSerializer = leaseSerializer;
         this.coordinatorStateDAODelegate = coordinatorStateDAODelegate;
         this.workerMetricStatsSchema = TableSchema.fromBean(WorkerMetricStats.LeaseTableWorkerMetricStats.class);
         this.executorService = executorService;
-        this.totalSegments = totalSegments;
+        this.scanSegmentResolver = new LeaseTableScanSegmentResolver(leaseTableScanTotalSegments, this::describeTable);
     }
 
     @Override
     public Map<EntityType, EntityScanList> scanAllEntities()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        final int totalSegments = scanSegmentResolver.resolveTotalSegments();
         log.debug("Scanning all entities from lease table {} with {} segments", tableName, totalSegments);
 
         // Initialize EntityScanList per type with mutable ArrayLists.
@@ -189,10 +192,20 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
     private void scanSegment(final int segment, final int totalSegments, final Map<EntityType, EntityScanList> result)
             throws DependencyException, ProvisionedThroughputException {
 
+        final Map<EntityType, EntityScanList> localResult = new EnumMap<>(EntityType.class);
+        for (final EntityType type : EntityType.values()) {
+            localResult.put(
+                    type,
+                    EntityScanList.builder()
+                            .entities(new ArrayList<>())
+                            .deserializationFailures(new ArrayList<>())
+                            .build());
+        }
+
         Map<String, AttributeValue> lastEvaluatedKey = null;
         do {
             if (Thread.currentThread().isInterrupted()) {
-                log.info("Scan segment {} interrupted, stopping early", segment);
+                Thread.currentThread().interrupt();
                 throw new DependencyException(new InterruptedException("Scan segment " + segment + " was interrupted"));
             }
             final ScanRequest scanRequest = ScanRequest.builder()
@@ -202,42 +215,43 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
                     .exclusiveStartKey(lastEvaluatedKey)
                     .build();
 
+            final ScanResponse scanResponse;
             try {
-                final ScanResponse scanResponse =
-                        FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(scanRequest));
-
-                synchronized (result) {
-                    for (final Map<String, AttributeValue> record : scanResponse.items()) {
-                        final EntityType entityType = resolveEntityType(record);
-                        final EntityScanList scanList = result.get(entityType);
-                        try {
-                            final Entity entity = deserializeRecord(entityType, record);
-                            if (entity != null) {
-                                scanList.getEntities().add(entity);
-                            }
-                        } catch (final Exception e) {
-                            final String key = extractPartitionKey(record);
-                            log.error(
-                                    "Failed to deserialize {} record with key '{}' in segment {}",
-                                    entityType,
-                                    key,
-                                    segment,
-                                    e);
-                            scanList.getDeserializationFailures().add(key);
-                        }
-                    }
-                }
-
-                lastEvaluatedKey = scanResponse.lastEvaluatedKey();
-                if (CollectionUtils.isNullOrEmpty(lastEvaluatedKey)) {
-                    lastEvaluatedKey = null;
-                }
+                scanResponse = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(scanRequest));
             } catch (final ProvisionedThroughputExceededException e) {
                 throw new ProvisionedThroughputException(e);
-            } catch (final ResourceNotFoundException e) {
-                throw e;
             }
+
+            for (final Map<String, AttributeValue> record : scanResponse.items()) {
+                final EntityType entityType = resolveEntityType(record);
+                final EntityScanList scanList = localResult.get(entityType);
+                try {
+                    final Entity entity = deserializeRecord(entityType, record);
+                    if (entity != null) {
+                        scanList.getEntities().add(entity);
+                    }
+                } catch (final Exception e) {
+                    final String key = extractPartitionKey(record);
+                    log.error(
+                            "Failed to deserialize {} record with key '{}' in segment {}", entityType, key, segment, e);
+                    scanList.getDeserializationFailures().add(key);
+                }
+            }
+
+            lastEvaluatedKey = CollectionUtils.isNullOrEmpty(scanResponse.lastEvaluatedKey())
+                    ? null
+                    : scanResponse.lastEvaluatedKey();
         } while (lastEvaluatedKey != null);
+
+        // merge per-segment results into the shared map under a single short lock
+        synchronized (result) {
+            for (final EntityType type : EntityType.values()) {
+                final EntityScanList from = localResult.get(type);
+                final EntityScanList into = result.get(type);
+                into.getEntities().addAll(from.getEntities());
+                into.getDeserializationFailures().addAll(from.getDeserializationFailures());
+            }
+        }
     }
 
     /**
@@ -286,6 +300,19 @@ public class DynamoDBLeaseTableDao implements EntityDAO {
             default:
                 log.warn("No deserializer for entityType {}. Skipping record.", entityType);
                 return null;
+        }
+    }
+
+    /**
+     * Describes the lease table for dynamic scan-segment sizing. Returns {@code null} if the table
+     * does not exist yet.
+     */
+    private DescribeTableResponse describeTable() throws DependencyException {
+        try {
+            return FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.describeTable(
+                    DescribeTableRequest.builder().tableName(tableName).build()));
+        } catch (final ResourceNotFoundException e) {
+            return null;
         }
     }
 

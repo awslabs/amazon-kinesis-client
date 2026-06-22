@@ -156,7 +156,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
             final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
             final long leaseAssignmentIntervalMillis,
-            final StreamIdCacheManager streamIdCacheManager) {
+            final StreamIdCacheManager streamIdCacheManager,
+            final int leaseTableScanTotalSegments) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = createExecutorService(maxLeaseRenewerThreadCount, LEASE_RENEWAL_THREAD_FACTORY);
         this.leaseTaker = new DynamoDBLeaseTaker(
@@ -178,7 +179,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 leaseRenewalThreadpool,
                 metricsFactory,
                 leaseStatsRecorder,
-                leaseGracefulShutdownHandler::enqueueShutdown);
+                leaseGracefulShutdownHandler::enqueueShutdown,
+                leaseTableScanTotalSegments);
         this.leaseDiscoveryThreadPool =
                 createExecutorService(maxLeaseRenewerThreadCount, LEASE_DISCOVERY_THREAD_FACTORY);
         this.leaseDiscoverer = new DynamoDBLeaseDiscoverer(

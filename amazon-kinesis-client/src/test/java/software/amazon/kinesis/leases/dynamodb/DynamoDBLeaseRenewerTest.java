@@ -101,7 +101,8 @@ class DynamoDBLeaseRenewerTest {
                 Executors.newFixedThreadPool(1),
                 new NullMetricsFactory(),
                 leaseStatsRecorder,
-                mockLeaseGracefulShutdownCallBack);
+                mockLeaseGracefulShutdownCallBack,
+                1);
         this.leaseRefresher.createLeaseTableIfNotExists();
         this.leaseRefresher.waitUntilLeaseTableExists(1, 30);
     }
@@ -297,7 +298,8 @@ class DynamoDBLeaseRenewerTest {
                 mockExecutorService,
                 new NullMetricsFactory(),
                 leaseStatsRecorder,
-                mockLeaseGracefulShutdownCallBack);
+                mockLeaseGracefulShutdownCallBack,
+                1);
         leaseRefresher.createLeaseTableIfNotExists();
         leaseRefresher.waitUntilLeaseTableExists(1, 30);
     }

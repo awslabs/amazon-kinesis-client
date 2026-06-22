@@ -79,6 +79,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
     private final MetricsFactory metricsFactory;
     private final LeaseStatsRecorder leaseStatsRecorder;
     private final Consumer<Lease> leaseGracefulShutdownCallback;
+    private final int leaseTableScanTotalSegments;
     private final ConcurrentNavigableMap<String, Lease> ownedLeases = new ConcurrentSkipListMap<>();
 
     /**
@@ -100,7 +101,8 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             final ExecutorService executorService,
             final MetricsFactory metricsFactory,
             final LeaseStatsRecorder leaseStatsRecorder,
-            final Consumer<Lease> leaseGracefulShutdownCallback) {
+            final Consumer<Lease> leaseGracefulShutdownCallback,
+            final int leaseTableScanTotalSegments) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
@@ -108,6 +110,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         this.metricsFactory = metricsFactory;
         this.leaseStatsRecorder = leaseStatsRecorder;
         this.leaseGracefulShutdownCallback = leaseGracefulShutdownCallback;
+        this.leaseTableScanTotalSegments = leaseTableScanTotalSegments;
     }
 
     /**
@@ -478,11 +481,11 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
     @Override
     public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, LEASE_RENEWER_INITIALIZE);
-        final ExecutorService singleThreadExecutorService = Executors.newSingleThreadExecutor();
+        final ExecutorService parallelScanExecutorService = Executors.newCachedThreadPool();
         boolean success = false;
         try {
             final Map.Entry<List<Lease>, List<String>> response =
-                    leaseRefresher.listLeasesParallely(singleThreadExecutorService, 1);
+                    leaseRefresher.listLeasesParallely(parallelScanExecutorService, leaseTableScanTotalSegments);
 
             if (!response.getValue().isEmpty()) {
                 log.warn("List of leaseKeys failed to deserialize : {} ", response.getValue());
@@ -523,7 +526,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             // care of reassignment if some lease is expired.
             log.warn("LeaseRefresher failed in initialization during renewing of pre assigned leases", e);
         } finally {
-            singleThreadExecutorService.shutdown();
+            parallelScanExecutorService.shutdown();
             MetricsUtil.addCount(scope, "Fault", success ? 0 : 1, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
         }

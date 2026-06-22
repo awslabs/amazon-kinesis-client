@@ -116,6 +116,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final LeaseCleanupConfig leaseCleanupConfig;
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
     private long leaseAssignmentIntervalMillis;
+    private final int leaseTableScanTotalSegments;
 
     /**
      * Constructor.
@@ -189,7 +190,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final LeaseCleanupConfig leaseCleanupConfig,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final long leaseAssignmentIntervalMillis) {
+            final long leaseAssignmentIntervalMillis,
+            final int leaseTableScanTotalSegments) {
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
         this.tableName = tableName;
@@ -225,6 +227,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.workerUtilizationAwareAssignmentConfig = workerUtilizationAwareAssignmentConfig;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
         this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
+        this.leaseTableScanTotalSegments = leaseTableScanTotalSegments;
     }
 
     @Override
@@ -260,7 +263,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 gracefulLeaseHandoffConfig,
                 shardInfoShardConsumerMap,
                 leaseAssignmentIntervalMillis,
-                streamIdCacheManager);
+                streamIdCacheManager,
+                leaseTableScanTotalSegments);
     }
 
     /**

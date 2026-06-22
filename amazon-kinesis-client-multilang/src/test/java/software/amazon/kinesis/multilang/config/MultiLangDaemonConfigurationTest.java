@@ -558,6 +558,17 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
+    public void testLeaseTableScanTotalSegments() {
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseTableScanTotalSegments(15);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertEquals(15, resolvedConfiguration.leaseManagementConfig.leaseTableScanTotalSegments());
+    }
+
+    @Test
     public void testDefaultleaseAssignmentIntervalMillis() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
 
