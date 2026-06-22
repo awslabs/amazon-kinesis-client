@@ -115,46 +115,10 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final boolean isMultiStreamMode;
     private final LeaseCleanupConfig leaseCleanupConfig;
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
-    private long leaseAssignmentIntervalMillis;
+    private final long leaseAssignmentIntervalMillis;
     private final int leaseTableScanTotalSegments;
 
-    /**
-     * Constructor.
-     * @param kinesisClient
-     * @param dynamoDBClient
-     * @param tableName
-     * @param workerIdentifier
-     * @param executorService
-     * @param failoverTimeMillis
-     * @param enablePriorityLeaseAssignment
-     * @param epsilonMillis
-     * @param maxLeasesForWorker
-     * @param maxLeasesToStealAtOneTime
-     * @param maxLeaseRenewalThreads
-     * @param cleanupLeasesUponShardCompletion
-     * @param ignoreUnexpectedChildShards
-     * @param shardSyncIntervalMillis
-     * @param consistentReads
-     * @param listShardsBackoffTimeMillis
-     * @param maxListShardsRetryAttempts
-     * @param maxCacheMissesBeforeReload
-     * @param listShardsCacheAllowedAgeInSeconds
-     * @param cacheMissWarningModulus
-     * @param initialLeaseTableReadCapacity
-     * @param initialLeaseTableWriteCapacity
-     * @param tableCreatorCallback
-     * @param dynamoDbRequestTimeout
-     * @param billingMode
-     * @param leaseTableDeletionProtectionEnabled
-     * @param leaseTablePitrEnabled
-     * @param leaseSerializer
-     * @param customShardDetectorProvider
-     * @param isMultiStreamMode
-     * @param leaseCleanupConfig
-     * @param workerUtilizationAwareAssignmentConfig
-     * @param gracefulLeaseHandoffConfig
-     * @param leaseAssignmentIntervalMillis
-     */
+    @Deprecated
     public DynamoDBLeaseManagementFactory(
             final @NotNull KinesisAsyncClient kinesisClient,
             final @NotNull DynamoDbAsyncClient dynamoDBClient,
@@ -190,8 +154,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final LeaseCleanupConfig leaseCleanupConfig,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final long leaseAssignmentIntervalMillis,
-            final int leaseTableScanTotalSegments) {
+            final long leaseAssignmentIntervalMillis) {
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
         this.tableName = tableName;
@@ -227,7 +190,53 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.workerUtilizationAwareAssignmentConfig = workerUtilizationAwareAssignmentConfig;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
         this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
-        this.leaseTableScanTotalSegments = leaseTableScanTotalSegments;
+        this.leaseTableScanTotalSegments = 0;
+    }
+
+    /**
+     * Constructor that accepts the full {@link LeaseManagementConfig}.
+     * Preferred for internal use — new config fields are picked up automatically.
+     */
+    public DynamoDBLeaseManagementFactory(
+            final @NotNull LeaseManagementConfig config,
+            final @NotNull LeaseSerializer leaseSerializer,
+            final boolean isMultiStreamMode) {
+        this.kinesisClient = config.kinesisClient();
+        this.dynamoDBClient = config.dynamoDBClient();
+        this.tableName = config.tableName();
+        this.workerIdentifier = config.workerIdentifier();
+        this.executorService = config.executorService();
+        this.failoverTimeMillis = config.failoverTimeMillis();
+        this.enablePriorityLeaseAssignment = config.enablePriorityLeaseAssignment();
+        this.epsilonMillis = config.epsilonMillis();
+        this.maxLeasesForWorker = config.maxLeasesForWorker();
+        this.maxLeasesToStealAtOneTime = config.maxLeasesToStealAtOneTime();
+        this.maxLeaseRenewalThreads = config.maxLeaseRenewalThreads();
+        this.cleanupLeasesUponShardCompletion = config.cleanupLeasesUponShardCompletion();
+        this.ignoreUnexpectedChildShards = config.ignoreUnexpectedChildShards();
+        this.shardSyncIntervalMillis = config.shardSyncIntervalMillis();
+        this.consistentReads = config.consistentReads();
+        this.listShardsBackoffTimeMillis = config.listShardsBackoffTimeInMillis();
+        this.maxListShardsRetryAttempts = config.maxListShardsRetryAttempts();
+        this.maxCacheMissesBeforeReload = config.maxCacheMissesBeforeReload();
+        this.listShardsCacheAllowedAgeInSeconds = config.listShardsCacheAllowedAgeInSeconds();
+        this.cacheMissWarningModulus = config.cacheMissWarningModulus();
+        this.initialLeaseTableReadCapacity = config.initialLeaseTableReadCapacity();
+        this.initialLeaseTableWriteCapacity = config.initialLeaseTableWriteCapacity();
+        this.tableCreatorCallback = config.tableCreatorCallback();
+        this.dynamoDbRequestTimeout = config.dynamoDbRequestTimeout();
+        this.billingMode = config.billingMode();
+        this.leaseTableDeletionProtectionEnabled = config.leaseTableDeletionProtectionEnabled();
+        this.leaseTablePitrEnabled = config.leaseTablePitrEnabled();
+        this.tags = config.tags();
+        this.leaseSerializer = leaseSerializer;
+        this.customShardDetectorProvider = config.customShardDetectorProvider();
+        this.isMultiStreamMode = isMultiStreamMode;
+        this.leaseCleanupConfig = config.leaseCleanupConfig();
+        this.workerUtilizationAwareAssignmentConfig = config.workerUtilizationAwareAssignmentConfig();
+        this.gracefulLeaseHandoffConfig = config.gracefulLeaseHandoffConfig();
+        this.leaseAssignmentIntervalMillis = config.leaseAssignmentIntervalMillis();
+        this.leaseTableScanTotalSegments = config.leaseTableScanTotalSegments();
     }
 
     @Override

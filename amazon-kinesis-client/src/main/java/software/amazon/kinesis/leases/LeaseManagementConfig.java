@@ -521,43 +521,7 @@ public class LeaseManagementConfig {
     public LeaseManagementFactory leaseManagementFactory(
             final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
         if (leaseManagementFactory == null) {
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(
-                    kinesisClient(),
-                    dynamoDBClient(),
-                    tableName(),
-                    workerIdentifier(),
-                    executorService(),
-                    failoverTimeMillis(),
-                    enablePriorityLeaseAssignment(),
-                    epsilonMillis(),
-                    maxLeasesForWorker(),
-                    maxLeasesToStealAtOneTime(),
-                    maxLeaseRenewalThreads(),
-                    cleanupLeasesUponShardCompletion(),
-                    ignoreUnexpectedChildShards(),
-                    shardSyncIntervalMillis(),
-                    consistentReads(),
-                    listShardsBackoffTimeInMillis(),
-                    maxListShardsRetryAttempts(),
-                    maxCacheMissesBeforeReload(),
-                    listShardsCacheAllowedAgeInSeconds(),
-                    cacheMissWarningModulus(),
-                    initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity(),
-                    tableCreatorCallback(),
-                    dynamoDbRequestTimeout(),
-                    billingMode(),
-                    leaseTableDeletionProtectionEnabled(),
-                    leaseTablePitrEnabled(),
-                    tags(),
-                    leaseSerializer,
-                    customShardDetectorProvider(),
-                    isMultiStreamingMode,
-                    leaseCleanupConfig(),
-                    workerUtilizationAwareAssignmentConfig(),
-                    gracefulLeaseHandoffConfig,
-                    leaseAssignmentIntervalMillis(),
-                    leaseTableScanTotalSegments());
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(this, leaseSerializer, isMultiStreamingMode);
         }
         return leaseManagementFactory;
     }
