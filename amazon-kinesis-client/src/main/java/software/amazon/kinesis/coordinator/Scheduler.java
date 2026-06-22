@@ -354,8 +354,8 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.tableName(),
                 leaseSerializer,
                 coordinatorStateDAO.getLeaseTableDaoDelegate(),
-                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
-                Runtime.getRuntime().availableProcessors());
+                Executors.newCachedThreadPool(),
+                leaseManagementConfig.leaseTableScanTotalSegments());
 
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);

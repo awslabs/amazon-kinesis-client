@@ -56,7 +56,8 @@ class DynamoDBLeaseDiscovererTest {
             Executors.newFixedThreadPool(1),
             TEST_METRICS_FACTORY,
             new LeaseStatsRecorder(30000L, System::currentTimeMillis),
-            lease -> {});
+            lease -> {},
+            1);
     private final DynamoDBLeaseDiscoverer dynamoDBLeaseDiscoverer = new DynamoDBLeaseDiscoverer(
             leaseRefresher,
             leaseRenewer,

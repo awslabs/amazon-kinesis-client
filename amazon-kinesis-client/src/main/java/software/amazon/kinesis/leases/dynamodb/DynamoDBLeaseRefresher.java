@@ -15,7 +15,6 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -124,19 +123,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private static final String LEASE_OWNER_INDEX_QUERY_CONDITIONAL_EXPRESSION =
             String.format("%s = %s", LEASE_OWNER_KEY, DDB_LEASE_OWNER);
 
-    /**
-     * Default parallelism factor for scaling lease table.
-     */
-    private static final int DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR = 10;
-
-    private static final long NUMBER_OF_BYTES_PER_GB = 1024 * 1024 * 1024;
-    private static final double GB_PER_SEGMENT = 0.2;
-    private static final int MIN_SCAN_SEGMENTS = 1;
-    private static final int MAX_SCAN_SEGMENTS = 30;
-
-    private Integer cachedTotalSegments;
-    private Instant expirationTimeForTotalSegmentsCache;
-    private static final Duration CACHE_DURATION_FOR_TOTAL_SEGMENTS = Duration.ofHours(2);
+    private final LeaseTableScanSegmentResolver scanSegmentResolver;
 
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
@@ -178,6 +165,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         this.leaseTableDeletionProtectionEnabled = leaseTableDeletionProtectionEnabled;
         this.leaseTablePitrEnabled = leaseTablePitrEnabled;
         this.tags = tags;
+        this.scanSegmentResolver = new LeaseTableScanSegmentResolver(0, this::describeLeaseTable);
     }
 
     /**
@@ -574,7 +562,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         if (parallelScanTotalSegment > 0) {
             totalSegments = parallelScanTotalSegment;
         } else {
-            totalSegments = getParallelScanTotalSegments();
+            totalSegments = scanSegmentResolver.resolveTotalSegments();
         }
 
         for (int i = 0; i < totalSegments; ++i) {
@@ -603,41 +591,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         return new AbstractMap.SimpleEntry<>(response, leaseItemFailedDeserialize);
     }
 
-    /**
-     * Calculates the optimal number of parallel scan segments for a DynamoDB table based on its size.
-     * The calculation follows these rules:
-     *  - Each segment handles 0.2GB (214,748,364 bytes) of data
-     *  - For empty tables or tables smaller than 0.2GB, uses 1 segment
-     *  - Number of segments scales linearly with table size
-     *
-     * @return The number of segments to use for parallel scan, minimum 1
-     */
-    private synchronized int getParallelScanTotalSegments() throws DependencyException {
-        if (isTotalSegmentsCacheValid()) {
-            return cachedTotalSegments;
-        }
-
-        int parallelScanTotalSegments =
-                cachedTotalSegments == null ? DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR : cachedTotalSegments;
-        final DescribeTableResponse describeTableResponse = describeLeaseTable();
-        if (describeTableResponse == null) {
-            log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegments);
-        } else {
-            final double tableSizeGB = (double) describeTableResponse.table().tableSizeBytes() / NUMBER_OF_BYTES_PER_GB;
-            parallelScanTotalSegments = Math.min(
-                    Math.max((int) Math.ceil(tableSizeGB / GB_PER_SEGMENT), MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
-
-            log.info("TotalSegments for Lease table parallel scan : {}", parallelScanTotalSegments);
-        }
-        cachedTotalSegments = parallelScanTotalSegments;
-        expirationTimeForTotalSegmentsCache = Instant.now().plus(CACHE_DURATION_FOR_TOTAL_SEGMENTS);
-        return parallelScanTotalSegments;
-    }
-
-    private boolean isTotalSegmentsCacheValid() {
-        return cachedTotalSegments != null && Instant.now().isBefore(expirationTimeForTotalSegmentsCache);
-    }
-
     private void scanSegment(
             final int segment,
             final int parallelScanTotalSegment,
@@ -648,6 +601,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(ProvisionedThroughputExceededException.class, t -> t);
+
+        final List<Lease> localLeases = new ArrayList<>();
+        final List<String> localFailedDeserialize = new ArrayList<>();
 
         Map<String, AttributeValue> lastEvaluatedKey = null;
         do {
@@ -661,23 +617,18 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
                 final ScanResponse scanResult =
                         FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
-                // Synchronizing on response should be enough since response and leaseItemFailedDeserialize are modified
-                // together in the same synchronized block
-                synchronized (response) {
-                    for (final Map<String, AttributeValue> item : scanResult.items()) {
-                        try {
-                            Lease lease = serializer.fromDynamoRecord(item);
-                            if (lease != null) {
-                                response.add(lease);
-                            }
-                        } catch (final Exception e) {
-                            // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
-                            // do not fail all list call. Capture failed deserialize item and return to caller.
-                            log.error("Failed to deserialize lease", e);
-                            // If an item exists in DDB then "leaseKey" should be always present as its primaryKey
-                            leaseItemFailedDeserialize.add(
-                                    item.get(LEASE_KEY_KEY).s());
+                for (final Map<String, AttributeValue> item : scanResult.items()) {
+                    try {
+                        Lease lease = serializer.fromDynamoRecord(item);
+                        if (lease != null) {
+                            localLeases.add(lease);
                         }
+                    } catch (final Exception e) {
+                        // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
+                        // do not fail all list call. Capture failed deserialize item and return to caller.
+                        log.error("Failed to deserialize lease", e);
+                        // If an item exists in DDB then "leaseKey" should be always present as its primaryKey
+                        localFailedDeserialize.add(item.get(LEASE_KEY_KEY).s());
                     }
                 }
                 if (scanResult.hasLastEvaluatedKey()) {
@@ -692,6 +643,12 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 throw new DependencyException(e);
             }
         } while (lastEvaluatedKey != null);
+
+        // merge per-segment results into the shared lists under a single short lock
+        synchronized (response) {
+            response.addAll(localLeases);
+            leaseItemFailedDeserialize.addAll(localFailedDeserialize);
+        }
     }
 
     /**

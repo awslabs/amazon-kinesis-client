@@ -80,7 +80,8 @@ class DynamoDBLeaseCoordinatorTest {
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
                 new ConcurrentHashMap<ShardInfo, ShardConsumer>(),
                 2 * LEASE_DURATION_MILLIS,
-                mockStreamIdCacheManager);
+                mockStreamIdCacheManager,
+                0);
     }
 
     @AfterEach

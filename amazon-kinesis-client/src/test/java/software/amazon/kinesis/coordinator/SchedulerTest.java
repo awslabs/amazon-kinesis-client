@@ -1701,6 +1701,12 @@ public class SchedulerTest {
                         retrievalConfig));
     }
 
+    @Test
+    public void testLeaseTableScanTotalSegmentsRejectsNonPositive() {
+        assertThrows(IllegalArgumentException.class, () -> leaseManagementConfig.leaseTableScanTotalSegments(-1));
+        assertThrows(IllegalArgumentException.class, () -> leaseManagementConfig.leaseTableScanTotalSegments(0));
+    }
+
     private void setSchedulerFieldToAccessible(final String varName, final Object mockComponent)
             throws NoSuchFieldException, IllegalAccessException {
         Field field = Scheduler.class.getDeclaredField(varName);

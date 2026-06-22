@@ -138,7 +138,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
                 new ConcurrentHashMap<>(),
                 2 * LEASE_DURATION_MILLIS,
-                mockStreamIdCacheManager);
+                mockStreamIdCacheManager,
+                0);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 

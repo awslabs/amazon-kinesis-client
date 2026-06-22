@@ -135,7 +135,8 @@ public class LeaseCoordinatorExerciser {
                     LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
                     new ConcurrentHashMap<>(),
                     2 * leaseDurationMillis,
-                    mockStreamIdCacheManager);
+                    mockStreamIdCacheManager,
+                    0);
 
             coordinators.add(coord);
         }

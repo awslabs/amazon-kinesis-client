@@ -60,7 +60,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
                 Executors.newCachedThreadPool(),
                 NULL_METRICS_FACTORY,
                 leaseStatsRecorder,
-                lease -> {});
+                lease -> {},
+                1);
     }
 
     @Test
@@ -277,7 +278,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
                 Executors.newCachedThreadPool(),
                 NULL_METRICS_FACTORY,
                 leaseStatsRecorder,
-                lease -> {});
+                lease -> {},
+                1);
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));
@@ -298,7 +300,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
                 Executors.newCachedThreadPool(),
                 NULL_METRICS_FACTORY,
                 leaseStatsRecorder,
-                lease -> {});
+                lease -> {},
+                1);
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));
