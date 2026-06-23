@@ -6,6 +6,43 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.5.0 (June 22, 2026)
+* [#1773](https://github.com/awslabs/amazon-kinesis-client/pull/1773) Single-table migration for KCL metadata
+    * KCL 3.5 introduces a mechanism to consolidate all KCL metadata into a single DynamoDB lease table. In earlier KCL 3.x versions, KCL maintained separate DynamoDB tables for lease management, worker metrics (the worker metrics table), and coordinator state (the coordinator state table). Starting with KCL 3.5+, the WorkerMetricStats and CoordinatorState entities can be co-located alongside lease records in the lease table, reducing the number of DynamoDB tables your application provisions and operates. This is optional, but cannot be rolled back once completed.
+    * Each record in the lease table is now tagged with an entityType attribute, allowing KCL to distinguish between leases, worker metrics, and coordinator state entries that share the same table.
+    * Multi-phase migration. Migrating from earlier versions of KCL v3 (3.0-3.4) to KCL 3.5 (or higher) follows a coordinated, leader-driven process so that a fleet can be upgraded with zero downtime and the ability to roll back.
+        * The programming interfaces of KCL 3.5+ remain compatible with KCL 3.x, so you don't need to change your record-processing code. For detailed instructions, see the Migrate consumers to KCL 3.5 page in the Amazon Kinesis Data Streams developer guide. How you adopt the single-table format depends on your current version:
+            * Migrating from KCL 2.x → 3.5+: Follow the standard Migrate from KCL 2.x to 3.x guide, targeting 3.5. The single-table format is used by default for new 2.x migrations. Your application uses only the lease table for all metadata, and there is no separate table-migration step to perform or monitor.
+            * Migrating from earlier KCL 3.x (3.0–3.4) → 3.5+ (single-table format): Perform the leader-driven migration. Prerequisite: your application must already be running in native KCL 3.x mode: that is, it has completed the 2.x→3.x client-version migration and no longer sets CoordinatorConfig.clientVersionConfig. Do not run the 2.x→3.x client-version migration and the single-table migration at the same time.
+                * Phase 1: Deploy KCL 3.5+ with migrateAllEntitiesToLeaseTable = false (the default). Wait for all workers to roll out and for the TableMigration3.5 entry to reach DEPLOYED, and verify there are no regressions.
+                * Phase 2: Redeploy with migrateAllEntitiesToLeaseTable = true. The leader drives the state through PENDING to COMPLETE, copying coordinator state into the lease table while workers cut their metric writes over to the lease table. Rollback is supported until COMPLETE.
+                * Optional cleanup (after COMPLETE): Once the migration reaches COMPLETE and you have verified stability, you can clean up in a subsequent deployment. Because COMPLETE is a terminal state, the migrateAllEntitiesToLeaseTable setting is ignored, so you can safely remove migrateAllEntitiesToLeaseTable from your configuration. You can also remove the deprecated coordinatorStateTableConfig and workerMetricsTableConfig settings, and manually delete the old worker-metrics and coordinator-state DynamoDB tables. KCL stops using them but does not delete them automatically.
+            * Important - IAM permissions: Do not modify or remove your KCL application's IAM permissions to the worker-metrics and coordinator-state tables until the migration has fully reached the COMPLETE state. KCL reads from and writes to those tables throughout the migration (and during any rollback). Removing access earlier can disrupt the migration and prevent normal operation of your application. Remove these permissions only as part of the optional cleanup, after the COMPLETE state is reached.
+            * Deprecated configuration properties. KCL no longer creates separate metadata tables for new migrations. We strongly recommend leaving these properties unchanged during the migration. You can safely remove them after the migration reaches the COMPLETE state (see optional cleanup). With this change, the following properties are deprecated in KCL 3.5:
+                * CoordinatorConfig.coordinatorStateTableConfig
+                * LeaseManagementConfig.workerUtilizationAwareAssignmentConfig.workerMetricsTableConfig
+    * Migration state machine and rollback safety. The migration is driven by an internal state machine that progresses through INIT → DEPLOYED → PENDING → COMPLETE, each gated by a configurable bake time. The migration remains safely rollback-able up until it reaches the COMPLETE state, after this state KCL will remain in single-table operation mode.
+        * INIT – Starting state set during the Phase 1 upgrade, while workers emit the SupportCode attribute.
+        * DEPLOYED – The leader has observed the minimum required support code across the fleet for the bake time, completing Phase 1.
+        * PENDING – Phase 2 is underway. All workers are writing WorkerMetricStats to the lease table and the leader has copied all CoordinatorState from the legacy table to the lease table. This state still allows rollback to DEPLOYED if a regression is detected.
+        * COMPLETE – Migration is finished. All workers use the lease table exclusively for both reads and writes of all entities. No rollback is permitted once this state is reached. The bake time for this final step is configurable via tableMigrationCompleteBakeTimeSeconds.
+    * New configuration properties (in CoordinatorConfig):
+        * migrateAllEntitiesToLeaseTable – Set to true to initiate Phase 2 of the single-table migration. Defaults to false.
+        * tableMigrationCompleteBakeTimeSeconds – Controls the bake time before the migration transitions to the final COMPLETE state.
+    * Deprecated configuration properties. Because KCL no longer supports separate metadata tables once migration completes, the configuration fields used to name and provision the separate worker metrics and coordinator state tables are now deprecated.
+* [#1781](https://github.com/awslabs/amazon-kinesis-client/pull/1781) Configurable lease table parallel scan
+    * The parallel scan used when listing the lease table is now configurable, giving you control over scan throughput and DynamoDB read consumption for large lease tables.
+* [#1776](https://github.com/awslabs/amazon-kinesis-client/pull/1776) Updated migration script for single-table format
+    * The KCL migration tooling has been updated to support the new single-table metadata format.
+* [#1772](https://github.com/awslabs/amazon-kinesis-client/pull/1772) Skip unnecessary DescribeStreamConsumer calls for active consumers
+    * For enhanced fan-out consumers that are already in the ACTIVE state, KCL now skips the redundant DescribeStreamConsumer call and associated sleep, reducing startup latency and API call volume.
+* [#1765](https://github.com/awslabs/amazon-kinesis-client/pull/1765) Treat expired pending-handoff leases as available
+    * Leases that are pending a graceful handoff but whose handoff has expired are now treated as available to take, preventing leases from becoming stuck when a handoff does not complete.
+* [#1744](https://github.com/awslabs/amazon-kinesis-client/pull/1744) Fix FanoutRecordsPublisher restart behavior at SHARD_END
+    * Corrected the restartFrom behavior of FanoutRecordsPublisher when a shard reaches SHARD_END, improving reliability of shard lifecycle transitions for enhanced fan-out consumers.
+* [#1728](https://github.com/awslabs/amazon-kinesis-client/pull/1728) CloudWatch OTEL endpoint support
+    * Added support for publishing KCL CloudWatch metrics through an OpenTelemetry (OTEL) endpoint.
+
 ### Release 3.4.3 (April 30, 2026)
 * [#1734](https://github.com/awslabs/amazon-kinesis-client/pull/1734) Fix metricsScope not being closed properly in Scheduler.run
 * [#1731](https://github.com/awslabs/amazon-kinesis-client/pull/1731) Perform initial shard sync operation after leader election
