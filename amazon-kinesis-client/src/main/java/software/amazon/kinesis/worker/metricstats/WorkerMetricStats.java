@@ -90,10 +90,8 @@ public class WorkerMetricStats implements Entity {
     @Getter
     @RequiredArgsConstructor
     public enum Features {
-        ZERO_INDEX_PLACEHOLDER("ZERO_INDEX_PLACEHOLDER"), // ordinals are 0-indexed, but 0 should mean no support
-        SINGLE_TABLE_MIGRATION("SINGLE_TABLE_MIGRATION");
-
-        private final String name;
+        ZERO_INDEX_PLACEHOLDER, // ordinals are 0-indexed, but 0 should mean no support
+        SINGLE_TABLE_MIGRATION;
     }
 
     /**
