@@ -21,8 +21,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
@@ -77,6 +81,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final String consumerArn;
     private final String streamAndShardId;
     private final StreamIdentifier streamIdentifier;
+    private final long backpressureTimeoutMillis;
+
+    @Nullable
+    private final ScheduledExecutorService backpressureTimerExecutor;
+
     private final Object lockObject = new Object();
 
     private final AtomicInteger subscribeToShardId = new AtomicInteger(0);
@@ -97,13 +106,32 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
+    // Backpressure timer state — guarded by lockObject
+    private ScheduledFuture<?> backpressureTimerFuture;
+    private RecordFlow backpressureTimerTargetFlow;
+    private boolean cancelledByBackpressure = false;
+    private long backpressureTimerEpoch = 0;
+
     public FanOutRecordsPublisher(
             KinesisAsyncClient kinesis, String shardId, String consumerArn, StreamIdentifier streamIdentifier) {
-        this.kinesis = kinesis;
-        this.shardId = shardId;
-        this.consumerArn = consumerArn;
-        this.streamAndShardId = shardId;
-        this.streamIdentifier = streamIdentifier;
+        this(kinesis, shardId, consumerArn, null, streamIdentifier, 0, null);
+    }
+
+    public FanOutRecordsPublisher(
+            KinesisAsyncClient kinesis,
+            String shardId,
+            String consumerArn,
+            StreamIdentifier streamIdentifier,
+            long backpressureTimeoutMillis,
+            @Nullable ScheduledExecutorService backpressureTimerExecutor) {
+        this(
+                kinesis,
+                shardId,
+                consumerArn,
+                null,
+                streamIdentifier,
+                backpressureTimeoutMillis,
+                backpressureTimerExecutor);
     }
 
     public FanOutRecordsPublisher(
@@ -112,11 +140,24 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             String consumerArn,
             String streamIdentifierSer,
             StreamIdentifier streamIdentifier) {
+        this(kinesis, shardId, consumerArn, streamIdentifierSer, streamIdentifier, 0, null);
+    }
+
+    public FanOutRecordsPublisher(
+            KinesisAsyncClient kinesis,
+            String shardId,
+            String consumerArn,
+            @Nullable String streamIdentifierSer,
+            StreamIdentifier streamIdentifier,
+            long backpressureTimeoutMillis,
+            @Nullable ScheduledExecutorService backpressureTimerExecutor) {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
-        this.streamAndShardId = streamIdentifierSer + ":" + shardId;
+        this.streamAndShardId = streamIdentifierSer != null ? streamIdentifierSer + ":" + shardId : shardId;
         this.streamIdentifier = streamIdentifier;
+        this.backpressureTimeoutMillis = backpressureTimeoutMillis;
+        this.backpressureTimerExecutor = backpressureTimerExecutor;
     }
 
     @Override
@@ -138,6 +179,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     @Override
     public void shutdown() {
         synchronized (lockObject) {
+            cancelBackpressureTimer();
             if (flow != null) {
                 flow.cancel();
             }
@@ -381,6 +423,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             ThrowableCategory category = throwableCategory(propagationThrowable);
 
             if (isActiveFlow(triggeringFlow)) {
+                cancelBackpressureTimer();
                 if (flow != null) {
                     String logMessage = String.format(
                             "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s."
@@ -615,7 +658,70 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             availableQueueSpace--;
             if (availableQueueSpace > 0) {
                 triggeringFlow.request(1);
+                rescheduleBackpressureTimer();
             }
+        }
+    }
+
+    // Called under lockObject. Reschedules the backpressure timer after each flow.request(1).
+    // If the timer fires without being rescheduled, it means no upstream request was made
+    // for the timeout duration — the consumer is blocked and the HTTP/2 stream should be cancelled.
+    private void rescheduleBackpressureTimer() {
+        assert Thread.holdsLock(lockObject);
+        if (backpressureTimeoutMillis <= 0 || backpressureTimerExecutor == null) {
+            return;
+        }
+        if (flow == null) {
+            return;
+        }
+
+        if (backpressureTimerFuture != null) {
+            backpressureTimerFuture.cancel(false);
+        }
+
+        long epoch = ++backpressureTimerEpoch;
+        backpressureTimerTargetFlow = flow;
+        backpressureTimerFuture = backpressureTimerExecutor.schedule(
+                () -> onBackpressureTimeout(epoch), backpressureTimeoutMillis, TimeUnit.MILLISECONDS);
+    }
+
+    // Called under lockObject
+    private void cancelBackpressureTimer() {
+        assert Thread.holdsLock(lockObject);
+        if (backpressureTimerFuture != null) {
+            backpressureTimerFuture.cancel(false);
+            backpressureTimerFuture = null;
+            backpressureTimerTargetFlow = null;
+        }
+    }
+
+    private void onBackpressureTimeout(long epoch) {
+        synchronized (lockObject) {
+            if (epoch != backpressureTimerEpoch) {
+                return;
+            }
+            if (backpressureTimerFuture == null) {
+                return;
+            }
+            if (flow == null || flow != backpressureTimerTargetFlow) {
+                backpressureTimerFuture = null;
+                backpressureTimerTargetFlow = null;
+                return;
+            }
+
+            log.warn(
+                    "{}: [SubscriptionLifetime] Backpressure timeout fired ({}ms) -- cancelling flow id: {}."
+                            + " Will re-subscribe when demand resumes.",
+                    streamAndShardId,
+                    backpressureTimeoutMillis,
+                    flow.subscribeToShardId);
+
+            flow.cancel();
+            flow = null;
+            cancelledByBackpressure = true;
+
+            backpressureTimerFuture = null;
+            backpressureTimerTargetFlow = null;
         }
     }
 
@@ -631,6 +737,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     triggeringFlow.connectionStartedAt,
                     triggeringFlow.subscribeToShardId);
 
+            cancelBackpressureTimer();
             triggeringFlow.cancel();
             if (!hasValidSubscriber()) {
                 log.debug(
@@ -714,6 +821,26 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                                     lastSuccessfulRequestDetails);
                             return;
                         }
+                        if (flow == null && cancelledByBackpressure) {
+                            cancelledByBackpressure = false;
+                            availableQueueSpace += n;
+                            log.info(
+                                    "{}: [SubscriptionLifetime] Demand resumed after backpressure cancellation."
+                                            + " Re-subscribing from {}",
+                                    streamAndShardId,
+                                    currentSequenceNumber);
+                            try {
+                                subscribeToShard(currentSequenceNumber);
+                            } catch (Throwable t) {
+                                log.warn(
+                                        "{}: [SubscriptionLifetime] Re-subscribe after backpressure failed",
+                                        streamAndShardId,
+                                        t);
+                                subscriber.onError(t);
+                                subscriber = null;
+                            }
+                            return;
+                        }
                         if (flow == null) {
                             //
                             // Flow has been terminated, so we can't make any requests on it anymore.
@@ -728,6 +855,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         availableQueueSpace += n;
                         if (previous <= 0) {
                             flow.request(1);
+                            rescheduleBackpressureTimer();
                         }
                     }
                 }
@@ -753,6 +881,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                                     lastSuccessfulRequestDetails);
                         }
                         subscriber = null;
+                        cancelBackpressureTimer();
+                        cancelledByBackpressure = false;
                         if (flow != null) {
                             log.debug(
                                     "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
@@ -769,6 +899,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     private void terminateExistingFlow() {
+        cancelBackpressureTimer();
+        cancelledByBackpressure = false;
         if (flow != null) {
             RecordFlow current = flow;
             flow = null;
@@ -1145,6 +1277,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         parent.availableQueueSpace);
                 if (parent.availableQueueSpace > 0) {
                     request(1);
+                    parent.rescheduleBackpressureTimer();
                 }
             }
         }
