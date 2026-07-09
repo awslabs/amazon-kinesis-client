@@ -299,7 +299,7 @@ public final class DynamicMigrationComponentsInitializer {
         if (blockingWait) {
             log.info("Waiting for Lease table GSI creation");
             final long secondsBetweenPolls = 10L;
-            final long timeoutSeconds = 600L;
+            final long timeoutSeconds = 1800L;
             final boolean isIndexActive =
                     leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(secondsBetweenPolls, timeoutSeconds);
 

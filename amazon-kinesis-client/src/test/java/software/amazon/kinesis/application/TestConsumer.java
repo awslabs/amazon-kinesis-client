@@ -107,10 +107,10 @@ public class TestConsumer {
             startConsumer();
 
             // The longest part of starting up a new KCL 3.x application is waiting for the lease table GSI to be
-            // created. This roughly takes between 5-10 minutes for a 4 shard lease table. Therefore, sleep for
-            // approximately 15 minutes to allow KCL to start up, assign leases, and process.
+            // created. This roughly takes between 15-20 minutes for a 4 shard lease table. Therefore, sleep for
+            // approximately 25 minutes to allow KCL to start up, assign leases, and process.
             // TODO: optimize the integration test runtime so we know when KCL has started so we don't sleep as long
-            Thread.sleep(TimeUnit.MINUTES.toMillis(15));
+            Thread.sleep(TimeUnit.MINUTES.toMillis(25));
 
             if (consumerConfig.getReshardFactorList() != null) {
                 performStreamScale();
