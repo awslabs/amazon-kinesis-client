@@ -153,6 +153,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private static final String PRE_PHASE1_WORKER_METRIC = "PrePhase1Worker";
     private static final String READ_FAULT_METRIC = "ReadFault";
     private static final String WRITE_FAULT_METRIC = "WriteFault";
+    private static final String DELETE_FAULT_METRIC = "DeleteFault";
     private static final String COMPLETION_FAULT_METRIC = "CompletionFault";
     private static final String MOVE_BATCH_COUNT_METRIC = "BatchCount";
 
@@ -305,7 +306,6 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             return;
         }
         final long startTime = System.currentTimeMillis();
-        boolean success = false;
 
         try {
             // Refresh from legacy DDB and re-apply config override to determine effective local status.
@@ -346,7 +346,6 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                     pendingMoveFuture.cancel(true);
                     pendingMoveFuture = null;
                 }
-                success = true;
                 return;
             }
 
@@ -368,10 +367,8 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                 default:
                     break;
             }
-
-            success = true;
         } finally {
-            MetricsUtil.addSuccessAndLatency(scope, success, startTime, MetricsLevel.SUMMARY);
+            MetricsUtil.addLatency(scope, null, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
         }
     }
@@ -1164,7 +1161,7 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
                     state,
                     e);
         } finally {
-            scope.addData(WRITE_FAULT_METRIC, success ? 0 : 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData(DELETE_FAULT_METRIC, success ? 0 : 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
         }
     }
 

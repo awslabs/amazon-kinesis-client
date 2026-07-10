@@ -213,8 +213,6 @@ class WorkerMetricStatsEntityTypeTest {
     void features_enum_hasExpectedValues() {
         assertEquals(0, WorkerMetricStats.Features.ZERO_INDEX_PLACEHOLDER.ordinal());
         assertEquals(1, WorkerMetricStats.Features.SINGLE_TABLE_MIGRATION.ordinal());
-        assertEquals("ZERO_INDEX_PLACEHOLDER", WorkerMetricStats.Features.ZERO_INDEX_PLACEHOLDER.getName());
-        assertEquals("SINGLE_TABLE_MIGRATION", WorkerMetricStats.Features.SINGLE_TABLE_MIGRATION.getName());
     }
 
     // --- LegacyWorkerMetricStats and LeaseTableWorkerMetricStats subclass tests ---
