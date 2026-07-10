@@ -378,47 +378,51 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
         long startTime = System.currentTimeMillis();
         boolean success = false;
-        Lease authoritativeLeaseCopy = authoritativeLease.copy();
         try {
             log.debug("Updating lease from {} to {}", authoritativeLease, lease);
             synchronized (authoritativeLease) {
-                authoritativeLease.update(lease);
-                boolean updatedLease = leaseRefresher.updateLease(authoritativeLease);
-                if (updatedLease) {
-                    // Updates increment the counter
-                    authoritativeLease.lastCounterIncrementNanos(System.nanoTime());
-                } else {
-                    /*
-                     * If updateLease returns false, it means someone took the lease from us. Remove the lease
-                     * from our set of owned leases pro-actively rather than waiting for a run of renewLeases().
-                     */
-                    log.info("Worker {} lost lease with key {} - discovered during update", workerIdentifier, leaseKey);
+                Lease authoritativeLeaseCopy = authoritativeLease.copy();
+                try {
+                    authoritativeLease.update(lease);
+                    boolean updatedLease = leaseRefresher.updateLease(authoritativeLease);
+                    if (updatedLease) {
+                        // Updates increment the counter
+                        authoritativeLease.lastCounterIncrementNanos(System.nanoTime());
+                    } else {
+                        /*
+                         * If updateLease returns false, it means someone took the lease from us. Remove the lease
+                         * from our set of owned leases pro-actively rather than waiting for a run of renewLeases().
+                         */
+                        log.info(
+                                "Worker {} lost lease with key {} - discovered during update",
+                                workerIdentifier,
+                                leaseKey);
+                        /*
+                         * Remove only if the value currently in the map is the same as the authoritative lease. We're
+                         * guarding against a pause after the concurrency token check above. It plays out like so:
+                         *
+                         * 1) Concurrency token check passes
+                         * 2) Pause. Lose lease, re-acquire lease. This requires at least one lease counter update.
+                         * 3) Unpause. leaseRefresher.updateLease fails conditional write due to counter updates, returns
+                         * false.
+                         * 4) ownedLeases.remove(key, value) doesn't do anything because authoritativeLease does not
+                         * .equals() the re-acquired version in the map on the basis of lease counter. This is what we want.
+                         * If we just used ownedLease.remove(key), we would have pro-actively removed a lease incorrectly.
+                         *
+                         * Note that there is a subtlety here - Lease.equals() deliberately does not check the concurrency
+                         * token, but it does check the lease counter, so this scheme works.
+                         */
+                        ownedLeases.remove(leaseKey, authoritativeLease);
+                    }
 
-                    /*
-                     * Remove only if the value currently in the map is the same as the authoritative lease. We're
-                     * guarding against a pause after the concurrency token check above. It plays out like so:
-                     *
-                     * 1) Concurrency token check passes
-                     * 2) Pause. Lose lease, re-acquire lease. This requires at least one lease counter update.
-                     * 3) Unpause. leaseRefresher.updateLease fails conditional write due to counter updates, returns
-                     * false.
-                     * 4) ownedLeases.remove(key, value) doesn't do anything because authoritativeLease does not
-                     * .equals() the re-acquired version in the map on the basis of lease counter. This is what we want.
-                     * If we just used ownedLease.remove(key), we would have pro-actively removed a lease incorrectly.
-                     *
-                     * Note that there is a subtlety here - Lease.equals() deliberately does not check the concurrency
-                     * token, but it does check the lease counter, so this scheme works.
-                     */
-                    ownedLeases.remove(leaseKey, authoritativeLease);
+                    success = true;
+                    return updatedLease;
+                } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
+                    // On failure in updating DDB, revert changes to in memory lease
+                    authoritativeLease.update(authoritativeLeaseCopy);
+                    throw e;
                 }
-
-                success = true;
-                return updatedLease;
             }
-        } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
-            // On failure in updating DDB, revert changes to in memory lease
-            authoritativeLease.update(authoritativeLeaseCopy);
-            throw e;
         } finally {
             MetricsUtil.addSuccessAndLatency(scope, "UpdateLease", success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
