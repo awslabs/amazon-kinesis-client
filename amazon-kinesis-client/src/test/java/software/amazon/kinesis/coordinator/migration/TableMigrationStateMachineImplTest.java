@@ -37,6 +37,7 @@ import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -151,7 +152,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, statusProvider.getTableMigrationStatus());
@@ -168,7 +174,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // Verify nothing was written to the lease table
@@ -190,7 +201,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, statusProvider.getTableMigrationStatus());
@@ -204,7 +220,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(true);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
 
         assertThrows(InvalidStateException.class, sm::initialize);
     }
@@ -220,7 +241,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, statusProvider.getTableMigrationStatus());
@@ -236,7 +262,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(true);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING, statusProvider.getTableMigrationStatus());
@@ -252,7 +283,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, statusProvider.getTableMigrationStatus());
@@ -268,7 +304,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE, statusProvider.getTableMigrationStatus());
@@ -282,7 +323,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
         sm.initialize(); // should not throw
 
@@ -297,7 +343,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
 
         assertThrows(IllegalStateException.class, () -> sm.handleLeaderLockResult(true));
     }
@@ -312,7 +363,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // Should not throw or change state
@@ -329,7 +385,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         sm.handleLeaderLockResult(false);
@@ -344,7 +405,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // No migration summary has been pushed — min support code check is conservative (false)
@@ -360,7 +426,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // Push a summary with min support code >= SINGLE_TABLE_MIGRATION ordinal
@@ -408,7 +479,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // Push summary with min support code met
@@ -449,7 +525,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // After initialization with DDB=DEPLOYED and config=false, the applyConfigOverride
@@ -466,7 +547,12 @@ class TableMigrationStateMachineImplTest {
         statusProvider = new TableMigrationStatusProvider();
         dao = createCoordinatorStateDAO();
         sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, statusProvider.getTableMigrationStatus());
 
@@ -508,7 +594,12 @@ class TableMigrationStateMachineImplTest {
 
         // Initialize with no DDB state → INIT
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, statusProvider.getTableMigrationStatus());
 
@@ -553,7 +644,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED, statusProvider.getTableMigrationStatus());
@@ -584,7 +680,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         // Simulate another leader writing COMPLETE to DDB
@@ -606,7 +707,12 @@ class TableMigrationStateMachineImplTest {
         CoordinatorConfig coordConfig = createCoordinatorConfig(true);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
-                statusProvider, dao, WORKER_ID, coordConfig, Executors.newSingleThreadExecutor());
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
         sm.initialize();
 
         assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING, statusProvider.getTableMigrationStatus());
