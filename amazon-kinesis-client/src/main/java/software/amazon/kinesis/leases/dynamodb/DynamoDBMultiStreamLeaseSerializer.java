@@ -46,6 +46,9 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public MultiStreamLease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
         final MultiStreamLease multiStreamLease =
                 (MultiStreamLease) super.fromDynamoRecord(dynamoRecord, new MultiStreamLease());
+        if (multiStreamLease == null) {
+            return null;
+        }
         multiStreamLease.streamIdentifier(DynamoUtils.safeGetString(dynamoRecord, STREAM_ID_KEY));
         multiStreamLease.shardId(DynamoUtils.safeGetString(dynamoRecord, SHARD_ID_KEY));
         return multiStreamLease;
