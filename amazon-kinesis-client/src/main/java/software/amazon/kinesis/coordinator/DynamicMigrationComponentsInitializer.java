@@ -299,7 +299,12 @@ public final class DynamicMigrationComponentsInitializer {
         if (blockingWait) {
             log.info("Waiting for Lease table GSI creation");
             final long secondsBetweenPolls = 10L;
-            final long timeoutSeconds = 1800L;
+            // TODO: there exists an issue where if this timeout is reached the KCL starts up erroneously for a new
+            //   application (Scheduler appears to start but doesn't take any leases and some threads don't start
+            //   properly) where the only recovery is bouncing the worker after the GSI is created.
+            //   Extending the timeout to a long time to ensure GSI is created as a short term fix and will revisit
+            //   on the proper fix in the future
+            final long timeoutSeconds = 3600L;
             final boolean isIndexActive =
                     leaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(secondsBetweenPolls, timeoutSeconds);
 
