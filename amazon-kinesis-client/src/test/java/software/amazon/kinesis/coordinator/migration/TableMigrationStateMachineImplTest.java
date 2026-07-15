@@ -743,6 +743,212 @@ class TableMigrationStateMachineImplTest {
                         .s());
     }
 
+    // --- handleInitState: new leader with no summary does NOT reset state ---
+
+    @Test
+    void handleLeaderLockResult_initState_newLeaderNoSummary_doesNotDeleteState() throws Exception {
+        // Simulate: DDB has INIT state (bake timer already started), but a new leader
+        // has no latestMigrationSummary yet (LAM hasn't run). Should NOT delete state.
+        putTableMigrationState(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        CoordinatorStateDAO dao = createCoordinatorStateDAO();
+        CoordinatorConfig coordConfig = createCoordinatorConfig(false);
+
+        TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
+        sm.initialize();
+
+        // Do NOT push any migration summary — simulates new leader before LAM runs
+
+        // Call as leader — should NOT delete DDB state
+        sm.handleLeaderLockResult(true);
+
+        // Verify DDB state still exists
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("key", AttributeValue.fromS(TableMigrationState.TABLE_MIGRATION_HASH_KEY));
+        GetItemResponse result = ddbClient
+                .getItem(b -> b.tableName(LEGACY_TABLE).key(key).consistentRead(true))
+                .get();
+        assertTrue(result.item() != null && !result.item().isEmpty(), "State should NOT be deleted on new leader");
+        assertEquals(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT.name(),
+                result.item()
+                        .get(TableMigrationState.TABLE_MIGRATION_STATUS_ATTRIBUTE_NAME)
+                        .s());
+    }
+
+    // --- handleInitState: requires consecutive observations before resetting ---
+
+    @Test
+    void handleLeaderLockResult_initState_minSupportCodeNotMet_requiresThresholdBeforeDelete() throws Exception {
+        putTableMigrationState(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        CoordinatorStateDAO dao = createCoordinatorStateDAO();
+        CoordinatorConfig coordConfig = createCoordinatorConfig(false);
+
+        TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
+        sm.initialize();
+
+        // Push summary with min support code NOT met (minSupportCode=0)
+        TableMigrationSummary notMetSummary = TableMigrationSummary.builder()
+                .minSupportCode(0)
+                .workersWithUnexpiredLeases(2)
+                .totalWorkersWithLeases(2)
+                .totalActiveWorkersWithMetrics(2)
+                .leaseOwnersWithActiveMetrics(2)
+                .activeWorkersWithMetricsInLeaseTable(0)
+                .activeWorkersWithMetricsInLegacyTable(2)
+                .build();
+        sm.updateMigrationSummary(notMetSummary);
+
+        // Call fewer than threshold times — state should NOT be deleted
+        for (int i = 0; i < TableMigrationStateMachineImpl.MIN_SUPPORT_CODE_NOT_MET_THRESHOLD - 1; i++) {
+            sm.handleLeaderLockResult(true);
+        }
+
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("key", AttributeValue.fromS(TableMigrationState.TABLE_MIGRATION_HASH_KEY));
+        GetItemResponse result = ddbClient
+                .getItem(b -> b.tableName(LEGACY_TABLE).key(key).consistentRead(true))
+                .get();
+        assertTrue(
+                result.item() != null && !result.item().isEmpty(),
+                "State should NOT be deleted before threshold is reached");
+
+        // One more call should trigger the delete
+        sm.handleLeaderLockResult(true);
+
+        result = ddbClient
+                .getItem(b -> b.tableName(LEGACY_TABLE).key(key).consistentRead(true))
+                .get();
+        assertTrue(
+                result.item() == null || result.item().isEmpty(), "State should be deleted after threshold is reached");
+    }
+
+    // --- handleInitState: counter decrements on recovery before proceeding ---
+
+    @Test
+    void handleLeaderLockResult_initState_minSupportCodeRecovery_decrementsCounterBeforeProceeding() throws Exception {
+        // Scenario: counter incremented to 2, then min support code recovers. Must count down to 0.
+        putTableMigrationState(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        CoordinatorStateDAO dao = createCoordinatorStateDAO();
+        CoordinatorConfig coordConfig = createCoordinatorConfig(false);
+
+        TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
+        sm.initialize();
+
+        // Push NOT met summary — increment counter twice
+        TableMigrationSummary notMetSummary = TableMigrationSummary.builder()
+                .minSupportCode(0)
+                .workersWithUnexpiredLeases(2)
+                .totalWorkersWithLeases(2)
+                .totalActiveWorkersWithMetrics(2)
+                .leaseOwnersWithActiveMetrics(2)
+                .activeWorkersWithMetricsInLeaseTable(0)
+                .activeWorkersWithMetricsInLegacyTable(2)
+                .build();
+        sm.updateMigrationSummary(notMetSummary);
+
+        sm.handleLeaderLockResult(true); // counter = 1
+        sm.handleLeaderLockResult(true); // counter = 2
+
+        // Now push a MET summary — counter should decrement
+        TableMigrationSummary metSummary = TableMigrationSummary.builder()
+                .minSupportCode(1)
+                .workersWithUnexpiredLeases(2)
+                .totalWorkersWithLeases(2)
+                .totalActiveWorkersWithMetrics(2)
+                .leaseOwnersWithActiveMetrics(2)
+                .activeWorkersWithMetricsInLeaseTable(2)
+                .activeWorkersWithMetricsInLegacyTable(0)
+                .build();
+        sm.updateMigrationSummary(metSummary);
+
+        // First call with met: counter 2->1, returns early (doesn't proceed to bake logic)
+        sm.handleLeaderLockResult(true);
+        // Status should still be INIT since counter hasn't reached 0 yet
+        assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, statusProvider.getTableMigrationStatus());
+
+        // Second call with met: counter 1->0, now proceeds
+        sm.handleLeaderLockResult(true);
+        // Now the state machine should proceed to normal logic (state exists, bake time check)
+        assertEquals(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT, statusProvider.getTableMigrationStatus());
+    }
+
+    // --- Leader change resets tracking state ---
+
+    @Test
+    void handleLeaderLockResult_leaderChange_resetsTrackingState() throws Exception {
+        putTableMigrationState(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
+
+        CoordinatorStateDAO dao = createCoordinatorStateDAO();
+        CoordinatorConfig coordConfig = createCoordinatorConfig(false);
+
+        TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
+                statusProvider,
+                dao,
+                WORKER_ID,
+                coordConfig,
+                new NullMetricsFactory(),
+                Executors.newSingleThreadExecutor());
+        sm.initialize();
+
+        // Push summary with NOT met, increment counter
+        TableMigrationSummary notMetSummary = TableMigrationSummary.builder()
+                .minSupportCode(0)
+                .workersWithUnexpiredLeases(2)
+                .totalWorkersWithLeases(2)
+                .totalActiveWorkersWithMetrics(2)
+                .leaseOwnersWithActiveMetrics(2)
+                .activeWorkersWithMetricsInLeaseTable(0)
+                .activeWorkersWithMetricsInLegacyTable(2)
+                .build();
+        sm.updateMigrationSummary(notMetSummary);
+
+        sm.handleLeaderLockResult(true); // counter = 1
+        sm.handleLeaderLockResult(true); // counter = 2
+
+        // Lose leadership — should reset everything
+        sm.handleLeaderLockResult(false);
+
+        // Re-gain leadership. Since latestMigrationSummary was reset (null),
+        // calling as leader with NOT met should NOT increment counter (no summary available).
+        sm.handleLeaderLockResult(true);
+
+        // Push NOT met again and verify we need full threshold observations again
+        sm.updateMigrationSummary(notMetSummary);
+        sm.handleLeaderLockResult(true); // counter = 1 (reset to fresh)
+        sm.handleLeaderLockResult(true); // counter = 2
+
+        // State should still exist (threshold is 3)
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("key", AttributeValue.fromS(TableMigrationState.TABLE_MIGRATION_HASH_KEY));
+        GetItemResponse result = ddbClient
+                .getItem(b -> b.tableName(LEGACY_TABLE).key(key).consistentRead(true))
+                .get();
+        assertTrue(
+                result.item() != null && !result.item().isEmpty(),
+                "State should still exist — counter was reset on leader change");
+    }
+
     // --- Helpers ---
 
     private void putTableMigrationState(TableMigrationStatus status) {

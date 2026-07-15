@@ -157,6 +157,17 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private static final String COMPLETION_FAULT_METRIC = "CompletionFault";
     private static final String MOVE_BATCH_COUNT_METRIC = "BatchCount";
 
+    /**
+     * Number of consecutive observations of min support code NOT being met (while DDB has INIT state)
+     * required before deleting the state and resetting the bake timer.
+     *
+     * <p>This prevents premature resets caused by transient conditions such as worker restarts
+     * where the lease is still held (not expired) but the worker's WorkerMetricStats heartbeat
+     * has expired temporarily. By requiring multiple consecutive observations, we tolerate
+     * brief gaps and only reset when there is sustained evidence of a real rollback.</p>
+     */
+    static final int MIN_SUPPORT_CODE_NOT_MET_THRESHOLD = 20;
+
     private final TableMigrationStatusProvider statusProvider;
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final LegacyTableCoordinatorStateDAODelegate legacyDao;
@@ -201,6 +212,19 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
      * Access is guarded by {@code synchronized}.
      */
     private TableMigrationSummary latestMigrationSummary;
+
+    /**
+     * Counts consecutive observations where the min support code is NOT met while
+     * DDB has the INIT state persisted. The state is only deleted (bake timer reset)
+     * after this counter reaches {@link #MIN_SUPPORT_CODE_NOT_MET_THRESHOLD}.
+     *
+     * <p>This prevents premature resets when workers restart — they still hold leases
+     * (not expired) but their WorkerMetricStats heartbeat has temporarily expired.
+     * The counter resets to 0 whenever min support code IS met.</p>
+     *
+     * Access is guarded by {@code synchronized}.
+     */
+    private int consecutiveMinSupportCodeNotMetCount = 0;
 
     public TableMigrationStateMachineImpl(
             final TableMigrationStatusProvider statusProvider,
@@ -340,12 +364,10 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             }
 
             if (!isLeader) {
-                // If we lost leadership while an async move is in progress, cancel it.
-                if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
-                    log.info("Lost leadership, cancelling in-progress async move.");
-                    pendingMoveFuture.cancel(true);
-                    pendingMoveFuture = null;
-                }
+                // Reset all leader-specific tracking state to prevent stale data from being
+                // used if this worker becomes leader again later. A new leader must start with
+                // fresh state from LAM before making any decisions.
+                resetLeaderState();
                 return;
             }
 
@@ -530,16 +552,57 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
     private void handleInitState(final TableMigrationState stateFromDDB, final MetricsScope scope) {
         if (!isMinSupportCodeMet()) {
             if (stateFromDDB != null) {
-                // Min support code regressed (rollback scenario). Delete state so bake restarts.
-                // Best-effort: during actual rollback, 3.4 workers can't do this.
-                log.info("INIT: min support code NOT met but DDB has INIT — deleting state (best effort).");
-                deleteStateSafe(stateFromDDB, scope);
+                // Min support code appears not met while DDB has INIT state.
+                // This could be a genuine rollback OR a transient condition such as:
+                // - A new leader that hasn't received latestMigrationSummary from LAM yet
+                // - Workers that restarted and still hold leases (not expired) but their
+                //   WorkerMetricStats heartbeat has temporarily expired
+                //
+                // To avoid premature resets, we require multiple consecutive observations
+                // before deleting the state. If latestMigrationSummary is null, we have
+                // no actual fleet data yet (e.g., new leader, LAM hasn't run), so we
+                // skip the counter entirely and wait for real data.
+                if (latestMigrationSummary == null) {
+                    log.info("INIT: min support code NOT met but no migration summary available yet "
+                            + "(new leader? LAM hasn't run). Skipping reset, waiting for data.");
+                } else {
+                    consecutiveMinSupportCodeNotMetCount++;
+                    log.info(
+                            "INIT: min support code NOT met (observation {}/{}), DDB has INIT state.",
+                            consecutiveMinSupportCodeNotMetCount,
+                            MIN_SUPPORT_CODE_NOT_MET_THRESHOLD);
+                    if (consecutiveMinSupportCodeNotMetCount >= MIN_SUPPORT_CODE_NOT_MET_THRESHOLD) {
+                        // Sustained regression — likely a real rollback. Delete state so bake restarts.
+                        // Best-effort: during actual rollback, 3.4 workers can't do this.
+                        log.info(
+                                "INIT: min support code NOT met for {} consecutive observations. "
+                                        + "Deleting state to reset bake timer (best effort).",
+                                consecutiveMinSupportCodeNotMetCount);
+                        deleteStateSafe(stateFromDDB, scope);
+                        consecutiveMinSupportCodeNotMetCount = 0;
+                    }
+                }
             }
             log.debug("INIT: waiting for min support code across all workers.");
             return;
         }
 
-        // Min support code met.
+        // Min support code met — decrement the consecutive not-met counter toward 0.
+        // We don't immediately reset to 0 because a rollback can occur close to the end of bake time.
+        // By counting down, we ensure that the counter fully recovers before we proceed with any
+        // state transitions, preventing the bake time from being cut short by a brief regression.
+        if (consecutiveMinSupportCodeNotMetCount > 0) {
+            consecutiveMinSupportCodeNotMetCount--;
+            log.info(
+                    "INIT: min support code met, but recovering from previous regression. " + "Counting down: {}/{}",
+                    consecutiveMinSupportCodeNotMetCount,
+                    MIN_SUPPORT_CODE_NOT_MET_THRESHOLD);
+            if (consecutiveMinSupportCodeNotMetCount > 0) {
+                return;
+            }
+            log.info("INIT: counter recovered to 0, resuming normal state machine logic.");
+        }
+
         if (stateFromDDB == null) {
             // First time min support code is met — write INIT to legacy DDB.
             // The modifiedTimestamp on this write serves as the bake start time.
@@ -784,6 +847,36 @@ public class TableMigrationStateMachineImpl implements TableMigrationStateMachin
             Thread.currentThread().interrupt();
         }
         log.info("TableMigrationStateMachine shutdown complete.");
+    }
+
+    // ==================== Leader State Reset ====================
+
+    /**
+     * Resets all leader-specific tracking state. Called when this worker is NOT the leader
+     * (or loses leadership) to ensure that stale data from a previous leadership term is not
+     * carried over to a future leadership term.
+     *
+     * <p>On leadership change, the new leader must wait for fresh data from LAM before making
+     * any state machine decisions. Without this reset:</p>
+     * <ul>
+     *   <li>{@code latestMigrationSummary} could be stale (from a previous LAM run when this
+     *       worker was leader before), leading to incorrect decisions.</li>
+     *   <li>{@code consecutiveMinSupportCodeNotMetCount} could carry over from a different
+     *       leadership term, causing premature or delayed resets.</li>
+     *   <li>{@code pendingMoveFuture} from a previous leadership term would be invalid since
+     *       the leader fencing check in the transaction would fail anyway.</li>
+     * </ul>
+     *
+     * Called from synchronized context.
+     */
+    private void resetLeaderState() {
+        if (pendingMoveFuture != null && !pendingMoveFuture.isDone()) {
+            log.info("Not leader, cancelling in-progress async move.");
+            pendingMoveFuture.cancel(true);
+        }
+        pendingMoveFuture = null;
+        latestMigrationSummary = null;
+        consecutiveMinSupportCodeNotMetCount = 0;
     }
 
     // ==================== Async Copy Logic ====================
