@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.coordinator.migration;
 
+import java.util.Map;
+
 import lombok.Builder;
 import lombok.ToString;
 import lombok.Value;
@@ -91,4 +93,15 @@ public class TableMigrationSummary {
      * (e.g., all workers must support SINGLE_TABLE_MIGRATION before advancing from INIT).</p>
      */
     int minSupportCode;
+
+    /**
+     * Distribution of support codes across lease-owning workers. Maps each support code
+     * ordinal to the number of workers emitting that code with a non-expired heartbeat.
+     * Workers without a valid support code (null, missing, or expired heartbeat) are
+     * included under key 0.
+     *
+     * <p>The table migration state machine uses this to look up how many workers support
+     * a specific feature (e.g., SINGLE_TABLE_MIGRATION) for Phase1/Phase2 worker counts.</p>
+     */
+    Map<Integer, Integer> supportCodeDistribution;
 }

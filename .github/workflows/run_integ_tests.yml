@@ -38,7 +38,7 @@ jobs:
     permissions:
       id-token: write
     if: ${{ always() && needs.check-if-should-run.outputs.should_run == 'true' && (needs.check-if-should-run.outputs.is_fork != 'true' || needs.wait-for-approval.result == 'success') }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     runs-on: ubuntu-latest
     defaults:
       run:

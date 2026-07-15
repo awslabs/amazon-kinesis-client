@@ -43,6 +43,7 @@ import software.amazon.kinesis.leases.EntityDAO.EntityScanList;
 import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
@@ -77,11 +78,14 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
 
     private static final int DDB_LOAD_RETRY_ATTEMPT = 1;
     public static final int DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD = 2;
+    public static final String WORKER_METRICS_OPERATION = "WorkerMetrics";
+    public static final String FLEET_MIN_SUPPORT_CODE_METRIC = "FleetMinSupportCode";
 
     private final EntityDAO entityDAO;
     private final WorkerMetricStatsDAO workerMetricsDAO;
     private final TableMigrationStatusProvider tableMigrationStatusProvider;
     private final Consumer<TableMigrationSummary> migrationSummaryConsumer;
+    private final MetricsFactory metricsFactory;
     private final ExecutorService executorService;
     private final Duration staleWorkerMetricsCleanupDuration;
 
@@ -102,11 +106,13 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
             final TableMigrationStatusProvider tableMigrationStatusProvider,
             final Consumer<TableMigrationSummary> migrationSummaryConsumer,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
-            final ExecutorService executorService) {
+            final ExecutorService executorService,
+            final MetricsFactory metricsFactory) {
         this.entityDAO = entityDAO;
         this.workerMetricsDAO = workerMetricsDAO;
         this.tableMigrationStatusProvider = tableMigrationStatusProvider;
         this.migrationSummaryConsumer = migrationSummaryConsumer;
+        this.metricsFactory = metricsFactory;
         this.workerMetricsExpiryDuration = Duration.ofMillis(
                 DEFAULT_NO_OF_SKIP_STAT_FOR_DEAD_WORKER_THRESHOLD * config.workerMetricsReporterFreqInMillis());
         this.supportCodeExpiryThreshold = Duration.ofMillis(config.workerMetricsReporterFreqInMillis() * 3);
@@ -314,8 +320,13 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 .filter(allActiveWorkersWithMetrics::contains)
                 .count();
 
-        // Compute min support code inline (merged from FleetSupportCodeEvaluator)
-        final int minSupportCode = computeMinSupportCode(unexpiredLeaseOwners, leaseTableMetrics, legacyTableMetrics);
+        // Compute support code distribution across lease-owning workers
+        final Map<Integer, Integer> supportCodeDistribution =
+                computeSupportCodeDistribution(unexpiredLeaseOwners, leaseTableMetrics, legacyTableMetrics);
+
+        // Derive min support code from distribution keys (0 if empty — no lease owners)
+        final int minSupportCode =
+                supportCodeDistribution.isEmpty() ? 0 : Collections.min(supportCodeDistribution.keySet());
 
         final TableMigrationSummary summary = TableMigrationSummary.builder()
                 .totalActiveWorkersWithMetrics(allActiveWorkersWithMetrics.size())
@@ -325,6 +336,7 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 .totalWorkersWithLeases(allLeaseOwners.size())
                 .leaseOwnersWithActiveMetrics((int) leaseOwnersWithActiveMetricsCount)
                 .minSupportCode(minSupportCode)
+                .supportCodeDistribution(Collections.unmodifiableMap(supportCodeDistribution))
                 .build();
 
         log.info("Table migration summary: {}", summary);
@@ -332,26 +344,26 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
     }
 
     /**
-     * Computes the minimum support code across all lease-owning workers by cross-referencing
-     * lease owners with their worker metrics support info.
+     * Computes the support code distribution across all lease-owning workers by cross-referencing
+     * lease owners with their worker metrics support info. Also emits the {@link #FLEET_MIN_SUPPORT_CODE_METRIC}
+     * metric.
      *
-     * <p>Classification logic for each lease-owning worker:</p>
-     * <ul>
-     *   <li>If lease owner has no worker metrics entry → min support = 0</li>
-     *   <li>If supportCode is null → min support = 0</li>
-     *   <li>If supportCodeUpdateEpochSeconds is fresh → use its support code value</li>
-     *   <li>If supportCodeUpdateEpochSeconds is expired → min support = 0</li>
-     * </ul>
+     * <p>Returns a map of support code ordinal → number of lease-owning workers emitting that code.
+     * Workers without a valid support code (no metrics entry, null support code, or expired
+     * heartbeat) are counted under key 0.</p>
      *
-     * @return min support code, 0 if any worker blocks, -1 if no lease owners to evaluate
+     * <p>The minimum support code can be derived from the minimum key in the returned map.
+     * An empty map indicates no lease owners to evaluate.</p>
+     *
+     * @return support code distribution map, empty if no lease owners to evaluate
      */
-    private int computeMinSupportCode(
+    private Map<Integer, Integer> computeSupportCodeDistribution(
             final Set<String> leaseOwnerWorkerIds,
             final List<WorkerMetricStats> leaseTableMetrics,
             final List<WorkerMetricStats> legacyTableMetrics) {
 
         if (leaseOwnerWorkerIds.isEmpty()) {
-            return -1;
+            return Collections.emptyMap();
         }
 
         // Build support info map: workerId -> WorkerSupportInfo (most recent heartbeat wins)
@@ -379,35 +391,53 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
             });
         }
 
-        // Evaluate min support code across lease owners
-        int minSupport = Integer.MAX_VALUE;
+        // Build distribution: supportCode -> count of workers emitting that code
+        final Map<Integer, Integer> distribution = new HashMap<>();
         for (final String leaseOwner : leaseOwnerWorkerIds) {
             final WorkerMetricStats.WorkerSupportInfo info = supportInfoByWorkerId.get(leaseOwner);
 
             if (info == null) {
-                log.info("computeMinSupportCode: lease owner '{}' has no worker metrics entry, min=0.", leaseOwner);
-                return 0;
+                log.info("computeSupportCodeDistribution: lease owner '{}' has no worker metrics entry.", leaseOwner);
+                distribution.merge(0, 1, Integer::sum);
+                continue;
             }
 
             final Integer supportCode = info.getSupportCode();
             if (supportCode == null) {
-                log.info("computeMinSupportCode: lease owner '{}' has no support code, min=0.", leaseOwner);
-                return 0;
+                log.info("computeSupportCodeDistribution: lease owner '{}' has no support code.", leaseOwner);
+                distribution.merge(0, 1, Integer::sum);
+                continue;
             }
 
-            if (!info.isSupportCodeExpired(supportCodeExpiryThreshold)) {
-                minSupport = Math.min(minSupport, supportCode);
-            } else {
+            if (info.isSupportCodeExpired(supportCodeExpiryThreshold)) {
                 log.info(
-                        "computeMinSupportCode: lease owner '{}' has expired support code heartbeat, min=0.",
+                        "computeSupportCodeDistribution: lease owner '{}' has expired support code heartbeat.",
                         leaseOwner);
-                return 0;
+                distribution.merge(0, 1, Integer::sum);
+                continue;
             }
+
+            distribution.merge(supportCode, 1, Integer::sum);
         }
 
-        final int result = (minSupport == Integer.MAX_VALUE) ? -1 : minSupport;
-        log.info("computeMinSupportCode: result={} (leaseOwners={})", result, leaseOwnerWorkerIds.size());
-        return result;
+        final int minSupportCode = distribution.isEmpty() ? 0 : Collections.min(distribution.keySet());
+
+        // Emit FleetMinSupportCode metric
+        final MetricsScope workerMetricsScope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, WORKER_METRICS_OPERATION);
+        try {
+            workerMetricsScope.addData(
+                    FLEET_MIN_SUPPORT_CODE_METRIC, minSupportCode, StandardUnit.NONE, MetricsLevel.SUMMARY);
+        } finally {
+            MetricsUtil.endScope(workerMetricsScope);
+        }
+
+        log.info(
+                "computeSupportCodeDistribution: distribution={}, minSupportCode={} (leaseOwners={})",
+                distribution,
+                minSupportCode,
+                leaseOwnerWorkerIds.size());
+        return distribution;
     }
 
     private List<Lease> extractLeases(final EntityScanList scanList) {
