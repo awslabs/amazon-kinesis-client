@@ -6,6 +6,16 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.5.1 (July 14, 2026)
+* [#1779](https://github.com/awslabs/amazon-kinesis-client/pull/1779) Add Metrics for table migration
+    * KCL now emits CloudWatch metrics tracking the single-table metadata migration, giving operators visibility into migration progress and state transitions.
+* [#1790](https://github.com/awslabs/amazon-kinesis-client/pull/1790) Extend GSI creation timeout to 1 hour
+* [#1786](https://github.com/awslabs/amazon-kinesis-client/pull/1786) Increase GSI creation timeout
+* [#1788](https://github.com/awslabs/amazon-kinesis-client/pull/1788) Move DDBLeaseRenewer updateLease revert on failure to be inside the synchronized block
+* [#1792](https://github.com/awslabs/amazon-kinesis-client/pull/1792) Skip non-lease entity types in DynamoDBMultiStreamLeaseSerializer
+* [#1787](https://github.com/awslabs/amazon-kinesis-client/pull/1787) Bump com.fasterxml.jackson.core:jackson-databind from 2.20.0 to 2.21.5
+* [#1795](https://github.com/awslabs/amazon-kinesis-client/pull/1795) Bump ch.qos.logback:logback-classic from 1.3.14 to 1.3.16
+
 ### Release 3.5.0 (June 22, 2026)
 * [#1773](https://github.com/awslabs/amazon-kinesis-client/pull/1773) Single-table migration for KCL metadata
     * KCL 3.5 introduces a mechanism to consolidate all KCL metadata into a single DynamoDB lease table. In earlier KCL 3.x versions, KCL maintained separate DynamoDB tables for lease management, worker metrics (the worker metrics table), and coordinator state (the coordinator state table). Starting with KCL 3.5+, the WorkerMetricStats and CoordinatorState entities can be co-located alongside lease records in the lease table, reducing the number of DynamoDB tables your application provisions and operates. This is optional, but cannot be rolled back once completed.
