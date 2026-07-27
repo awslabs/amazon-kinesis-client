@@ -320,9 +320,16 @@ public class MigrationAwareLAMDataManager implements LAMDataManager {
                 .filter(allActiveWorkersWithMetrics::contains)
                 .count();
 
-        // Compute support code distribution across lease-owning workers
+        // Compute support code distribution across all active workers (lease owners + active metrics).
+        // We include workers with active metrics even if they don't hold leases, because they are
+        // alive and their support code must be considered. Workers with both expired leases AND
+        // expired metrics are excluded (they are dead). This ensures newly started workers that
+        // emit SINGLE_TABLE_MIGRATION support code but haven't acquired leases yet are counted.
+        final Set<String> workersForSupportCodeEvaluation = new HashSet<>(unexpiredLeaseOwners);
+        workersForSupportCodeEvaluation.addAll(allActiveWorkersWithMetrics);
+
         final Map<Integer, Integer> supportCodeDistribution =
-                computeSupportCodeDistribution(unexpiredLeaseOwners, leaseTableMetrics, legacyTableMetrics);
+                computeSupportCodeDistribution(workersForSupportCodeEvaluation, leaseTableMetrics, legacyTableMetrics);
 
         // Derive min support code from distribution keys (0 if empty — no lease owners)
         final int minSupportCode =
