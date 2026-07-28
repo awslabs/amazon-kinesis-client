@@ -152,12 +152,6 @@ public class ProcessTask implements ConsumerTask {
                             MetricsLevel.SUMMARY);
                 }
 
-                if (processRecordsInput.isAtShardEnd()
-                        && processRecordsInput.records().isEmpty()) {
-                    log.info("Reached end of shard {} and have no records to process", shardInfoId);
-                    return new TaskResult(null, true);
-                }
-
                 throttlingReporter.success();
                 List<KinesisClientRecord> records = deaggregateAnyKplRecords(processRecordsInput.records());
 
