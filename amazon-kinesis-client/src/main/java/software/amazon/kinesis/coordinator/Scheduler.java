@@ -747,7 +747,7 @@ public class Scheduler implements Runnable {
                                 log.info(
                                         "Removing stream {} from currentStreamConfigMap due to not being active",
                                         stream);
-                                currentStreamConfigMap.remove(stream);
+                                cleanupConfigForStream(stream);
                                 staleStreamDeletionMap.remove(stream);
                                 streamsSynced.add(stream);
                             });
@@ -938,7 +938,7 @@ public class Scheduler implements Runnable {
             // it will be retried again since stream will still show up in the staleStreamDeletionMap.
             // It is fine for PSSM to detect holes and it should not do shardsync because it takes few iterations
             // to breach the hole confidence interval threshold.
-            currentStreamConfigMap.remove(streamIdentifier);
+            cleanupConfigForStream(streamIdentifier);
             // Deleting leases will cause the workers to shutdown the record processors for these shards.
             if (deleteMultiStreamLeases(streamIdToShardsMap.get(streamIdentifier.serialize()))) {
                 streamInfoManager.deleteStreamInfo(streamIdentifier);
@@ -1392,6 +1392,17 @@ public class Scheduler implements Runnable {
         }
         Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
         return streamIdentifier;
+    }
+
+    /**
+     * Remove the streamConfig for a given stream from the relevant maps.
+     * @param streamIdentifier Stream identifier to identify the config
+     */
+    private void cleanupConfigForStream(StreamIdentifier streamIdentifier) {
+        final StreamConfig streamConfig = currentStreamConfigMap.remove(streamIdentifier);
+        if (streamConfig != null) {
+            streamToShardSyncTaskManagerMap.remove(streamConfig);
+        }
     }
 
     private Region getKinesisRegion() {

@@ -216,19 +216,16 @@ class PeriodicShardSyncManager {
             boolean isRunSuccess = false;
             final long runStartMillis = System.currentTimeMillis();
 
+            // Create a copy of the streams to be considered for this run to avoid data race with Scheduler.
+            final Set<StreamIdentifier> streamIdentifiers = new HashSet<>(currentStreamConfigMap.keySet());
+
             try {
-                // Create a copy of the streams to be considered for this run to avoid data race with Scheduler.
-                final Set<StreamIdentifier> streamConfigMap = new HashSet<>(currentStreamConfigMap.keySet());
 
                 // Construct the stream to leases map to be used in the lease sync
-                final Map<StreamIdentifier, List<Lease>> streamToLeasesMap = getStreamToLeasesMap(streamConfigMap);
+                final Map<StreamIdentifier, List<Lease>> streamToLeasesMap = getStreamToLeasesMap(streamIdentifiers);
 
                 // For each of the stream, check if shard sync needs to be done based on the leases state.
-                for (StreamIdentifier streamIdentifier : streamConfigMap) {
-                    if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
-                        log.info("Skipping shard sync task for {} as stream is purged", streamIdentifier);
-                        continue;
-                    }
+                for (StreamIdentifier streamIdentifier : streamIdentifiers) {
                     final ShardSyncResponse shardSyncResponse =
                             checkForShardSync(streamIdentifier, streamToLeasesMap.get(streamIdentifier));
 
@@ -288,6 +285,10 @@ class PeriodicShardSyncManager {
             } catch (Exception e) {
                 log.error("Caught exception while running periodic shard syncer.", e);
             } finally {
+
+                // Clean up any deleted streams from hashRangeHoleTrackerMap
+                hashRangeHoleTrackerMap.keySet().retainAll(streamIdentifiers);
+
                 scope.addData(
                         "NumStreamsWithPartialLeases",
                         numStreamsWithPartialLeases,

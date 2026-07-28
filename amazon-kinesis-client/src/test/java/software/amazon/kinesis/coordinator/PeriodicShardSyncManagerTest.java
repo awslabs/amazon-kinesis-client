@@ -18,9 +18,12 @@ package software.amazon.kinesis.coordinator;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,6 +52,7 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.common.HashKeyRangeForLease.deserialize;
@@ -604,6 +608,392 @@ public class PeriodicShardSyncManagerTest {
                     .hasHoleInLeases(streamIdentifier, leases)
                     .isPresent());
         }
+    }
+
+    // ==================== Tests for memory leak fix: hashRangeHoleTrackerMap cleanup ====================
+
+    @Test
+    public void testCheckForShardSync_holeDetected_populatesHashRangeHoleTrackerMap() {
+        final StreamIdentifier stream1 = StreamIdentifier.singleStreamInstance("stream1");
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(stream1, new StreamConfig(stream1, null));
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                mockScheduledExecutor,
+                false,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // Create leases with a hole in hash range coverage
+        List<Lease> leasesWithHole = createLeasesWithHole();
+
+        // Call checkForShardSync which should populate hashRangeHoleTrackerMap
+        manager.checkForShardSync(stream1, leasesWithHole);
+
+        // The hashRangeHoleTrackerMap should now contain an entry for stream1
+        Assert.assertTrue(manager.getHashRangeHoleTrackerMap().containsKey(stream1));
+    }
+
+    @Test
+    public void testCheckForShardSync_noHole_removesFromHashRangeHoleTrackerMap() {
+        final StreamIdentifier stream1 = StreamIdentifier.singleStreamInstance("stream1");
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(stream1, new StreamConfig(stream1, null));
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                mockScheduledExecutor,
+                false,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // First call: create hole to populate tracker
+        List<Lease> leasesWithHole = createLeasesWithHole();
+        manager.checkForShardSync(stream1, leasesWithHole);
+        Assert.assertTrue(manager.getHashRangeHoleTrackerMap().containsKey(stream1));
+
+        // Second call: no hole, complete hash range
+        List<Lease> completeLeases = createCompleteLeaseCoverage();
+        manager.checkForShardSync(stream1, completeLeases);
+
+        // hashRangeHoleTrackerMap should no longer contain stream1
+        Assert.assertFalse(manager.getHashRangeHoleTrackerMap().containsKey(stream1));
+    }
+
+    @Test
+    public void testRunShardSync_deletedStreamCleanedUpFromHashRangeHoleTrackerMap() throws Exception {
+        final StreamIdentifier stream1 = StreamIdentifier.multiStreamInstance("123456789012:stream1:1");
+        final StreamIdentifier stream2 = StreamIdentifier.multiStreamInstance("123456789012:stream2:2");
+        final StreamIdentifier stream3 = StreamIdentifier.multiStreamInstance("123456789012:stream3:3");
+
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(stream1, new StreamConfig(stream1, null));
+        realStreamConfigMap.put(stream2, new StreamConfig(stream2, null));
+        realStreamConfigMap.put(stream3, new StreamConfig(stream3, null));
+
+        final ScheduledExecutorService localMockExecutor = mock(ScheduledExecutorService.class);
+        final Runnable[] capturedRunnable = new Runnable[1];
+        when(localMockExecutor.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(invocation -> {
+                    capturedRunnable[0] = invocation.getArgument(0);
+                    return mock(ScheduledFuture.class);
+                });
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                localMockExecutor,
+                true,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // Populate hashRangeHoleTrackerMap for all 3 streams by calling checkForShardSync with holes
+        List<Lease> leasesWithHole = createLeasesWithHole();
+        manager.checkForShardSync(stream1, leasesWithHole);
+        manager.checkForShardSync(stream2, leasesWithHole);
+        manager.checkForShardSync(stream3, leasesWithHole);
+
+        Assert.assertEquals(3, manager.getHashRangeHoleTrackerMap().size());
+
+        // Now remove stream2 and stream3 from currentStreamConfigMap to simulate deletion
+        realStreamConfigMap.remove(stream2);
+        realStreamConfigMap.remove(stream3);
+
+        // Setup mock to return complete leases for the remaining stream (no shard sync needed)
+        List<Lease> completeMultiStreamLeases = createCompleteMultiStreamLeaseCoverage(stream1);
+        when(leaseRefresher.listLeases()).thenReturn(completeMultiStreamLeases);
+
+        // Start the manager to capture the runnable and then invoke it
+        LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
+        when(localLeaderDecider.isLeader(any())).thenReturn(true);
+        manager.start(localLeaderDecider);
+        capturedRunnable[0].run();
+
+        // After runShardSync, hashRangeHoleTrackerMap should not contain stream2 or stream3
+        Assert.assertFalse(
+                "Deleted stream2 should be removed from hashRangeHoleTrackerMap",
+                manager.getHashRangeHoleTrackerMap().containsKey(stream2));
+        Assert.assertFalse(
+                "Deleted stream3 should be removed from hashRangeHoleTrackerMap",
+                manager.getHashRangeHoleTrackerMap().containsKey(stream3));
+        // stream1 was cleaned by checkForShardSync since it has complete coverage now
+        Assert.assertFalse(
+                "stream1 should be removed since leases have complete coverage",
+                manager.getHashRangeHoleTrackerMap().containsKey(stream1));
+    }
+
+    @Test
+    public void testRunShardSync_deletedStreamWithHoleTracker_retainAllCleansUp() throws Exception {
+        final StreamIdentifier activeStream = StreamIdentifier.multiStreamInstance("123456789012:activeStream:1");
+        final StreamIdentifier deletedStream = StreamIdentifier.multiStreamInstance("123456789012:deletedStream:2");
+
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(activeStream, new StreamConfig(activeStream, null));
+        realStreamConfigMap.put(deletedStream, new StreamConfig(deletedStream, null));
+
+        final ScheduledExecutorService localMockExecutor = mock(ScheduledExecutorService.class);
+        final Runnable[] capturedRunnable = new Runnable[1];
+        when(localMockExecutor.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(invocation -> {
+                    capturedRunnable[0] = invocation.getArgument(0);
+                    return mock(ScheduledFuture.class);
+                });
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                localMockExecutor,
+                true,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // Populate hashRangeHoleTrackerMap for both streams
+        List<Lease> leasesWithHole = createLeasesWithHole();
+        manager.checkForShardSync(activeStream, leasesWithHole);
+        manager.checkForShardSync(deletedStream, leasesWithHole);
+
+        Assert.assertEquals(2, manager.getHashRangeHoleTrackerMap().size());
+
+        // Simulate stream deletion: remove deletedStream from config
+        realStreamConfigMap.remove(deletedStream);
+
+        // Setup mock: return leases with hole for active stream (so its tracker entry persists)
+        List<Lease> multiStreamLeasesWithHole = createMultiStreamLeasesWithHole(activeStream);
+        when(leaseRefresher.listLeases()).thenReturn(multiStreamLeasesWithHole);
+
+        // Trigger runShardSync
+        LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
+        when(localLeaderDecider.isLeader(any())).thenReturn(true);
+        manager.start(localLeaderDecider);
+        capturedRunnable[0].run();
+
+        // Active stream should still have its tracker entry (hole still present)
+        Assert.assertTrue(
+                "Active stream with hole should retain its tracker entry",
+                manager.getHashRangeHoleTrackerMap().containsKey(activeStream));
+        // Deleted stream should be cleaned up
+        Assert.assertFalse(
+                "Deleted stream should be cleaned from hashRangeHoleTrackerMap",
+                manager.getHashRangeHoleTrackerMap().containsKey(deletedStream));
+        Assert.assertEquals(1, manager.getHashRangeHoleTrackerMap().size());
+    }
+
+    @Test
+    public void testRunShardSync_noDeletedStreams_hashRangeHoleTrackerMapUnchanged() throws Exception {
+        final StreamIdentifier stream1 = StreamIdentifier.multiStreamInstance("123456789012:stream1:1");
+        final StreamIdentifier stream2 = StreamIdentifier.multiStreamInstance("123456789012:stream2:2");
+
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(stream1, new StreamConfig(stream1, null));
+        realStreamConfigMap.put(stream2, new StreamConfig(stream2, null));
+
+        final ScheduledExecutorService localMockExecutor = mock(ScheduledExecutorService.class);
+        final Runnable[] capturedRunnable = new Runnable[1];
+        when(localMockExecutor.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(invocation -> {
+                    capturedRunnable[0] = invocation.getArgument(0);
+                    return mock(ScheduledFuture.class);
+                });
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                localMockExecutor,
+                true,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // Populate hashRangeHoleTrackerMap for both streams
+        List<Lease> leasesWithHole = createLeasesWithHole();
+        manager.checkForShardSync(stream1, leasesWithHole);
+        manager.checkForShardSync(stream2, leasesWithHole);
+
+        Assert.assertEquals(2, manager.getHashRangeHoleTrackerMap().size());
+
+        // Both streams remain in config - no deletions. Return leases with holes for both.
+        List<Lease> allMultiStreamLeases = new ArrayList<>();
+        allMultiStreamLeases.addAll(createMultiStreamLeasesWithHole(stream1));
+        allMultiStreamLeases.addAll(createMultiStreamLeasesWithHole(stream2));
+        when(leaseRefresher.listLeases()).thenReturn(allMultiStreamLeases);
+
+        // Trigger runShardSync
+        LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
+        when(localLeaderDecider.isLeader(any())).thenReturn(true);
+        manager.start(localLeaderDecider);
+        capturedRunnable[0].run();
+
+        // Both entries should still be in the map since no streams were deleted
+        Assert.assertTrue(manager.getHashRangeHoleTrackerMap().containsKey(stream1));
+        Assert.assertTrue(manager.getHashRangeHoleTrackerMap().containsKey(stream2));
+        Assert.assertEquals(2, manager.getHashRangeHoleTrackerMap().size());
+    }
+
+    @Test
+    public void testRunShardSync_allStreamsDeleted_hashRangeHoleTrackerMapCleared() throws Exception {
+        final StreamIdentifier stream1 = StreamIdentifier.multiStreamInstance("123456789012:stream1:1");
+        final StreamIdentifier stream2 = StreamIdentifier.multiStreamInstance("123456789012:stream2:2");
+
+        final Map<StreamIdentifier, StreamConfig> realStreamConfigMap = new HashMap<>();
+        realStreamConfigMap.put(stream1, new StreamConfig(stream1, null));
+        realStreamConfigMap.put(stream2, new StreamConfig(stream2, null));
+
+        final ScheduledExecutorService localMockExecutor = mock(ScheduledExecutorService.class);
+        final Runnable[] capturedRunnable = new Runnable[1];
+        when(localMockExecutor.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(invocation -> {
+                    capturedRunnable[0] = invocation.getArgument(0);
+                    return mock(ScheduledFuture.class);
+                });
+
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                realStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                localMockExecutor,
+                true,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true));
+
+        // Populate hashRangeHoleTrackerMap
+        List<Lease> leasesWithHole = createLeasesWithHole();
+        manager.checkForShardSync(stream1, leasesWithHole);
+        manager.checkForShardSync(stream2, leasesWithHole);
+
+        Assert.assertEquals(2, manager.getHashRangeHoleTrackerMap().size());
+
+        // Remove all streams from config
+        realStreamConfigMap.clear();
+
+        // Mock returns empty list since no leases
+        when(leaseRefresher.listLeases()).thenReturn(Collections.emptyList());
+
+        // Trigger runShardSync
+        LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
+        when(localLeaderDecider.isLeader(any())).thenReturn(true);
+        manager.start(localLeaderDecider);
+        capturedRunnable[0].run();
+
+        // All entries should be cleaned up
+        Assert.assertTrue(
+                "hashRangeHoleTrackerMap should be empty when all streams are deleted",
+                manager.getHashRangeHoleTrackerMap().isEmpty());
+    }
+
+    /**
+     * Creates leases with a hole in hash range coverage.
+     * Covers [0, mid] but NOT (mid, MAX] — creating a detectable hole.
+     */
+    private List<Lease> createLeasesWithHole() {
+        final BigInteger mid = MAX_HASH_KEY.divide(BigInteger.valueOf(2));
+        List<Lease> leases = new ArrayList<>();
+
+        Lease lease1 = new Lease();
+        lease1.leaseKey("shard-001");
+        lease1.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease1.hashKeyRange(new HashKeyRangeForLease(MIN_HASH_KEY, mid));
+        leases.add(lease1);
+
+        // Gap from mid+1 to MAX_HASH_KEY — no lease covers this range
+        return leases;
+    }
+
+    /**
+     * Creates leases that cover the complete hash range [0, MAX] with no holes.
+     */
+    private List<Lease> createCompleteLeaseCoverage() {
+        final BigInteger mid = MAX_HASH_KEY.divide(BigInteger.valueOf(2));
+        List<Lease> leases = new ArrayList<>();
+
+        Lease lease1 = new Lease();
+        lease1.leaseKey("shard-001");
+        lease1.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease1.hashKeyRange(new HashKeyRangeForLease(MIN_HASH_KEY, mid));
+        leases.add(lease1);
+
+        Lease lease2 = new Lease();
+        lease2.leaseKey("shard-002");
+        lease2.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease2.hashKeyRange(new HashKeyRangeForLease(mid.add(BigInteger.ONE), MAX_HASH_KEY));
+        leases.add(lease2);
+
+        return leases;
+    }
+
+    /**
+     * Creates MultiStreamLease objects with a hole for a given stream (for multi-stream mode runShardSync tests).
+     */
+    private List<Lease> createMultiStreamLeasesWithHole(StreamIdentifier stream) {
+        final BigInteger mid = MAX_HASH_KEY.divide(BigInteger.valueOf(2));
+        List<Lease> leases = new ArrayList<>();
+
+        MultiStreamLease lease1 = new MultiStreamLease();
+        lease1.leaseKey(MultiStreamLease.getLeaseKey(stream.serialize(), "shard-001"));
+        lease1.shardId("shard-001");
+        lease1.streamIdentifier(stream.serialize());
+        lease1.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease1.hashKeyRange(new HashKeyRangeForLease(MIN_HASH_KEY, mid));
+        leases.add(lease1);
+
+        // Gap from mid+1 to MAX_HASH_KEY — no lease covers this range
+        return leases;
+    }
+
+    /**
+     * Creates MultiStreamLease objects with complete hash range coverage for a given stream.
+     */
+    private List<Lease> createCompleteMultiStreamLeaseCoverage(StreamIdentifier stream) {
+        final BigInteger mid = MAX_HASH_KEY.divide(BigInteger.valueOf(2));
+        List<Lease> leases = new ArrayList<>();
+
+        MultiStreamLease lease1 = new MultiStreamLease();
+        lease1.leaseKey(MultiStreamLease.getLeaseKey(stream.serialize(), "shard-001"));
+        lease1.shardId("shard-001");
+        lease1.streamIdentifier(stream.serialize());
+        lease1.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease1.hashKeyRange(new HashKeyRangeForLease(MIN_HASH_KEY, mid));
+        leases.add(lease1);
+
+        MultiStreamLease lease2 = new MultiStreamLease();
+        lease2.leaseKey(MultiStreamLease.getLeaseKey(stream.serialize(), "shard-002"));
+        lease2.shardId("shard-002");
+        lease2.streamIdentifier(stream.serialize());
+        lease2.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease2.hashKeyRange(new HashKeyRangeForLease(mid.add(BigInteger.ONE), MAX_HASH_KEY));
+        leases.add(lease2);
+
+        return leases;
     }
 
     private List<Lease> generateInitialLeases(int initialShardCount) {

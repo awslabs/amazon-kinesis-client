@@ -31,7 +31,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -105,10 +104,25 @@ public final class LeaseAssignmentManager {
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
     private final LeaseAssignmentStrategy leaseAssignmentStrategy;
     private boolean tookOverLeadershipInThisRun = false;
-    private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
     private final LAMDataManager lamDataManager;
+
+    /**
+     * Lease snapshot class to reduce memory usage by only containing attributes
+     * needed for subsequent checks rather than the entire lease.
+     */
+    @RequiredArgsConstructor
+    private static class LeaseCounterSnapshot {
+        final long leaseCounter;
+        final long lastCounterIncrementNanos;
+        final boolean shutdownRequested;
+        final long checkpointOwnerTimeoutTimestampMillis;
+        final String leaseOwner;
+        final String checkpointOwner;
+    }
+
+    private final Map<String, LeaseCounterSnapshot> prevRunLeasesState = new HashMap<>();
 
     private Future<?> managerFuture;
 
@@ -392,7 +406,7 @@ public final class LeaseAssignmentManager {
     private void updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
             final List<Lease> leaseList, final Long scanTime) {
         for (final Lease lease : leaseList) {
-            final Lease prevLease = prevRunLeasesState.get(lease.leaseKey());
+            final LeaseCounterSnapshot prev = prevRunLeasesState.get(lease.leaseKey());
 
             // make sure lease shutdown timeouts are tracked.
             if (lease.shutdownRequested()) {
@@ -400,16 +414,16 @@ public final class LeaseAssignmentManager {
                 // guarantee that the latest shutdown is the same shutdown in the previous lease for example
                 // some other leaders change the lease states while this worker waiting for it's LAM run.
                 // This is the best effort to prevent marking the incorrect timeout.
-                if (isNull(prevLease) || !prevLease.shutdownRequested() || !isSameOwners(lease, prevLease)) {
+                if (isNull(prev) || !prev.shutdownRequested || !isSameOwners(lease, prev)) {
                     // Add new value if previous is null, previous lease is not shutdown pending or the owners
                     // don't match
                     lease.checkpointOwnerTimeoutTimestampMillis(getCheckpointOwnerTimeoutTimestampMillis());
                 } else {
-                    lease.checkpointOwnerTimeoutTimestampMillis(prevLease.checkpointOwnerTimeoutTimestampMillis());
+                    lease.checkpointOwnerTimeoutTimestampMillis(prev.checkpointOwnerTimeoutTimestampMillis);
                 }
             }
 
-            if (isNull(prevLease)) {
+            if (isNull(prev)) {
                 lease.lastCounterIncrementNanos(
                         isNull(lease.actualOwner())
                                 // This is an unassigned lease, mark as 0L that puts this in first in assignment order
@@ -417,13 +431,21 @@ public final class LeaseAssignmentManager {
                                 : scanTime);
             } else {
                 lease.lastCounterIncrementNanos(
-                        lease.leaseCounter() > prevLease.leaseCounter()
-                                ? scanTime
-                                : prevLease.lastCounterIncrementNanos());
+                        lease.leaseCounter() > prev.leaseCounter ? scanTime : prev.lastCounterIncrementNanos);
             }
         }
         prevRunLeasesState.clear();
-        prevRunLeasesState.putAll(leaseList.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
+        for (Lease lease : leaseList) {
+            prevRunLeasesState.put(
+                    lease.leaseKey(),
+                    new LeaseCounterSnapshot(
+                            lease.leaseCounter(),
+                            lease.lastCounterIncrementNanos(),
+                            lease.shutdownRequested(),
+                            lease.checkpointOwnerTimeoutTimestampMillis(),
+                            lease.leaseOwner(),
+                            lease.checkpointOwner()));
+        }
     }
 
     private void prepareAfterLeaderSwitch() {
@@ -639,8 +661,8 @@ public final class LeaseAssignmentManager {
         return TimeUnit.NANOSECONDS.toMillis(nanoTimeProvider.get());
     }
 
-    private static boolean isSameOwners(Lease currentLease, Lease previousLease) {
-        return Objects.equals(currentLease.leaseOwner(), previousLease.leaseOwner())
-                && Objects.equals(currentLease.checkpointOwner(), previousLease.checkpointOwner());
+    private static boolean isSameOwners(Lease currentLease, LeaseCounterSnapshot previousLease) {
+        return Objects.equals(currentLease.leaseOwner(), previousLease.leaseOwner)
+                && Objects.equals(currentLease.checkpointOwner(), previousLease.checkpointOwner);
     }
 }
