@@ -117,7 +117,7 @@ public final class LeaseAssignmentManager {
         final long leaseCounter;
         final long lastCounterIncrementNanos;
         final boolean shutdownRequested;
-        final long checkpointOwnerTimeoutTimestampMillis;
+        final Long checkpointOwnerTimeoutTimestampMillis;
         final String leaseOwner;
         final String checkpointOwner;
     }
