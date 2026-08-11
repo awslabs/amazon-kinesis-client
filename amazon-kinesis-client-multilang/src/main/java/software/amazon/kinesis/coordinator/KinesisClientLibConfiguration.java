@@ -1360,12 +1360,12 @@ public class KinesisClientLibConfiguration {
      * @param maxLeaseRenewalThreads
      *            the maximum size of the lease renewal thread pool
      * @throws IllegalArgumentException
-     *             if maxLeaseRenewalThreads is <= 0
+     *             if maxLeaseRenewalThreads is less than 2
      * @return this configuration object
      */
     public KinesisClientLibConfiguration withMaxLeaseRenewalThreads(int maxLeaseRenewalThreads) {
         Validate.isTrue(
-                maxLeaseRenewalThreads > 2,
+                maxLeaseRenewalThreads >= 2,
                 "The maximum number of lease renewal threads must be greater than or equal to 2.");
         this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
 
