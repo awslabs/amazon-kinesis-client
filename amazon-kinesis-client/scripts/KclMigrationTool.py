@@ -14,7 +14,9 @@ limitations under the License.
 """
 
 import argparse
+import builtins
 import time
+from datetime import datetime, timezone
 
 from enum import Enum
 import boto3
@@ -32,12 +34,55 @@ MIGRATION_KEY = "Migration3.0"
 GSI_NAME = 'LeaseOwnerToLeaseKeyIndex'
 GSI_DELETION_WAIT_TIME_SECONDS = 120
 
+# Entity type constants for non-lease entity cleanup.
+ENTITY_TYPE_ATTR = 'entityType'
+ENTITY_TYPE_LEASE = 'LEASE'
+BATCH_DELETE_SIZE = 25  # DynamoDB BatchWriteItem limit
+
+# Confirmation phrase for rollback-to-v2
+ROLLBACK_CONFIRMATION_PHRASE = "Code rollback to CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE1 completed"
+
 config = Config(
     retries = {
         'max_attempts': 10,
         'mode': 'standard'
     }
 )
+
+
+def _utc_timestamp():
+    """Return the current UTC time formatted for log prefixes, e.g. '2026-09-07T22:54:02.874Z'."""
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+
+def print(*args, **kwargs):
+    """
+    Drop-in replacement for the builtin print that prepends a UTC timestamp to
+    every log line emitted by this tool. Blank or whitespace-only messages
+    (used for spacing/banner separators) are passed through unmodified so the
+    interactive UI stays readable.
+
+    Multi-line messages are timestamped per line so each logged line is
+    independently parseable.
+    """
+    sep = kwargs.get('sep', ' ')
+    message = sep.join(str(arg) for arg in args)
+
+    # Preserve intentional blank lines / separators without a timestamp.
+    if message.strip() == '':
+        builtins.print(*args, **kwargs)
+        return
+
+    prefix = f'[{_utc_timestamp()}] '
+    timestamped = '\n'.join(
+        prefix + line if line.strip() != '' else line
+        for line in message.split('\n')
+    )
+    # Emit as a single positional arg so caller-provided end/file kwargs still apply,
+    # while sep no longer affects the already-joined message.
+    kwargs.pop('sep', None)
+    builtins.print(timestamped, **kwargs)
+
 
 class KclClientVersion(Enum):
     VERSION_2X = "CLIENT_VERSION_2X"
@@ -365,6 +410,186 @@ def delete_gsi_if_exists(dynamodb_client, table_name):
               " Please manually confirm the GSI is removed from the lease table, or"
               " resolve the error and rerun the migration script.")
 
+def scan_non_lease_entities(dynamodb_client, table_name):
+    """
+    Scan the lease table for all items where EntityType (et) exists,
+    is not 'LEASE', and is not empty. These are non-lease entities
+    written by KCL v3.5 Phase 2 that must be removed before rolling
+    back to v2.
+
+    :param dynamodb_client: Boto3 DynamoDB client
+    :param table_name: Name of the DynamoDB lease table
+    :return: List of (leaseKey, full_item) tuples to delete
+    """
+    non_lease_entries = []
+    scan_kwargs = {
+        'TableName': table_name,
+        'FilterExpression': (
+            'attribute_exists(#et) AND #et <> :lease_type AND #et <> :empty_string'
+        ),
+        'ExpressionAttributeNames': {'#et': ENTITY_TYPE_ATTR},
+        'ExpressionAttributeValues': {
+            ':lease_type': {'S': ENTITY_TYPE_LEASE},
+            ':empty_string': {'S': ''}
+        }
+    }
+
+    while True:
+        response = dynamodb_client.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            lease_key = item['leaseKey']['S']
+            non_lease_entries.append((lease_key, item))
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+    return non_lease_entries
+
+
+def delete_non_lease_entities(dynamodb_client, table_name, keys_to_delete):
+    """
+    Batch-delete non-lease entities from the lease table.
+
+    :param dynamodb_client: Boto3 DynamoDB client
+    :param table_name: Name of the DynamoDB lease table
+    :param keys_to_delete: List of leaseKey string values to delete
+    :return: Number of items successfully deleted
+    """
+    deleted_count = 0
+    for i in range(0, len(keys_to_delete), BATCH_DELETE_SIZE):
+        batch = keys_to_delete[i:i + BATCH_DELETE_SIZE]
+        request_items = {
+            table_name: [
+                {'DeleteRequest': {'Key': {'leaseKey': {'S': key}}}}
+                for key in batch
+            ]
+        }
+        try:
+            response = dynamodb_client.batch_write_item(RequestItems=request_items)
+            unprocessed = response.get('UnprocessedItems', {})
+            retry_count = 0
+            while unprocessed and retry_count < 3:
+                time.sleep(2 ** retry_count)
+                response = dynamodb_client.batch_write_item(RequestItems=unprocessed)
+                unprocessed = response.get('UnprocessedItems', {})
+                retry_count += 1
+            if unprocessed:
+                unprocessed_count = len(unprocessed.get(table_name, []))
+                print(f"WARNING: {unprocessed_count} items not deleted after retries.")
+                deleted_count += len(batch) - unprocessed_count
+            else:
+                deleted_count += len(batch)
+        except ClientError as e:
+            print(f"Error during batch delete: {e.response['Error']['Code']} - "
+                  f"{e.response['Error']['Message']}")
+            print(f"Deleted {deleted_count} items before failure. Re-run to continue.")
+            return deleted_count
+    return deleted_count
+
+
+def perform_rollback_to_v2(dynamodb_client, lease_table_name):
+    """
+    Delete all non-lease entities from the lease table to enable rollback to v2.
+
+    Prerequisites:
+    1. Phase 2 -> Phase 1 rollback completed using this tool (MigrationState.ClientVersion == CLIENT_VERSION_2X)
+    2. ALL workers have completed the Phase 1 code rollback (needs user confirmation)
+
+    :param dynamodb_client: Boto3 DynamoDB client
+    :param lease_table_name: Name of the DynamoDB lease table
+    """
+    if not validate_tables(dynamodb_client, "Rollback-to-v2", lease_table_name):
+        return
+
+    # Step 1: Verify MigrationState.ClientVersion == CLIENT_VERSION_2X
+    try:
+        response = dynamodb_client.get_item(
+            TableName=lease_table_name,
+            Key={'leaseKey': {'S': MIGRATION_KEY}}
+        )
+        item = response.get('Item', {})
+        current_version = item.get(CLIENT_VERSION_ATTR, {}).get('S', 'Unknown')
+    except ClientError as e:
+        handle_get_item_client_error(e, "Rollback-to-v2", lease_table_name)
+        return
+
+    if current_version != KclClientVersion.VERSION_2X.value:
+        print(f"ERROR: MigrationState.ClientVersion is '{current_version}'. "
+              f"Expected '{KclClientVersion.VERSION_2X.value}'.")
+        print("You must first complete the Phase 2 -> Phase 1 rollback:")
+        print(f"  python3 ./KclMigrationTool.py --region <region> "
+              f"--mode rollback-to-phase1 --lease_table_name {lease_table_name}")
+        print("Then wait for ALL workers to complete the Phase 1 code rollback before re-running.")
+        return
+
+    # Step 2: Scan for non-lease entities first to check if cleanup is needed
+    print(f"\nScanning '{lease_table_name}' for non-lease entities...")
+    non_lease_entries = scan_non_lease_entities(dynamodb_client, lease_table_name)
+
+    if not non_lease_entries:
+        print("No non-lease entities found. The lease table is already clean for v2 rollback.")
+        print("Next step: redeploy your application with the previous KCL v2 version.")
+        return
+
+    print(f"\nFound {len(non_lease_entries)} non-lease entities to delete:\n")
+    for i, (lease_key, item) in enumerate(non_lease_entries, 1):
+        print(f"--- Entry {i} ---")
+        for attr_name, attr_value in sorted(item.items()):
+            print(f"  {attr_name}: {attr_value}")
+        print()
+    print("-" * 80)
+
+    # Step 3: Operator confirmation that the Phase 1 code rollback has actually
+    # reached every worker. Note: we do NOT ask the operator to confirm that
+    # rollback-to-phase1 was run -- Step 1 above already verified
+    # MigrationState.ClientVersion == CLIENT_VERSION_2X, which is only reachable
+    # via rollback-to-phase1. The remaining risk the tool cannot prove is that
+    # all *workers* (not just the leader) have finished deploying the Phase 1
+    # config, so that is what the operator must confirm here.
+    print("\n" + "=" * 70)
+    print("MigrationState.ClientVersion is already confirmed to be "
+          f"{KclClientVersion.VERSION_2X.value},")
+    print("so the Phase 2 -> Phase 1 rollback has run. Before proceeding, confirm:")
+    print("")
+    print("  ALL workers in your fleet have completed the Phase 1 code")
+    print("  rollback deployment with:")
+    print("     clientVersionConfig = CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X_PHASE1")
+    print("")
+    print("Verify using your CI/CD system that no Phase 2 workers remain.")
+    print("=" * 70)
+    print(f"\nType exactly: {ROLLBACK_CONFIRMATION_PHRASE}")
+    user_input = input("> ").strip()
+    if user_input != ROLLBACK_CONFIRMATION_PHRASE:
+        print("Confirmation did not match. Aborting.")
+        return
+
+    # Step 4: Confirm deletion
+    print(f"\nThe above {len(non_lease_entries)} entries will be permanently deleted "
+          f"from '{lease_table_name}'.")
+    print("After deletion, rollforward to Phase 2 will require a fresh migration from Phase 1.")
+    print("\nType 'yes' to confirm deletion:")
+    user_input = input("> ").strip()
+    if user_input != 'yes':
+        print("Aborting. No items deleted.")
+        return
+
+    # Step 5: Delete non-lease entities
+    keys_to_delete = [entry[0] for entry in non_lease_entries]
+    print(f"\nDeleting {len(keys_to_delete)} non-lease entities...")
+    deleted = delete_non_lease_entities(dynamodb_client, lease_table_name, keys_to_delete)
+    print(f"\nDone. Deleted {deleted}/{len(keys_to_delete)} non-lease entities.")
+
+    if deleted == len(keys_to_delete):
+        print("\nThe lease table is clean for v2 rollback.")
+        print("Next step: redeploy your application with the previous KCL v2 version.")
+        print("\nWhen ready to migrate to KCL v3.5 again:")
+        print("  1. Deploy with Phase 1 config (no tool needed)")
+        print("  2. Bake Phase 1 for your confidence interval")
+        print("  3. Deploy with Phase 2 config (no tool needed to rollforward)")
+    else:
+        print(f"\n{len(keys_to_delete) - deleted} items were not deleted. Re-run the tool to retry.")
+
+
 def perform_rollback(dynamodb_client, lease_table_name):
     """
     Perform KCL 3.0 migration rollback by updating MigrationState for the KCL application.
@@ -439,17 +664,19 @@ def run_kcl_migration(mode, lease_table_name):
     """
     Update the MigrationState in the DynamoDB lease table.
 
-    :param mode: Either 'rollback' or 'rollforward'
+    :param mode: 'rollback-to-phase1', 'rollback', 'rollforward-to-phase2', 'rollforward', or 'rollback-to-v2'
     :param lease_table_name: Name of the DynamoDB KCL lease table
     """
     dynamodb_client = boto3.client('dynamodb', config=config)
 
-    if mode == "rollback":
+    if mode in ("rollback", "rollback-to-phase1"):
         perform_rollback(dynamodb_client, lease_table_name)
-    elif mode == "rollforward":
+    elif mode in ("rollforward", "rollforward-to-phase2"):
         perform_rollforward(dynamodb_client, lease_table_name)
+    elif mode == "rollback-to-v2":
+        perform_rollback_to_v2(dynamodb_client, lease_table_name)
     else:
-        print(f"Invalid mode: {mode}. Please use 'rollback' or 'rollforward'.")
+        print(f"Invalid mode: {mode}. Please use 'rollback-to-phase1', 'rollforward-to-phase2', or 'rollback-to-v2'.")
 
 
 def validate_args(args):
@@ -494,8 +721,12 @@ if __name__ == "__main__":
         For detailed usage instructions, use the -h or --help option.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--mode", choices=['rollback', 'rollforward'], required=True,
-                        help="Mode of operation: rollback or rollforward")
+    parser.add_argument("--mode", choices=['rollback-to-phase1', 'rollback', 'rollforward-to-phase2', 'rollforward', 'rollback-to-v2'],
+                        required=True, metavar='{rollback-to-phase1,rollforward-to-phase2,rollback-to-v2}',
+                        help="Mode of operation: "
+                             "'rollback-to-phase1': Client Version Migration Phase 2 -> Phase 1. "
+                             "'rollforward-to-phase2': After a rollback to Phase1, rollforward Client Version Migration to Phase 2. "
+                             "'rollback-to-v2': Delete non-lease entities to enable rollback to v2.")
     parser.add_argument("--application_name",
                         help="Name of the KCL application. This must match the application name "
                              "used in the KCL Library configurations.")
