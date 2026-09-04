@@ -6,6 +6,11 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.5.2 (September 4, 2026)
+* [#1798](https://github.com/awslabs/amazon-kinesis-client/pull/1798) Update KCLMigrationTool
+* [#1799](https://github.com/awslabs/amazon-kinesis-client/pull/1799) Address memory leaks and improved overall memory usage
+* [#1804](https://github.com/awslabs/amazon-kinesis-client/pull/1804) Ensure worker re-initializes after startup failure
+
 ### Release 3.5.1 (July 14, 2026)
 * [#1779](https://github.com/awslabs/amazon-kinesis-client/pull/1779) Add Metrics for table migration
     * KCL now emits CloudWatch metrics tracking the single-table metadata migration, giving operators visibility into migration progress and state transitions.
