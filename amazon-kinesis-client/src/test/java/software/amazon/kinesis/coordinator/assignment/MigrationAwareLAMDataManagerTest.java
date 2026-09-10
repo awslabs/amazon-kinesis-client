@@ -309,34 +309,43 @@ class MigrationAwareLAMDataManagerTest {
 
     @Test
     void loadData_migrationSummary_allWorkersWithFreshSupportCode_returnsMinCode() throws Exception {
-        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
 
         long freshEpoch = Instant.now().getEpochSecond();
         WorkerMetricStats wm1 = createWorkerWithSupportCode("worker1", 2, freshEpoch);
         WorkerMetricStats wm2 = createWorkerWithSupportCode("worker2", 3, freshEpoch);
+        // worker3 has active metrics and support code but holds no leases (e.g., newly started)
+        // It should still be included in the support code distribution
+        WorkerMetricStats wm3 = createWorkerWithSupportCode("worker3", 2, freshEpoch);
         Lease lease1 = createLease("lease1", "worker1");
         Lease lease2 = createLease("lease2", "worker2");
 
         when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
-                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2), Arrays.asList(wm1, wm2)));
+                .thenReturn(buildScanResult(Arrays.asList(lease1, lease2), Collections.emptyList()));
+        when(legacyDelegate.getAllWorkerMetricStats()).thenReturn(Arrays.asList(wm1, wm2, wm3));
 
         manager.loadData(new NullMetricsScope());
 
         TableMigrationSummary summary = capturedSummary.get();
         assertNotNull(summary);
+        // min is 2 (worker1=2, worker2=3, worker3=2 with no lease but active metrics)
         assertEquals(2, summary.getMinSupportCode());
+        // worker3 is included in distribution despite having no leases
+        assertEquals(2, summary.getSupportCodeDistribution().get(2).intValue());
+        assertEquals(1, summary.getSupportCodeDistribution().get(3).intValue());
     }
 
     @Test
     void loadData_migrationSummary_workerWithNullSupportCode_returnsZero() throws Exception {
-        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
 
         long freshEpoch = Instant.now().getEpochSecond();
         WorkerMetricStats wm1 = createWorkerWithSupportCode("worker1", null, freshEpoch);
         Lease lease1 = createLease("lease1", "worker1");
 
         when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
-                .thenReturn(buildScanResult(Collections.singletonList(lease1), Collections.singletonList(wm1)));
+                .thenReturn(buildScanResult(Collections.singletonList(lease1), Collections.emptyList()));
+        when(legacyDelegate.getAllWorkerMetricStats()).thenReturn(Collections.singletonList(wm1));
 
         manager.loadData(new NullMetricsScope());
 
@@ -347,20 +356,27 @@ class MigrationAwareLAMDataManagerTest {
 
     @Test
     void loadData_migrationSummary_workerWithExpiredSupportCode_returnsZero() throws Exception {
-        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        manager = createManager(TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT);
 
+        long freshEpoch = Instant.now().getEpochSecond();
         // Support code update epoch is very old (expired)
         long staleEpoch = Instant.now().minus(Duration.ofDays(10)).getEpochSecond();
-        WorkerMetricStats wm1 = createWorkerWithSupportCode("worker1", 2, staleEpoch);
+        // worker1 has a lease and valid support code
+        WorkerMetricStats wm1 = createWorkerWithSupportCode("worker1", 2, freshEpoch);
         Lease lease1 = createLease("lease1", "worker1");
+        // worker2 has active metrics but expired support code heartbeat and no leases
+        // It should be included (alive) and drag min to 0
+        WorkerMetricStats wm2 = createWorkerWithSupportCode("worker2", 2, staleEpoch);
 
         when(entityDAO.scanEntities(EntityType.LEASE, EntityType.WORKER_METRIC_STATS))
-                .thenReturn(buildScanResult(Collections.singletonList(lease1), Collections.singletonList(wm1)));
+                .thenReturn(buildScanResult(Collections.singletonList(lease1), Collections.emptyList()));
+        when(legacyDelegate.getAllWorkerMetricStats()).thenReturn(Arrays.asList(wm1, wm2));
 
         manager.loadData(new NullMetricsScope());
 
         TableMigrationSummary summary = capturedSummary.get();
         assertNotNull(summary);
+        // worker2 has active metrics (alive) but expired support code heartbeat → counted as 0
         assertEquals(0, summary.getMinSupportCode());
     }
 
