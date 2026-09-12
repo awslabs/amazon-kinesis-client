@@ -691,6 +691,142 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
+    void performAssignment_tinyThroughputWithZeroThroughputLeases_assertZeroThroughputLeasesNotMoved()
+            throws Exception {
+        // When throughputToTake is tiny but non-zero, zero-throughput leases should NOT be selected.
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        // 9 leases with zero throughput, 1 with tiny throughput on yield worker
+        for (int i = 0; i < 9; ++i) {
+            final Lease lease = createDummyLease("lease" + i, TEST_YIELD_WORKER_ID);
+            lease.throughputKBps(0D);
+            populateLeasesInLeaseTable(lease);
+        }
+        final Lease leaseWithThroughput = createDummyLease("lease9", TEST_YIELD_WORKER_ID);
+        leaseWithThroughput.throughputKBps(0.001D);
+        populateLeasesInLeaseTable(leaseWithThroughput);
+
+        leaseAssignmentManagerRunnable.run();
+
+        final long leasesOnTakeWorker = leaseRefresher.listLeases().stream()
+                .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                .count();
+
+        // Correct behavior: at most 1 lease should move.
+        // This test FAILS with current code because the bug selects all zero-throughput leases.
+        assertTrue(
+                leasesOnTakeWorker <= 1, "Expected at most 1 lease moved, but " + leasesOnTakeWorker + " were moved");
+    }
+
+    @Test
+    void performAssignment_mixedThroughputLeases_assertZeroThroughputLeasesNotMoved() throws Exception {
+        // When some leases have real throughput and others have 0, zero-throughput leases
+        // should NOT be dragged along during rebalancing.
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        // 2 leases with real throughput, 3 with zero on yield worker
+        final Lease lease1 = createDummyLease("lease1", TEST_YIELD_WORKER_ID);
+        lease1.throughputKBps(10D);
+        final Lease lease2 = createDummyLease("lease2", TEST_YIELD_WORKER_ID);
+        lease2.throughputKBps(10D);
+        final Lease lease3 = createDummyLease("lease3", TEST_YIELD_WORKER_ID);
+        lease3.throughputKBps(0D);
+        final Lease lease4 = createDummyLease("lease4", TEST_YIELD_WORKER_ID);
+        lease4.throughputKBps(0D);
+        final Lease lease5 = createDummyLease("lease5", TEST_YIELD_WORKER_ID);
+        lease5.throughputKBps(0D);
+        // 1 lease on take worker
+        final Lease lease6 = createDummyLease("lease6", TEST_TAKE_WORKER_ID);
+        lease6.throughputKBps(30D);
+        populateLeasesInLeaseTable(lease1, lease2, lease3, lease4, lease5, lease6);
+
+        leaseAssignmentManagerRunnable.run();
+
+        final long zeroThroughputLeasesOnTakeWorker = leaseRefresher.listLeases().stream()
+                .filter(lease -> TEST_TAKE_WORKER_ID.equals(lease.leaseOwner()))
+                .filter(lease -> lease.throughputKBps() != null && lease.throughputKBps() == 0D)
+                .count();
+
+        // Correct behavior: zero-throughput leases should NOT be moved.
+        // This test FAILS with current code because they get dragged along.
+        assertEquals(
+                0,
+                zeroThroughputLeasesOnTakeWorker,
+                "Expected no zero-throughput leases moved, but " + zeroThroughputLeasesOnTakeWorker + " were moved");
+    }
+
+    @Test
+    void performAssignment_smallCpuDifference_assertNoRebalancing() throws Exception {
+        // When CPU difference between workers is trivially small,
+        // rebalancing should NOT trigger. Uses actual CPU values from reproduction
+        // where unnecessary moves were observed (00:05:50 UTC).
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        // 4 workers with low CPU values from actual reproduction data
+        // avg=2.59, upper=2.85, lower=2.33
+        // worker1 at 3.82 > 2.85 → above upper limit → targeted
+        // worker4 at 1.69 < 2.33 → below lower limit → can accept
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker1", 3.82D, 80L));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker2", 2.65D, 80L));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker3", 2.19D, 80L));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker4", 1.69D, 80L));
+
+        // Leases distributed across workers, all zero throughput
+        for (int i = 0; i < 5; ++i) {
+            final Lease lease = createDummyLease("lease" + i, "worker1");
+            lease.throughputKBps(0D);
+            populateLeasesInLeaseTable(lease);
+        }
+        for (int i = 5; i < 9; ++i) {
+            final Lease lease = createDummyLease("lease" + i, "worker2");
+            lease.throughputKBps(0D);
+            populateLeasesInLeaseTable(lease);
+        }
+        for (int i = 9; i < 13; ++i) {
+            final Lease lease = createDummyLease("lease" + i, "worker3");
+            lease.throughputKBps(0D);
+            populateLeasesInLeaseTable(lease);
+        }
+        for (int i = 13; i < 16; ++i) {
+            final Lease lease = createDummyLease("lease" + i, "worker4");
+            lease.throughputKBps(0D);
+            populateLeasesInLeaseTable(lease);
+        }
+
+        leaseAssignmentManagerRunnable.run();
+
+        final long leasesOnWorker1 = leaseRefresher.listLeases().stream()
+                .filter(lease -> "worker1".equals(lease.leaseOwner()))
+                .count();
+
+        // Correct behavior: no rebalancing because ~2% absolute CPU difference is trivially small.
+        // This test FAILS with current code because relative threshold triggers rebalancing
+        // and worker4 has enough room below average to accept the lease.
+        assertEquals(
+                5,
+                leasesOnWorker1,
+                "Expected no rebalancing (worker1 should keep all 5 leases), but has " + leasesOnWorker1);
+    }
+
+    @Test
     void performAssignment_continuousFailure_assertLeadershipRelease() throws Exception {
         final Supplier<Long> mockFailingNanoTimeProvider = Mockito.mock(Supplier.class);
         when(mockFailingNanoTimeProvider.get()).thenThrow(new RuntimeException("IAmAlwaysFailing"));

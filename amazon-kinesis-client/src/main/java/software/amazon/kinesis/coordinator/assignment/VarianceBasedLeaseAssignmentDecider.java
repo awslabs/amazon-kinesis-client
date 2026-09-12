@@ -53,23 +53,44 @@ import static java.util.Objects.nonNull;
 @Slf4j
 @KinesisClientInternalApi
 public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmentDecider {
+    private static final double DEFAULT_MIN_CPU_IMPACT_FOR_REBALANCE = 1.0D;
+
     private final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView;
     private final int dampeningPercentageValue;
     private final int reBalanceThreshold;
     private final boolean allowThroughputOvershoot;
+    private final double minCpuImpactForRebalance;
     private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
     private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
     private int targetLeasePerWorker;
 
+    /**
+     * Backward compatible constructor using default minimum CPU impact for rebalance.
+     */
     public VarianceBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
             final int dampeningPercentageValue,
             final int reBalanceThreshold,
             final boolean allowThroughputOvershoot) {
+        this(
+                inMemoryStorageView,
+                dampeningPercentageValue,
+                reBalanceThreshold,
+                allowThroughputOvershoot,
+                DEFAULT_MIN_CPU_IMPACT_FOR_REBALANCE);
+    }
+
+    public VarianceBasedLeaseAssignmentDecider(
+            final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
+            final int dampeningPercentageValue,
+            final int reBalanceThreshold,
+            final boolean allowThroughputOvershoot,
+            final double minCpuImpactForRebalance) {
         this.inMemoryStorageView = inMemoryStorageView;
         this.dampeningPercentageValue = dampeningPercentageValue;
         this.reBalanceThreshold = reBalanceThreshold;
         this.allowThroughputOvershoot = allowThroughputOvershoot;
+        this.minCpuImpactForRebalance = minCpuImpactForRebalance;
         initialize();
         final Comparator<WorkerMetricStats> comparator = Comparator.comparingDouble(
                 workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
@@ -261,6 +282,11 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
             final double throughputToTake = workerIdToThroughputToTakeEntry.getValue();
 
+            // Skip if the expected CPU impact is too small to justify moving leases.
+            if (!isRebalanceImpactful(throughputToTake, largestOutlierWorkerMetricsName, workerId)) {
+                continue;
+            }
+
             final Queue<Lease> leasesToTake = getLeasesToTake(workerId, throughputToTake);
 
             log.info(
@@ -286,6 +312,32 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         }
 
         printWorkerToUtilizationLog(inMemoryStorageView.getActiveWorkerMetrics());
+    }
+
+    /**
+     * Checks if removing the given throughput from a worker would meaningfully change its CPU utilization.
+     * Returns false if the expected CPU drop is below the configured minimum, indicating the rebalance
+     * would not be worth the disruption of moving leases.
+     */
+    private boolean isRebalanceImpactful(
+            final double throughputToTake, final String metricName, final String workerId) {
+        final double avgThroughput = inMemoryStorageView.getTargetAverageThroughput();
+        final double fleetAvgMetric = workerMetricsToFleetLevelAverageMap.getOrDefault(metricName, 0D);
+        final double expectedCpuDrop;
+        if (avgThroughput > 0) {
+            expectedCpuDrop = throughputToTake * fleetAvgMetric / avgThroughput;
+        } else {
+            expectedCpuDrop = fleetAvgMetric / Math.max(1, targetLeasePerWorker);
+        }
+        if (expectedCpuDrop < minCpuImpactForRebalance) {
+            log.debug(
+                    "Skipping rebalance for worker {}: expected CPU drop {} is below minimum {}",
+                    workerId,
+                    expectedCpuDrop,
+                    minCpuImpactForRebalance);
+            return false;
+        }
+        return true;
     }
 
     private Queue<Lease> getLeasesToTake(final String workerId, final double throughputToTake) {
@@ -367,6 +419,11 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         final Queue<Lease> response = new ArrayDeque<>();
         double remainingThroughputToGet = throughputToGet;
         for (final Lease lease : assignedLeases) {
+            // Skip zero-throughput leases as they don't contribute to the throughput target
+            // and would be selected indefinitely (subtracting 0 never reduces the remaining target).
+            if (lease.throughputKBps() == 0D) {
+                continue;
+            }
             // if adding this lease makes throughout to take go below zero avoid taking this lease.
             if (remainingThroughputToGet - lease.throughputKBps() <= 0) {
                 continue;
@@ -376,8 +433,10 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         }
 
         // If allowThroughputOvershoot is set to true, take a minimum throughput lease
+        // but only if it has non-zero throughput to avoid moving silent shards needlessly.
         if (allowThroughputOvershoot && response.isEmpty()) {
             assignedLeases.stream()
+                    .filter(lease -> lease.throughputKBps() > 0D)
                     .min(Comparator.comparingDouble(Lease::throughputKBps))
                     .ifPresent(response::add);
         }

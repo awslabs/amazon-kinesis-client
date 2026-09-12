@@ -578,6 +578,15 @@ public class LeaseManagementConfig {
         private int reBalanceThresholdPercentage = 10;
 
         /**
+         * Minimum expected CPU impact (in percentage points) required for a lease rebalancing move.
+         * If removing throughput from a worker would change its CPU by less than this value,
+         * the move is skipped because it wouldn't meaningfully help the worker.
+         * This prevents unnecessary lease churn when all workers are lightly loaded.
+         * Default is 1.0 (1 percentage point).
+         */
+        private double minCpuImpactForRebalance = 1.0D;
+
+        /**
          * The allowThroughputOvershoot flag determines whether leases should still be taken even if
          * it causes the total assigned throughput to exceed the desired throughput to take for re-balance.
          * Enabling this flag provides more flexibility for the LeaseAssignmentManager to explore additional
