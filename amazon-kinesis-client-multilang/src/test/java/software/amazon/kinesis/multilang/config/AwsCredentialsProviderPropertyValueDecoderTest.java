@@ -25,7 +25,9 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.kinesis.multilang.auth.KclStaticCredentialsProvider;
 import software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -159,6 +161,54 @@ public class AwsCredentialsProviderPropertyValueDecoderTest {
 
         final AwsCredentialsProvider provider = decoder.decodeValue(encodedValue);
         assertEquals(Arrays.toString(args), provider.resolveCredentials().accessKeyId());
+    }
+
+    /**
+     * Test that KclStaticCredentialsProvider can be instantiated with access key and secret.
+     */
+    @Test
+    public void testKclStaticCredentialsProviderWithBasicCredentials() {
+        final String accessKeyId = "AKIAIOSFODNN7EXAMPLE";
+        final String secretAccessKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+        for (final String className : Arrays.asList(
+                KclStaticCredentialsProvider.class.getName(), // fully-qualified name
+                KclStaticCredentialsProvider.class.getSimpleName())) { // name-only; needs prefix
+            final AwsCredentialsProvider provider =
+                    decoder.decodeValue(className + "|" + accessKeyId + "|" + secretAccessKey);
+            assertNotNull(className, provider);
+
+            final AwsCredentials credentials = provider.resolveCredentials();
+            assertEquals(className, accessKeyId, credentials.accessKeyId());
+            assertEquals(className, secretAccessKey, credentials.secretAccessKey());
+        }
+    }
+
+    /**
+     * Test that KclStaticCredentialsProvider can be instantiated with session credentials.
+     */
+    @Test
+    public void testKclStaticCredentialsProviderWithSessionCredentials() {
+        final String accessKeyId = "AKIAIOSFODNN7EXAMPLE";
+        final String secretAccessKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        final String sessionToken = "FwoGZXIvYXdzEBYaDI7example";
+
+        for (final String className : Arrays.asList(
+                KclStaticCredentialsProvider.class.getName(), // fully-qualified name
+                KclStaticCredentialsProvider.class.getSimpleName())) { // name-only; needs prefix
+            final AwsCredentialsProvider provider =
+                    decoder.decodeValue(className + "|" + accessKeyId + "|" + secretAccessKey + "|" + sessionToken);
+            assertNotNull(className, provider);
+
+            final AwsCredentials credentials = provider.resolveCredentials();
+            assertEquals(className, accessKeyId, credentials.accessKeyId());
+            assertEquals(className, secretAccessKey, credentials.secretAccessKey());
+
+            // Verify it's a session credential
+            assertThat(className, credentials, instanceOf(AwsSessionCredentials.class));
+            final AwsSessionCredentials sessionCredentials = (AwsSessionCredentials) credentials;
+            assertEquals(className, sessionToken, sessionCredentials.sessionToken());
+        }
     }
 
     /**
