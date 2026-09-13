@@ -20,6 +20,7 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
@@ -78,9 +79,35 @@ public class FanOutConfig implements RetrievalSpecificConfig {
      */
     private long retryBackoffMillis = 1000;
 
+    /**
+     * Duration in milliseconds after which a SubscribeToShard subscription will be cancelled if the consumer is
+     * unable to keep up (backpressure). When the consumer catches up and demand resumes, the publisher will
+     * re-subscribe from the last successfully processed sequence number.
+     *
+     * <p>This prevents OOM caused by unbounded network buffer growth in the HTTP/2 stream when the consumer
+     * blocks in processRecords(). The subscription cancellation terminates the HTTP/2 stream, stopping further
+     * data from accumulating at the network layer.</p>
+     *
+     * <p>A value of 0 (default) disables this feature, preserving existing behavior where subscriptions remain
+     * alive for their full duration regardless of consumer processing speed.</p>
+     *
+     * <p>If enabled, must be at least 1000ms to avoid subscription thrashing.</p>
+     */
+    private long backpressureTimeoutMillis = 0;
+
+    public FanOutConfig backpressureTimeoutMillis(long value) {
+        Validate.isTrue(
+                value == 0 || value >= 1000,
+                "backpressureTimeoutMillis must be 0 (disabled) or >= 1000, got: %d",
+                value);
+        this.backpressureTimeoutMillis = value;
+        return this;
+    }
+
     @Override
     public RetrievalFactory retrievalFactory() {
-        return new FanOutRetrievalFactory(kinesisClient, streamName, consumerArn, this::getOrCreateConsumerArn);
+        return new FanOutRetrievalFactory(
+                kinesisClient, streamName, consumerArn, this::getOrCreateConsumerArn, backpressureTimeoutMillis);
     }
 
     @Override

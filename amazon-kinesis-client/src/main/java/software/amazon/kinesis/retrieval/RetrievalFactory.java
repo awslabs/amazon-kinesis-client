@@ -60,4 +60,10 @@ public interface RetrievalFactory {
             ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory, String consumerId) {
         return createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
     }
+
+    /**
+     * Called during Scheduler shutdown to release any resources held by this factory
+     * (e.g., executor threads). Default implementation is a no-op.
+     */
+    default void shutdown() {}
 }

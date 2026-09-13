@@ -18,11 +18,13 @@ package software.amazon.kinesis.retrieval.fanout;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
 import javax.annotation.Nullable;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamConfig;
@@ -32,7 +34,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
-@RequiredArgsConstructor
 @KinesisClientInternalApi
 public class FanOutRetrievalFactory implements RetrievalFactory {
 
@@ -40,8 +41,39 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     private final String defaultStreamName;
     private final String defaultConsumerArn;
     private final Function<String, String> consumerArnCreator;
+    private final long backpressureTimeoutMillis;
+
+    @Nullable
+    private final ScheduledExecutorService backpressureTimerExecutor;
 
     private final Map<StreamIdentifier, String> implicitConsumerArnTracker = new HashMap<>();
+
+    public FanOutRetrievalFactory(
+            KinesisAsyncClient kinesisClient,
+            String defaultStreamName,
+            String defaultConsumerArn,
+            Function<String, String> consumerArnCreator) {
+        this(kinesisClient, defaultStreamName, defaultConsumerArn, consumerArnCreator, 0);
+    }
+
+    public FanOutRetrievalFactory(
+            KinesisAsyncClient kinesisClient,
+            String defaultStreamName,
+            String defaultConsumerArn,
+            Function<String, String> consumerArnCreator,
+            long backpressureTimeoutMillis) {
+        this.kinesisClient = kinesisClient;
+        this.defaultStreamName = defaultStreamName;
+        this.defaultConsumerArn = defaultConsumerArn;
+        this.consumerArnCreator = consumerArnCreator;
+        this.backpressureTimeoutMillis = backpressureTimeoutMillis;
+        this.backpressureTimerExecutor = backpressureTimeoutMillis > 0
+                ? Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+                        .setDaemon(true)
+                        .setNameFormat("kinesis-backpressure-timer-%d")
+                        .build())
+                : null;
+    }
 
     @Override
     public RecordsPublisher createGetRecordsCache(
@@ -55,13 +87,23 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
                     shardInfo.shardId(),
                     getOrCreateConsumerArn(streamConfig.streamIdentifier(), streamConfig.consumerArn()),
                     streamIdentifierStr.get(),
-                    streamConfig.streamIdentifier());
+                    streamConfig.streamIdentifier(),
+                    backpressureTimeoutMillis,
+                    backpressureTimerExecutor);
         } else {
             return new FanOutRecordsPublisher(
                     kinesisClient,
                     shardInfo.shardId(),
                     getOrCreateConsumerArn(streamConfig.streamIdentifier(), defaultConsumerArn),
-                    streamConfig.streamIdentifier());
+                    streamConfig.streamIdentifier(),
+                    backpressureTimeoutMillis,
+                    backpressureTimerExecutor);
+        }
+    }
+
+    public void shutdown() {
+        if (backpressureTimerExecutor != null) {
+            backpressureTimerExecutor.shutdownNow();
         }
     }
 

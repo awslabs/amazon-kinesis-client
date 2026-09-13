@@ -1180,6 +1180,7 @@ public class Scheduler implements Runnable {
         } else if (metricsFactory instanceof OtelMetricsFactory) {
             ((OtelMetricsFactory) metricsFactory).shutdown();
         }
+        retrievalConfig.retrievalFactory().shutdown();
         shutdownComplete = true;
         finalShutdownLatch.countDown();
     }
