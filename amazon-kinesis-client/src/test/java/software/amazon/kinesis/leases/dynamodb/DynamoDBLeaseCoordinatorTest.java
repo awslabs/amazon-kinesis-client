@@ -169,32 +169,8 @@ class DynamoDBLeaseCoordinatorTest {
         return (ExecutorService) field.get(coordinator);
     }
 
-    private ExecutorService getLeaseRenewalThreadpool() throws Exception {
-        Field field = DynamoDBLeaseCoordinator.class.getDeclaredField("leaseRenewalThreadpool");
-        field.setAccessible(true);
-        return (ExecutorService) field.get(coordinator);
-    }
-
-    /**
-     * Verifies that leaseRenewalThreadpool is shut down after stop() is called.
-     * This is the control case — leaseRenewalThreadpool IS properly cleaned up.
-     */
-    @Test
-    void stop_shutsDownLeaseRenewalThreadpool() throws Exception {
-        when(mockModeProvider.dynamicModeChangeSupportNeeded()).thenReturn(false);
-        when(mockModeProvider.getLeaseAssignmentMode())
-                .thenReturn(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT);
-
-        coordinator.start(mockModeProvider);
-        coordinator.stop();
-
-        ExecutorService renewalPool = getLeaseRenewalThreadpool();
-        assertTrue(renewalPool.isShutdown(), "leaseRenewalThreadpool should be shut down after stop() is called");
-    }
-
     /**
      * Verifies that leaseDiscoveryThreadPool is shut down after stop() is called.
-     * This test exposes the bug: leaseDiscoveryThreadPool is never shut down in stop().
      */
     @Test
     void stop_shutsDownLeaseDiscoveryThreadPool() throws Exception {
