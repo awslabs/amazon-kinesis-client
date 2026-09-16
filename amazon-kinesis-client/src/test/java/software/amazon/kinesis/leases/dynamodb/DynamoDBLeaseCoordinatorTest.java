@@ -17,6 +17,7 @@ package software.amazon.kinesis.leases.dynamodb;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
 
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +36,7 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 class DynamoDBLeaseCoordinatorTest {
@@ -159,5 +161,27 @@ class DynamoDBLeaseCoordinatorTest {
         Field field = DynamoDBLeaseCoordinator.class.getDeclaredField("takerFuture");
         field.setAccessible(true);
         return (ScheduledFuture<?>) field.get(coordinator);
+    }
+
+    private ExecutorService getLeaseDiscoveryThreadPool() throws Exception {
+        Field field = DynamoDBLeaseCoordinator.class.getDeclaredField("leaseDiscoveryThreadPool");
+        field.setAccessible(true);
+        return (ExecutorService) field.get(coordinator);
+    }
+
+    /**
+     * Verifies that leaseDiscoveryThreadPool is shut down after stop() is called.
+     */
+    @Test
+    void stop_shutsDownLeaseDiscoveryThreadPool() throws Exception {
+        when(mockModeProvider.dynamicModeChangeSupportNeeded()).thenReturn(false);
+        when(mockModeProvider.getLeaseAssignmentMode())
+                .thenReturn(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT);
+
+        coordinator.start(mockModeProvider);
+        coordinator.stop();
+
+        ExecutorService discoveryPool = getLeaseDiscoveryThreadPool();
+        assertTrue(discoveryPool.isShutdown(), "leaseDiscoveryThreadPool should be shut down after stop() is called");
     }
 }
