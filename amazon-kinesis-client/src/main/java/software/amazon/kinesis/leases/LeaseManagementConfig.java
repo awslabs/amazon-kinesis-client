@@ -586,6 +586,14 @@ public class LeaseManagementConfig {
         private boolean allowThroughputOvershoot = true;
 
         /**
+         * When set to true, the reBalanceThresholdPercentage is interpreted as absolute percentage points
+         * (band = avg ± threshold/2) instead of relative to the average (band = avg ± avg*threshold/100).
+         * Absolute threshold provides a consistent band width regardless of fleet average CPU utilization,
+         * preventing unnecessary rebalancing at low CPU where the relative band becomes too narrow.
+         */
+        private boolean useAbsoluteReBalanceThreshold = false;
+
+        /**
          * Duration after which workerMetricStats entry from WorkerMetricStats table will be cleaned up. When an entry's
          * lastUpdateTime is older than staleWorkerMetricsEntryCleanupDuration from current time, entry will be removed
          * from the table.
