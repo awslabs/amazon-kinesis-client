@@ -100,13 +100,22 @@ public class MetricsConfig {
     private Set<String> metricsEnabledDimensions = METRICS_DIMENSIONS_ALL;
 
     /**
-     * Buffer size for MetricDatums before publishing.
+     * Number of datums that accumulate in the in-memory queue before a flush is triggered (independent of the
+     * time-based flush governed by {@link #metricsBufferTimeMillis}).
      *
      * <p>
-     * Default value: 200
+     * The default was raised from 200 to 1000 to match the CloudWatch {@code PutMetricData} per-request datum
+     * limit, so that a full flush maps to a single API call instead of several. This is a throughput/cost win at
+     * high volume, but it is also a latency tradeoff: at low volume more datums may buffer before the count
+     * trigger fires. Worst-case metric latency is unchanged — it remains bounded by {@link #metricsBufferTimeMillis}
+     * (the time-based flush) — but the typical publish cadence is longer than with the old default of 200. Lower
+     * this value if you need fresher metrics at low volume.
+     *
+     * <p>
+     * Default value: 1000
      * </p>
      */
-    private int publisherFlushBuffer = 200;
+    private int publisherFlushBuffer = 1000;
 
     /**
      * The metrics publishing backend to use.
