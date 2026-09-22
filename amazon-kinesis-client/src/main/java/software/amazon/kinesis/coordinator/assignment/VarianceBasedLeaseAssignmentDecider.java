@@ -146,7 +146,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
         WorkerMetricStats mostLoadedWorker = null;
 
-        log.info("Range for re-balance upper threshold {} and lower threshold {}", upperLimit, lowerLimit);
+        log.info("Range for re-balance upper threshold {} and lower threshold {}", upperLimit, Math.max(0, lowerLimit));
 
         boolean shouldTriggerReBalance = false;
         for (final WorkerMetricStats workerMetrics : currentWorkerMetrics) {
