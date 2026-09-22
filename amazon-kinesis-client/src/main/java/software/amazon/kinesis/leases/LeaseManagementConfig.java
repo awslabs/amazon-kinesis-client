@@ -586,10 +586,12 @@ public class LeaseManagementConfig {
         private boolean allowThroughputOvershoot = true;
 
         /**
-         * When set to true, the reBalanceThresholdPercentage is interpreted as absolute percentage points
-         * (band = avg ± threshold/2) instead of relative to the average (band = avg ± avg*threshold/100).
-         * Absolute threshold provides a consistent band width regardless of fleet average CPU utilization,
-         * preventing unnecessary rebalancing at low CPU where the relative band becomes too narrow.
+         * When set to true, the reBalanceThresholdPercentage is applied as fixed percentage points.
+         * The rebalancing range is calculated as
+         * [fleetAvgCPU - reBalanceThresholdPercentage/2, fleetAvgCPU + reBalanceThresholdPercentage/2].
+         * This gives a constant range width regardless of fleet average CPU utilization.
+         * For example, with reBalanceThresholdPercentage=10, the range is always 10 percentage points wide.
+         * Default is false.
          */
         private boolean useAbsoluteReBalanceThreshold = false;
 
