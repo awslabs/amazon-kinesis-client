@@ -1806,4 +1806,107 @@ class LeaseAssignmentManagerTest {
                         .count(),
                 "Worker1 should keep both leases — high threshold band covers entire CPU range");
     }
+
+    @Test
+    void performAssignment_absoluteThreshold_workerBelowLowerLimit_rebalanceTriggered() throws Exception {
+        // Three workers at 63%, 63%, 50%. Fleet avg ~58.7%.
+        // With absolute threshold of 10, band is [53.7%, 63.7%].
+        // Worker3 at 50% is below lower limit 53.7% → triggers rebalancing.
+        // Workers 1 and 2 at 63% are inside band (below 63.7%).
+        // No worker is above upper limit — this isolates the below-lower trigger path.
+        // Fallback logic picks the most loaded worker (63%) to yield leases.
+        // Worker3 at 50% is below fleet avg → can receive leases.
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
+        config.useAbsoluteReBalanceThreshold(true);
+        createLeaseAssignmentManager(config, Duration.ofHours(1).toMillis(), System::nanoTime, Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker1", 63, 100));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker2", 63, 100));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker3", 50, 100));
+
+        // Many small leases to keep avg throughput per worker high,
+        // so receiver-side extrapolation stays below fleet average.
+        for (int i = 1; i <= 10; i++) {
+            final Lease lease = createDummyLease("lease-w1-" + i, "worker1");
+            lease.throughputKBps(100D);
+            populateLeasesInLeaseTable(lease);
+        }
+        for (int i = 1; i <= 10; i++) {
+            final Lease lease = createDummyLease("lease-w2-" + i, "worker2");
+            lease.throughputKBps(100D);
+            populateLeasesInLeaseTable(lease);
+        }
+        for (int i = 1; i <= 2; i++) {
+            final Lease lease = createDummyLease("lease-w3-" + i, "worker3");
+            lease.throughputKBps(100D);
+            populateLeasesInLeaseTable(lease);
+        }
+
+        leaseAssignmentManagerRunnable.run();
+
+        // Worker3 at 50% is below lower limit 53.7% → rebalancing triggers.
+        // No worker above upper limit — only below-lower path fires.
+        assertTrue(
+                leaseRefresher.listLeases().stream()
+                                .filter(l -> l.leaseOwner().equals("worker3"))
+                                .count()
+                        > 2,
+                "Worker3 should receive leases — rebalancing triggered solely by worker below lower limit");
+    }
+
+    @Test
+    void performAssignment_sameData_absoluteSkipsButRelativeTriggers() throws Exception {
+        // Same workers and leases tested with both modes. Workers at 0.5% and 0.1% CPU.
+        // Fleet avg 0.3%, threshold=10.
+        // Absolute band: [-4.7%, 5.3%] → both inside → no trigger.
+        // Relative band: [0.27%, 0.33%] → worker1 at 0.5% above 0.33% → triggers.
+
+        // --- Part 1: Absolute mode — no trigger, leases unchanged ---
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig absConfig =
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
+        absConfig.useAbsoluteReBalanceThreshold(true);
+        createLeaseAssignmentManager(absConfig, Duration.ofHours(1).toMillis(), System::nanoTime, Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker1", 0.5, 80));
+        workerMetricsDAO.updateMetrics(createDummyWorkerMetrics("worker2", 0.1, 80));
+
+        final Lease lease1 = createDummyLease("lease1", "worker1");
+        lease1.throughputKBps(0D);
+        final Lease lease2 = createDummyLease("lease2", "worker1");
+        lease2.throughputKBps(0D);
+        final Lease lease3 = createDummyLease("lease3", "worker1");
+        lease3.throughputKBps(0D);
+        final Lease lease4 = createDummyLease("lease4", "worker1");
+        lease4.throughputKBps(0D);
+        final Lease lease5 = createDummyLease("lease5", "worker1");
+        lease5.throughputKBps(0D);
+        final Lease lease6 = createDummyLease("lease6", "worker2");
+        lease6.throughputKBps(0D);
+        populateLeasesInLeaseTable(lease1, lease2, lease3, lease4, lease5, lease6);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                5,
+                leaseRefresher.listLeases().stream()
+                        .filter(l -> l.leaseOwner().equals("worker1"))
+                        .count(),
+                "Absolute mode: Worker1 should keep all 5 leases — all workers within absolute threshold range");
+
+        // --- Part 2: Relative mode — same leases still in table, triggers ---
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig relConfig =
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
+        // useAbsoluteReBalanceThreshold defaults to false — relative mode
+        createLeaseAssignmentManager(relConfig, Duration.ofHours(1).toMillis(), System::nanoTime, Integer.MAX_VALUE);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(
+                leaseRefresher.listLeases().stream()
+                                .filter(l -> l.leaseOwner().equals("worker1"))
+                                .count()
+                        < 5,
+                "Relative mode: Worker1 should lose leases — worker1 at 0.5% is outside relative threshold range [0.27%, 0.33%]");
+    }
 }
