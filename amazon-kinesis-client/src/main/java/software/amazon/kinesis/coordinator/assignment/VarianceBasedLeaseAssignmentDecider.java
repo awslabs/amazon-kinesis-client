@@ -137,8 +137,8 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         final double lowerLimit;
         if (useAbsoluteThreshold) {
             final double halfBand = (double) reBalanceThreshold / 2;
-            upperLimit = workerMetricsValueAvg + halfBand;
-            lowerLimit = workerMetricsValueAvg - halfBand;
+            upperLimit = Math.min(100, workerMetricsValueAvg + halfBand);
+            lowerLimit = Math.max(0, workerMetricsValueAvg - halfBand);
         } else {
             upperLimit = workerMetricsValueAvg * (1.0D + (double) reBalanceThreshold / 100);
             lowerLimit = workerMetricsValueAvg * (1.0D - (double) reBalanceThreshold / 100);
@@ -146,10 +146,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
         WorkerMetricStats mostLoadedWorker = null;
 
-        log.info(
-                "Range for re-balance upper threshold {} and lower threshold {}",
-                Math.min(100, upperLimit),
-                Math.max(0, lowerLimit));
+        log.info("Range for re-balance upper threshold {} and lower threshold {}", upperLimit, lowerLimit);
 
         boolean shouldTriggerReBalance = false;
         for (final WorkerMetricStats workerMetrics : currentWorkerMetrics) {
