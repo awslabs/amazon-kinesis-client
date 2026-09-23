@@ -586,10 +586,10 @@ public class LeaseManagementConfig {
         private boolean allowThroughputOvershoot = true;
 
         /**
-         * When set to true, the reBalanceThresholdPercentage is applied as fixed percentage points.
+         * When set to true, the {@link #reBalanceThresholdPercentage} is applied as fixed percentage points.
          * The rebalancing range is calculated as
-         * [fleetAvgCPU - reBalanceThresholdPercentage/2, fleetAvgCPU + reBalanceThresholdPercentage/2].
-         * This gives a constant range width regardless of fleet average CPU utilization.
+         * [fleetAvgMetricValue - reBalanceThresholdPercentage/2, fleetAvgMetricValue + reBalanceThresholdPercentage/2].
+         * This gives a constant range width regardless of fleet average utilization.
          * For example, with reBalanceThresholdPercentage=10, the range is always 10 percentage points wide.
          * Default is false.
          */
