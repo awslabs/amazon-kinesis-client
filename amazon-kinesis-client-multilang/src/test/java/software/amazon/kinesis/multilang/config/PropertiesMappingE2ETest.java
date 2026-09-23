@@ -103,6 +103,10 @@ public class PropertiesMappingE2ETest {
                 .leaseManagementConfig
                 .workerUtilizationAwareAssignmentConfig()
                 .allowThroughputOvershoot());
+        assertTrue(kclV3Config
+                .leaseManagementConfig
+                .workerUtilizationAwareAssignmentConfig()
+                .useAbsoluteReBalanceThreshold());
         assertEquals(
                 Duration.ofHours(12),
                 kclV3Config
@@ -242,6 +246,10 @@ public class PropertiesMappingE2ETest {
                 .leaseManagementConfig
                 .workerUtilizationAwareAssignmentConfig()
                 .allowThroughputOvershoot());
+        assertFalse(kclV3Config
+                .leaseManagementConfig
+                .workerUtilizationAwareAssignmentConfig()
+                .useAbsoluteReBalanceThreshold());
         assertEquals(
                 Duration.ofDays(1),
                 kclV3Config

@@ -227,6 +227,7 @@ public class KinesisClientLibConfiguratorTest {
         final long testDampeningPercentage = 12;
         final long testReBalanceThresholdPercentage = 12;
         final Boolean testAllowThroughputOvershoot = false;
+        final Boolean testUseAbsoluteReBalanceThreshold = true;
         final long testVarianceBalancingFrequency = 12;
         final double testWorkerMetricsEMAAlpha = .123;
 
@@ -243,6 +244,7 @@ public class KinesisClientLibConfiguratorTest {
                     "dampeningPercentage = " + testDampeningPercentage,
                     "reBalanceThresholdPercentage = " + testReBalanceThresholdPercentage,
                     "allowThroughputOvershoot = " + testAllowThroughputOvershoot,
+                    "useAbsoluteReBalanceThreshold = " + testUseAbsoluteReBalanceThreshold,
                     "varianceBalancingFrequency = " + testVarianceBalancingFrequency,
                     "workerMetricsEMAAlpha = " + testWorkerMetricsEMAAlpha
                 },
@@ -258,6 +260,7 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(testDampeningPercentage, config.getDampeningPercentage());
         assertEquals(testReBalanceThresholdPercentage, config.getReBalanceThresholdPercentage());
         assertEquals(testAllowThroughputOvershoot, config.getAllowThroughputOvershoot());
+        assertEquals(testUseAbsoluteReBalanceThreshold, config.getUseAbsoluteReBalanceThreshold());
         assertEquals(testVarianceBalancingFrequency, config.getVarianceBalancingFrequency());
         assertEquals(testWorkerMetricsEMAAlpha, config.getWorkerMetricsEMAAlpha(), 0.0001);
     }
