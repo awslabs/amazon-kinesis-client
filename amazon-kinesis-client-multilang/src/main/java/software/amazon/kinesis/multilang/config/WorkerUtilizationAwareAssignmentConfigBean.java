@@ -58,6 +58,10 @@ public class WorkerUtilizationAwareAssignmentConfigBean {
 
         void setAllowThroughputOvershoot(Boolean value);
 
+        Boolean getUseAbsoluteReBalanceThreshold();
+
+        void setUseAbsoluteReBalanceThreshold(Boolean value);
+
         int getVarianceBalancingFrequency();
 
         void setVarianceBalancingFrequency(int value);
@@ -94,6 +98,9 @@ public class WorkerUtilizationAwareAssignmentConfigBean {
 
     @ConfigurationSettable(configurationClass = WorkerUtilizationAwareAssignmentConfig.class)
     private Boolean allowThroughputOvershoot;
+
+    @ConfigurationSettable(configurationClass = WorkerUtilizationAwareAssignmentConfig.class)
+    private Boolean useAbsoluteReBalanceThreshold;
 
     @ConfigurationSettable(configurationClass = WorkerUtilizationAwareAssignmentConfig.class)
     private int varianceBalancingFrequency;

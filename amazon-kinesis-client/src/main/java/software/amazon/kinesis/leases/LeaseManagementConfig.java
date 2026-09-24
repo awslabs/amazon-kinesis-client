@@ -586,6 +586,16 @@ public class LeaseManagementConfig {
         private boolean allowThroughputOvershoot = true;
 
         /**
+         * When set to true, the {@link #reBalanceThresholdPercentage} is applied as fixed percentage points,
+         * resulting in a constant range width regardless of fleet average utilization.
+         * The rebalancing range is calculated as
+         * [fleetAvgMetricValue - reBalanceThresholdPercentage/2, fleetAvgMetricValue + reBalanceThresholdPercentage/2].
+         * When set to false (default), the {@link #reBalanceThresholdPercentage} is applied as a relative percentage
+         * of the fleet average utilization, resulting in a range width that scales with utilization.
+         */
+        private boolean useAbsoluteReBalanceThreshold = false;
+
+        /**
          * Duration after which workerMetricStats entry from WorkerMetricStats table will be cleaned up. When an entry's
          * lastUpdateTime is older than staleWorkerMetricsEntryCleanupDuration from current time, entry will be removed
          * from the table.

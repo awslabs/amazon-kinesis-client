@@ -57,6 +57,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
     private final int dampeningPercentageValue;
     private final int reBalanceThreshold;
     private final boolean allowThroughputOvershoot;
+    private final boolean useAbsoluteThreshold;
     private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
     private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
     private int targetLeasePerWorker;
@@ -65,11 +66,13 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
             final int dampeningPercentageValue,
             final int reBalanceThreshold,
-            final boolean allowThroughputOvershoot) {
+            final boolean allowThroughputOvershoot,
+            final boolean useAbsoluteThreshold) {
         this.inMemoryStorageView = inMemoryStorageView;
         this.dampeningPercentageValue = dampeningPercentageValue;
         this.reBalanceThreshold = reBalanceThreshold;
         this.allowThroughputOvershoot = allowThroughputOvershoot;
+        this.useAbsoluteThreshold = useAbsoluteThreshold;
         initialize();
         final Comparator<WorkerMetricStats> comparator = Comparator.comparingDouble(
                 workerMetrics -> workerMetrics.computePercentageToReachAverage(workerMetricsToFleetLevelAverageMap));
@@ -130,8 +133,16 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
             final double workerMetricsValueAvg) {
         final List<WorkerMetricStats> workerIdsAboveAverage = new ArrayList<>();
 
-        final double upperLimit = workerMetricsValueAvg * (1.0D + (double) reBalanceThreshold / 100);
-        final double lowerLimit = workerMetricsValueAvg * (1.0D - (double) reBalanceThreshold / 100);
+        final double upperLimit;
+        final double lowerLimit;
+        if (useAbsoluteThreshold) {
+            final double halfBand = (double) reBalanceThreshold / 2;
+            upperLimit = Math.min(100, workerMetricsValueAvg + halfBand);
+            lowerLimit = Math.max(0, workerMetricsValueAvg - halfBand);
+        } else {
+            upperLimit = workerMetricsValueAvg * (1.0D + (double) reBalanceThreshold / 100);
+            lowerLimit = workerMetricsValueAvg * (1.0D - (double) reBalanceThreshold / 100);
+        }
 
         WorkerMetricStats mostLoadedWorker = null;
 
@@ -143,8 +154,10 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
             final boolean isCurrentWorkerMetricsAboveOperatingRange =
                     workerMetrics.isWorkerMetricAboveOperatingRange(workerMetricsName);
             /*
-            If there is any worker, whose WorkerMetricStats value is between +/- reBalanceThreshold % of workerMetricsValueAvg or if
-            worker's WorkerMetricStats value is above operating range trigger re-balance
+            If there is any worker whose WorkerMetricStats value is outside the re-balance threshold
+            or above operating range, trigger re-balance. When useAbsoluteThreshold is true, the threshold
+            is applied as absolute percentage points (avg ± threshold/2). Otherwise it is applied as a
+            percentage of the average (avg ± avg*threshold/100).
              */
             if (currentWorkerMetricsValue > upperLimit
                     || currentWorkerMetricsValue < lowerLimit

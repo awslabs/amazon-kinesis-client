@@ -177,6 +177,7 @@ public class MultiLangDaemonConfigurationTest {
         configuration.setDampeningPercentage(12);
         configuration.setReBalanceThresholdPercentage(12);
         configuration.setAllowThroughputOvershoot(false);
+        configuration.setUseAbsoluteReBalanceThreshold(true);
         configuration.setVarianceBalancingFrequency(12);
         configuration.setWorkerMetricsEMAAlpha(.123);
 
@@ -194,6 +195,7 @@ public class MultiLangDaemonConfigurationTest {
         assertEquals(config.dampeningPercentage(), 12);
         assertEquals(config.reBalanceThresholdPercentage(), 12);
         assertFalse(config.allowThroughputOvershoot());
+        assertTrue(config.useAbsoluteReBalanceThreshold());
         assertEquals(config.varianceBalancingFrequency(), 12);
         assertEquals(config.workerMetricsEMAAlpha(), .123, .25);
     }
