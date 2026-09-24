@@ -6,6 +6,15 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.5.3 (September 24, 2026)
+* [#1811](https://github.com/awslabs/amazon-kinesis-client/pull/1811) Table Migration metrics fixes
+* [#1812](https://github.com/awslabs/amazon-kinesis-client/pull/1812) Fix phase1 worker count to include workers with active metrics but no leases
+* [#1813](https://github.com/awslabs/amazon-kinesis-client/pull/1813) KCL version migration tool support for rollbacking to v2
+* [#1815](https://github.com/awslabs/amazon-kinesis-client/pull/1815) Fix lease discovery thread pool leak on shutdown
+* [#1816](https://github.com/awslabs/amazon-kinesis-client/pull/1816) Pack CloudWatch metrics into far fewer PutMetricData calls
+* [#1814](https://github.com/awslabs/amazon-kinesis-client/pull/1814) Add fixed-width threshold option for variance-based lease rebalancing
+* [#1818](https://github.com/awslabs/amazon-kinesis-client/pull/1818) Remove binary file
+
 ### Release 3.5.2 (September 4, 2026)
 * [#1798](https://github.com/awslabs/amazon-kinesis-client/pull/1798) Update KCLMigrationTool
 * [#1799](https://github.com/awslabs/amazon-kinesis-client/pull/1799) Address memory leaks and improved overall memory usage
