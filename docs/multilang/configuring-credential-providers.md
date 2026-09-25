@@ -34,6 +34,16 @@ You can create a default [DefaultCredentialsProvider][default-credentials-provid
 AwsCredentialsProvider = DefaultCredentialsProvider
 ```
 
+You can also use static credentials by providing an access key ID and secret access key:
+```
+AwsCredentialsProvider = KclStaticCredentialsProvider|<accessKeyId>|<secretAccessKey>
+```
+
+For temporary credentials with a session token:
+```
+AwsCredentialsProvider = KclStaticCredentialsProvider|<accessKeyId>|<secretAccessKey>|<sessionToken>
+```
+
 ## Nested Properties
 
 KCL multilang supports "nested properties" on the `AwsCredentialsProvider` key in the properties file.
@@ -81,9 +91,23 @@ Multilang configurations that use `StsAssumeRoleSessionCredentialsProvider` need
 AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>|endpointRegion=us-east-1
 ```
 
+### KclStaticCredentialsProvider
+
+KCL multilang includes a [custom wrapper for `StaticCredentialsProvider`][kcl-static-provider] that accepts string parameters.
+This allows you to configure static credentials directly in your properties file:
+```
+AwsCredentialsProvider = KclStaticCredentialsProvider|<accessKeyId>|<secretAccessKey>
+```
+
+For session credentials (temporary credentials with a session token):
+```
+AwsCredentialsProvider = KclStaticCredentialsProvider|<accessKeyId>|<secretAccessKey>|<sessionToken>
+```
+
 [aws-credentials-provider]: https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/AwsCredentialsProvider.html
 [bnf]: https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form
 [kcl-sts-provider]: /amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/auth/KclStsAssumeRoleCredentialsProvider.java
+[kcl-static-provider]: /amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/auth/KclStaticCredentialsProvider.java
 [nested-property-key]: /amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/NestedPropertyKey.java
 [nested-property-processor]: /amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/NestedPropertyProcessor.java
 [sts-assume-provider]: https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/services/sts/auth/StsAssumeRoleCredentialsProvider.html
