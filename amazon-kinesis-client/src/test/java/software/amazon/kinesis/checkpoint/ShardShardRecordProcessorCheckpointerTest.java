@@ -832,6 +832,50 @@ public class ShardShardRecordProcessorCheckpointerTest {
         }
     }
 
+    /**
+     * Regression test for upstream issue
+     * <a href="https://github.com/awslabs/amazon-kinesis-client/issues/211">#211</a>
+     * ("Application didn't checkpoint at end of shard").
+     *
+     * <p>Reproduces the case where the application checkpoints the last record of the shard during
+     * {@code processRecords}, and then the framework calls {@code checkpoint(lastSequenceNumber)}
+     * again during shard-end shutdown after {@code sequenceNumberAtShardEnd} has been set.
+     */
+    @Test
+    public final void testCheckpointAdvancesToShardEndWhenSequenceAlreadyCheckpointed() throws Exception {
+        ShardRecordProcessorCheckpointer processingCheckpointer =
+                new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+
+        // Simulate the record processor receiving and checkpointing the final record of the shard.
+        ExtendedSequenceNumber lastRecordSequenceNumber = new ExtendedSequenceNumber("6789");
+        processingCheckpointer.largestPermittedCheckpointValue(lastRecordSequenceNumber);
+        processingCheckpointer.checkpoint(
+                lastRecordSequenceNumber.sequenceNumber(), lastRecordSequenceNumber.subSequenceNumber());
+        assertThat(processingCheckpointer.lastCheckpointValue(), equalTo(lastRecordSequenceNumber));
+        assertThat(checkpoint.getCheckpoint(shardId), equalTo(lastRecordSequenceNumber));
+
+        // Simulate ShutdownTask preparing to checkpoint at shard end.
+        processingCheckpointer.sequenceNumberAtShardEnd(lastRecordSequenceNumber);
+        processingCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+
+        // The framework re-issues a checkpoint at the last record's sequence number. Internally
+        // advancePosition should rewrite this to SHARD_END and persist it, even though the numeric
+        // value matches lastCheckpointValue.
+        processingCheckpointer.checkpoint(
+                lastRecordSequenceNumber.sequenceNumber(), lastRecordSequenceNumber.subSequenceNumber());
+
+        assertThat(
+                "Checkpointing the final record after sequenceNumberAtShardEnd is set must advance "
+                        + "lastCheckpointValue to SHARD_END",
+                processingCheckpointer.lastCheckpointValue(),
+                equalTo(ExtendedSequenceNumber.SHARD_END));
+        assertThat(
+                "The persisted checkpoint must be SHARD_END so the lease can be completed",
+                checkpoint.getCheckpoint(shardId),
+                equalTo(ExtendedSequenceNumber.SHARD_END));
+    }
+
     @Test
     public final void testUnsetMetricsScopeDuringCheckpointing() throws Exception {
         // First call to checkpoint
