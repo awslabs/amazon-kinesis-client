@@ -37,6 +37,8 @@ public class LeaderLock extends CoordinatorState {
 
     public static final String LEADER_HASH_KEY = "Leader";
 
+    public static final String DEPLOYING_LEADER_HASH_KEY = "DeployingLeader";
+
     public LeaderLock() {
         super(LEADER_HASH_KEY, EntityType.CoordinatorStateType.LEADER_LOCK, Collections.emptyMap());
     }
