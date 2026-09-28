@@ -85,6 +85,7 @@ public class FleetSegmentingHandler {
     public String getHashKeyForLeaderLock() {
         // If segmenting handler is disabled, default to returning the Leader key
         if (!isEnabled) {
+            log.info("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
         // If the current leader does not exist, default to obtaining the Leader lock.
@@ -95,6 +96,14 @@ public class FleetSegmentingHandler {
         if (currentVersionAttrs == null
                 || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
                 || isVersionHashExpired(currentVersionAttrs)) {
+            if (currentVersionAttrs != null) {
+                log.info(
+                        "Current version attributes is non-null. hasKey: {}, isExpired: {}",
+                        currentVersionAttrs.containsKey(VERSION_HASH_KEY),
+                        isVersionHashExpired(currentVersionAttrs));
+            } else {
+                log.info("Returning {} due to null version attributes.", LeaderLock.LEADER_HASH_KEY);
+            }
             return LeaderLock.LEADER_HASH_KEY;
         }
 
@@ -102,6 +111,10 @@ public class FleetSegmentingHandler {
         // If the current version does exist and the version hash is not expired, take the leader lock depending on
         // the value of the version hash.
         if (isVersionEmittedByAllActiveWorkers || doesVersionHashMatch(currentVersionAttrs)) {
+            log.info(
+                    "isVersionEmittedByAllActiveWorkers : {}, doesVersionHashMatch : {}",
+                    isVersionEmittedByAllActiveWorkers,
+                    doesVersionHashMatch(currentVersionAttrs));
             return LeaderLock.LEADER_HASH_KEY;
         }
         return LeaderLock.DEPLOYING_LEADER_HASH_KEY;
