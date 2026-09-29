@@ -20,7 +20,6 @@ import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
-import software.amazon.kinesis.coordinator.delegate.LegacyTableCoordinatorStateDAODelegate;
 import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
@@ -85,7 +84,7 @@ public class FleetSegmentingHandler {
     public String getHashKeyForLeaderLock() {
         // If segmenting handler is disabled, default to returning the Leader key
         if (!isEnabled) {
-            log.info("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
+            log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
         // If the current leader does not exist, default to obtaining the Leader lock.
@@ -97,10 +96,18 @@ public class FleetSegmentingHandler {
                 || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
                 || isVersionHashExpired(currentVersionAttrs)) {
             if (currentVersionAttrs != null) {
-                log.info(
-                        "Current version attributes is non-null. hasKey: {}, isExpired: {}",
-                        currentVersionAttrs.containsKey(VERSION_HASH_KEY),
-                        isVersionHashExpired(currentVersionAttrs));
+                long lut = Long.parseLong(
+                        currentVersionAttrs.get(VERSION_HASH_LUT_KEY).s());
+                long ageMs = Duration.between(Instant.ofEpochSecond(lut), Instant.now())
+                        .toMillis();
+                log.debug(
+                        "versionHashLut={} ageMs={} expiryMs={} versionHash(item)={} myVersionHash={} isLeader={}",
+                        lut,
+                        ageMs,
+                        versionHashExpiryMillis,
+                        currentVersionAttrs.get(VERSION_HASH_KEY).s(),
+                        versionHash,
+                        isLeader);
             } else {
                 log.info("Returning {} due to null version attributes.", LeaderLock.LEADER_HASH_KEY);
             }
@@ -201,11 +208,6 @@ public class FleetSegmentingHandler {
 
     private Map<String, ExpectedAttributeValue> getVersionHashHeartbeatExpectationMap(final String leaderKey) {
         final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
-        expectations.put(
-                LegacyTableCoordinatorStateDAODelegate.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
-                ExpectedAttributeValue.builder()
-                        .value(AttributeValue.fromS(leaderKey))
-                        .build());
         expectations.put(
                 VERSION_HASH_LUT_KEY,
                 ExpectedAttributeValue.builder()
