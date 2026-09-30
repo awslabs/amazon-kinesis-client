@@ -118,7 +118,7 @@ public class FleetSegmentingHandler {
         // If the current version does exist and the version hash is not expired, take the leader lock depending on
         // the value of the version hash.
         if (isVersionEmittedByAllActiveWorkers || doesVersionHashMatch(currentVersionAttrs)) {
-            log.info(
+            log.debug(
                     "isVersionEmittedByAllActiveWorkers : {}, doesVersionHashMatch : {}",
                     isVersionEmittedByAllActiveWorkers,
                     doesVersionHashMatch(currentVersionAttrs));
