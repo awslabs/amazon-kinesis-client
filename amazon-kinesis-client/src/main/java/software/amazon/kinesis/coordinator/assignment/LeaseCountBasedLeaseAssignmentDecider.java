@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -240,7 +241,9 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
      */
     private Map<String, List<Lease>> computeAvailableLeases() {
         final Map<String, List<Lease>> availableLeases = new HashMap<>();
-        final Set<String> workersWithAvailableLeases = inMemoryStorageView.getWorkersOnVersionHash().stream()
+        final Set<String> workersWithAvailableLeases = Stream.concat(
+                        inMemoryStorageView.getWorkersOnVersionHash().stream(),
+                        inMemoryStorageView.getWorkersWithNoVersionHash().stream())
                 .map(WorkerMetricStats::getWorkerId)
                 .collect(Collectors.toSet());
         final long currentTimeMillis = TimeUnit.NANOSECONDS.toMillis(nanoTimeProvider.get());

@@ -96,17 +96,12 @@ public class FleetSegmentingHandler {
                 || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
                 || isVersionHashExpired(currentVersionAttrs)) {
             if (currentVersionAttrs != null) {
-                long lut = Long.parseLong(
-                        currentVersionAttrs.get(VERSION_HASH_LUT_KEY).s());
-                long ageMs = Duration.between(Instant.ofEpochSecond(lut), Instant.now())
-                        .toMillis();
                 log.debug(
-                        "versionHashLut={} ageMs={} expiryMs={} versionHash(item)={} myVersionHash={} isLeader={}",
-                        lut,
-                        ageMs,
-                        versionHashExpiryMillis,
-                        currentVersionAttrs.get(VERSION_HASH_KEY).s(),
+                        "Returning {} (not on current version). attrs={}, myVersionHash={}, expiryMs={}, isLeader={}",
+                        LeaderLock.LEADER_HASH_KEY,
+                        currentVersionAttrs,
                         versionHash,
+                        versionHashExpiryMillis,
                         isLeader);
             } else {
                 log.info("Returning {} due to null version attributes.", LeaderLock.LEADER_HASH_KEY);
@@ -186,6 +181,12 @@ public class FleetSegmentingHandler {
                 .collect(Collectors.toList());
     }
 
+    public List<WorkerMetricStats> filterWorkersWithNoVersionHash(final List<WorkerMetricStats> activeWorkers) {
+        return activeWorkers.stream()
+                .filter(worker -> !doesWorkerHaveVersionHash(worker) || isWorkerVersionHashStale(worker))
+                .collect(Collectors.toList());
+    }
+
     private void updateLeaderVersionHashLut() {
         // checking if worker is the leader to avoid unnecessary calls to DDB
         if (!isLeader) {
@@ -246,5 +247,9 @@ public class FleetSegmentingHandler {
         return attrs != null
                 && attrs.containsKey(VERSION_HASH_KEY)
                 && versionHash.equals(attrs.get(VERSION_HASH_KEY).s());
+    }
+
+    private boolean doesWorkerHaveVersionHash(final WorkerMetricStats worker) {
+        return worker.getProperties() != null && worker.getProperties().containsKey(VERSION_HASH_KEY);
     }
 }

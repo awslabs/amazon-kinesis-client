@@ -28,6 +28,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -212,18 +213,11 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                 workerMetricsToFleetLevelAverageMap.entrySet()) {
             final String workerMetricsName = workerMetricsToFleetLevelAverageEntry.getKey();
 
-            // Filter workers that does not have current WorkerMetricStats. This is possible if application is adding a
-            // new WorkerMetricStats and currently in phase of deployment.
-            final List<WorkerMetricStats> workersOnVersion = inMemoryStorageView.getWorkersOnVersionHash().stream()
-                    .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
-                    .collect(Collectors.toList());
+            final List<WorkerMetricStats> leaseTakingCandidates = getLeaseTakingCandidates(workerMetricsName);
 
             final double fleetAverageForWorkerMetrics = workerMetricsToFleetLevelAverageEntry.getValue();
-
-            // Only workers on the leader's version hash will be considered when taking leases if segmenting
-            // is enabled
             final List<WorkerMetricStats> workersToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
-                    workersOnVersion, workerMetricsName, fleetAverageForWorkerMetrics);
+                    leaseTakingCandidates, workerMetricsName, fleetAverageForWorkerMetrics);
             log.info("Workers to take from : {}", workersToTakeLeasesFrom);
 
             final Map<String, Double> workerIdToThroughputToTakeForCurrentWorkerMetrics = new HashMap<>();
@@ -400,5 +394,22 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                     .ifPresent(response::add);
         }
         return response;
+    }
+
+    private List<WorkerMetricStats> getLeaseTakingCandidates(final String workerMetricsName) {
+        // Workers on the leader's version hash and workers with no version hash are considered when taking
+        // leases if segmenting is enabled. Each list also filters workers that do not have worker metrics name. This
+        // is possible if the application is adding a new WorkerMetricStats and workers are in a deployment phase.
+        final List<WorkerMetricStats> workersOnVersion = inMemoryStorageView.getWorkersOnVersionHash().stream()
+                .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
+                .collect(Collectors.toList());
+        final List<WorkerMetricStats> workersWithNoVersion = inMemoryStorageView.getWorkersWithNoVersionHash().stream()
+                .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
+                .collect(Collectors.toList());
+
+        final Set<String> seenWorkerIds = new HashSet<>();
+        return Stream.concat(workersOnVersion.stream(), workersWithNoVersion.stream())
+                .filter(w -> seenWorkerIds.add(w.getWorkerId()))
+                .collect(Collectors.toList());
     }
 }
