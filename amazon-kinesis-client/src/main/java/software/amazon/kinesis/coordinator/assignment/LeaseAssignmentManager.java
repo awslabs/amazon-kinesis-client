@@ -677,6 +677,10 @@ public final class LeaseAssignmentManager {
             }
             return segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics);
         }
+
+        public List<WorkerMetricStats> getWorkersWithNoVersionHash() {
+            return segmentingHandler.filterWorkersWithNoVersionHash(activeWorkerMetrics);
+        }
     }
 
     private long getCheckpointOwnerTimeoutTimestampMillis() {
