@@ -16,6 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -28,20 +29,31 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
+import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 @Slf4j
 @Accessors(fluent = true)
+@KinesisClientInternalApi
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
+    private static final String DISPATCH_FAILURE_METRIC = "DispatchFailure";
+
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
     private final String shardInfoId;
+    private final MetricsFactory metricsFactory;
     private volatile int readTimeoutSinceLastRead = 0;
 
     @VisibleForTesting
@@ -56,42 +68,49 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Getter
     private volatile Instant lastDataArrival;
 
-    @Getter
+    /**
+     * Fatal failure (an {@link Error}, or anything unexpected) raised while dispatching a batch. Once set, this shard
+     * stops consuming.
+     */
     private volatile Throwable dispatchFailure;
+
+    /**
+     * Set once this subscriber gives up on dispatching (shutdown requested, interrupted, or fatal error). Once set,
+     * no further records are requested, delivered, or resubscribed for.
+     */
+    private volatile boolean dispatchStopped = false;
+
+    @VisibleForTesting
+    long dispatchRetryInitialBackoffMillis = 500L;
+
+    @VisibleForTesting
+    long dispatchRetryMaxBackoffMillis = 10_000L;
 
     @Getter(AccessLevel.PACKAGE)
     private volatile Throwable retrievalFailure;
-
-    @Deprecated
-    ShardConsumerSubscriber(
-            RecordsPublisher recordsPublisher,
-            ExecutorService executorService,
-            int bufferSize,
-            ShardConsumer shardConsumer) {
-        this(
-                recordsPublisher,
-                executorService,
-                bufferSize,
-                shardConsumer,
-                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
-    }
 
     ShardConsumerSubscriber(
             RecordsPublisher recordsPublisher,
             ExecutorService executorService,
             int bufferSize,
             ShardConsumer shardConsumer,
-            int readTimeoutsToIgnoreBeforeWarning) {
+            int readTimeoutsToIgnoreBeforeWarning,
+            MetricsFactory metricsFactory) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
         this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
+        this.metricsFactory = metricsFactory;
     }
 
     void startSubscriptions() {
         synchronized (lockObject) {
+            if (dispatchStopped) {
+                // Stopped for good (shutdown or fatal error); never resubscribe and pull more records.
+                return;
+            }
             // Setting the lastRequestTime to allow for health checks to restart subscriptions if they failed to
             // during initial try.
             lastRequestTime = Instant.now();
@@ -120,11 +139,9 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         return result;
     }
 
-    Throwable getAndResetDispatchFailure() {
+    Throwable getDispatchFailure() {
         synchronized (lockObject) {
-            Throwable failure = dispatchFailure;
-            dispatchFailure = null;
-            return failure;
+            return dispatchFailure;
         }
     }
 
@@ -180,31 +197,140 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     @Override
     public void onNext(RecordsRetrieved input) {
-        try {
-            synchronized (lockObject) {
-                lastRequestTime = null;
-            }
-            lastDataArrival = Instant.now();
-            shardConsumer.handleInput(
-                    input.processRecordsInput().toBuilder()
-                            .cacheExitTime(Instant.now())
-                            .build(),
-                    subscription);
+        if (dispatchStopped) {
+            // Already stopped; drop anything still in flight from upstream.
+            return;
+        }
+        synchronized (lockObject) {
+            lastRequestTime = null;
+        }
+        lastDataArrival = Instant.now();
 
+        boolean handedOff = false;
+        try {
+            handedOff = dispatchWithRetry(input);
         } catch (Throwable t) {
-            log.warn("{}: Caught exception from handleInput", shardInfoId, t);
+            // Unexpected escape. onNext must not throw (Reactive Streams 2.13), so record it instead (keeping any fatal
+            // error already recorded) and let healthCheck surface the halt.
+            log.error(
+                    "{}: Unexpected failure while dispatching batch, stopping consumption of this shard",
+                    shardInfoId,
+                    t);
             synchronized (lockObject) {
-                dispatchFailure = t;
-            }
-        } finally {
-            subscription.request(1);
-            synchronized (lockObject) {
-                lastAccepted = input;
-                lastRequestTime = Instant.now();
+                if (dispatchFailure == null) {
+                    dispatchFailure = t;
+                }
             }
         }
+        if (!handedOff) {
+            // Any exit without handing the batch off (fatal error, shutdown, interrupt, or anything unexpected) stops
+            // this subscriber, so the read position never advances past an undelivered batch.
+            stopDispatching();
+            return;
+        }
 
+        subscription.request(1);
+        synchronized (lockObject) {
+            lastAccepted = input;
+            lastRequestTime = Instant.now();
+        }
         readTimeoutSinceLastRead = 0;
+    }
+
+    /**
+     * Hands the batch to the shard consumer, retrying the same batch with backoff on failure.
+     *
+     * @return true if the batch was handed off; false if dispatching gave up (fatal error, shutdown, or interrupt).
+     */
+    private boolean dispatchWithRetry(RecordsRetrieved input) {
+        long backoffMillis = dispatchRetryInitialBackoffMillis;
+        int attempt = 0;
+        while (true) {
+            try {
+                shardConsumer.handleInput(
+                        input.processRecordsInput().toBuilder()
+                                .cacheExitTime(Instant.now())
+                                .build(),
+                        subscription);
+                return true;
+            } catch (Exception e) {
+                // KCL failed before delivering the batch to the record processor. Retry the same batch in place
+                // rather than skipping it, so no data is lost. Ordering is preserved since the next batch is not
+                // requested until this one succeeds.
+                attempt++;
+                emitDispatchFailureMetric();
+                if (shardConsumer.isShutdownRequested()) {
+                    // Without this, a batch that always fails (poison pill) would keep the shard from shutting down.
+                    log.warn(
+                            "{}: Failed to dispatch batch and shutdown was requested, not retrying. The batch was not"
+                                    + " delivered and will be reprocessed from the last checkpoint.",
+                            shardInfoId,
+                            e);
+                    return false;
+                }
+                log.warn(
+                        "{}: Failed to dispatch batch (attempt {}), retrying the same batch in {} ms",
+                        shardInfoId,
+                        attempt,
+                        backoffMillis,
+                        e);
+                try {
+                    Thread.sleep(backoffMillis);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("{}: Interrupted while waiting to retry dispatch, not retrying", shardInfoId);
+                    return false;
+                }
+                backoffMillis = Math.min(backoffMillis * 2, dispatchRetryMaxBackoffMillis);
+            } catch (Error e) {
+                // Fatal error. Stop consuming this shard without advancing, so nothing can checkpoint past this
+                // batch. The error is surfaced through healthCheck.
+                log.error(
+                        "{}: Fatal error while dispatching batch, stopping consumption of this shard", shardInfoId, e);
+                synchronized (lockObject) {
+                    dispatchFailure = e;
+                }
+                emitDispatchFailureMetric();
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Permanently stops this subscriber: cancels the upstream subscription and prevents resubscribing.
+     */
+    private void stopDispatching() {
+        synchronized (lockObject) {
+            dispatchStopped = true;
+            if (subscription != null) {
+                subscription.cancel();
+            }
+        }
+    }
+
+    /**
+     * Emits a DispatchFailure count of 1 at both shard and application level. Best-effort: a metrics failure must
+     * never decide whether a batch is retried, so it is logged and swallowed.
+     */
+    private void emitDispatchFailureMetric() {
+        try {
+            final MetricsScope shardScope =
+                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.PROCESS_TASK_OPERATION);
+            shardConsumer
+                    .shardInfo()
+                    .streamIdentifierSerOpt()
+                    .ifPresent(streamId ->
+                            MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
+            MetricsUtil.addShardId(shardScope, shardConsumer.shardInfo().shardId());
+            final MetricsScope appScope =
+                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.APPLICATION_TRACKER_OPERATION);
+            for (MetricsScope scope : Arrays.asList(shardScope, appScope)) {
+                scope.addData(DISPATCH_FAILURE_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                MetricsUtil.endScope(scope);
+            }
+        } catch (RuntimeException e) {
+            log.warn("{}: Failed to emit {} metric", shardInfoId, DISPATCH_FAILURE_METRIC, e);
+        }
     }
 
     @Override
