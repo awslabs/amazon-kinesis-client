@@ -197,10 +197,7 @@ public class ShardConsumer {
         }
         Throwable dispatchFailure = subscriber.getDispatchFailure();
         if (dispatchFailure != null) {
-            log.error(
-                    "{} : Fatal error occurred while dispatching incoming data. Consumption of this shard has stopped",
-                    streamIdentifier,
-                    dispatchFailure);
+            log.error("{} : Fatal error occurred while dispatching incoming data.", streamIdentifier, dispatchFailure);
             return dispatchFailure;
         }
 

@@ -45,13 +45,7 @@ import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 @Accessors(fluent = true)
 @KinesisClientInternalApi
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
-    // Same operation as ProcessTask's shard-level metrics: a failed dispatch is a ProcessTask attempt that failed
-    // before the handoff.
-    private static final String METRICS_OPERATION = "ProcessTask";
-    // App-level operation (no shard dimension), shared with ProcessTask, so customers can alarm across all shards.
-    private static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
     private static final String DISPATCH_FAILURE_METRIC = "DispatchFailure";
-    private static final String DISPATCH_FATAL_ERROR_METRIC = "DispatchFatalError";
 
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
@@ -227,14 +221,11 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                     dispatchFailure = t;
                 }
             }
-        } finally {
-            // Any exit without handing the batch off (fatal error, shutdown, interrupt, or anything unexpected) stops
-            // this subscriber, so the read position never advances past an undelivered batch.
-            if (!handedOff) {
-                stopDispatching();
-            }
         }
         if (!handedOff) {
+            // Any exit without handing the batch off (fatal error, shutdown, interrupt, or anything unexpected) stops
+            // this subscriber, so the read position never advances past an undelivered batch.
+            stopDispatching();
             return;
         }
 
@@ -267,7 +258,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 // rather than skipping it, so no data is lost. Ordering is preserved since the next batch is not
                 // requested until this one succeeds.
                 attempt++;
-                emitDispatchFailureMetric(DISPATCH_FAILURE_METRIC);
+                emitDispatchFailureMetric();
                 if (shardConsumer.isShutdownRequested()) {
                     // Without this, a batch that always fails (poison pill) would keep the shard from shutting down.
                     log.warn(
@@ -299,7 +290,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 synchronized (lockObject) {
                     dispatchFailure = e;
                 }
-                emitDispatchFailureMetric(DISPATCH_FATAL_ERROR_METRIC);
+                emitDispatchFailureMetric();
                 return false;
             }
         }
@@ -317,19 +308,28 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         }
     }
 
-    private void emitDispatchFailureMetric(String failureMetric) {
-        final MetricsScope shardScope = MetricsUtil.createMetricsWithOperation(metricsFactory, METRICS_OPERATION);
-        shardConsumer
-                .shardInfo()
-                .streamIdentifierSerOpt()
-                .ifPresent(streamId ->
-                        MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
-        MetricsUtil.addShardId(shardScope, shardConsumer.shardInfo().shardId());
-        final MetricsScope appScope =
-                MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_TRACKER_OPERATION);
-        for (MetricsScope scope : Arrays.asList(shardScope, appScope)) {
-            scope.addData(failureMetric, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-            MetricsUtil.endScope(scope);
+    /**
+     * Emits a DispatchFailure count of 1 at both shard and application level. Best-effort: a metrics failure must
+     * never decide whether a batch is retried, so it is logged and swallowed.
+     */
+    private void emitDispatchFailureMetric() {
+        try {
+            final MetricsScope shardScope =
+                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.PROCESS_TASK_OPERATION);
+            shardConsumer
+                    .shardInfo()
+                    .streamIdentifierSerOpt()
+                    .ifPresent(streamId ->
+                            MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
+            MetricsUtil.addShardId(shardScope, shardConsumer.shardInfo().shardId());
+            final MetricsScope appScope =
+                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.APPLICATION_TRACKER_OPERATION);
+            for (MetricsScope scope : Arrays.asList(shardScope, appScope)) {
+                scope.addData(DISPATCH_FAILURE_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                MetricsUtil.endScope(scope);
+            }
+        } catch (RuntimeException e) {
+            log.warn("{}: Failed to emit {} metric", shardInfoId, DISPATCH_FAILURE_METRIC, e);
         }
     }
 

@@ -45,8 +45,8 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 @Slf4j
 @KinesisClientInternalApi
 public class ProcessTask implements ConsumerTask {
-    private static final String PROCESS_TASK_OPERATION = "ProcessTask";
-    private static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
+    static final String PROCESS_TASK_OPERATION = "ProcessTask";
+    static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
