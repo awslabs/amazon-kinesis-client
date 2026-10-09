@@ -4,9 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -59,7 +59,7 @@ public class FleetSegmentingHandler {
             final CoordinatorStateDAO coordinatorStateDAO,
             final ScheduledExecutorService versionHeartbeatExecutor) {
         this.coordinatorStateDAO = coordinatorStateDAO;
-        this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionNum());
+        this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         isEnabled = config.enableRollingDeploymentSystem();
         workerId = config.workerIdentifier();
 
@@ -69,8 +69,8 @@ public class FleetSegmentingHandler {
                 2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
-        // start a thread to update the leader's version hash only if segmenting is enabled
         if (isEnabled) {
+            // start a thread to update the leader's version hash only if segmenting is enabled
             versionHeartbeatExecutor.scheduleAtFixedRate(
                     this::updateLeaderVersionHashLastUpdateTime,
                     0,
@@ -138,20 +138,15 @@ public class FleetSegmentingHandler {
     }
 
     /**
-     * Used by the leader to check if it should handle the current Leader responsibilities (as opposed to the
-     * DeployingLeader responsibilities). If the segmenting handler is disabled, the leader will behave as it normally
-     * would without segmenting.
+     * The "current" version is the version that is currently deployed to all workers. Used by the leader to check
+     * if it should handle the current Leader responsibilities (as opposed to the DeployingLeader responsibilities).
+     * If the segmenting handler is disabled, the leader will behave as it normally would without segmenting.
      */
     public boolean isOnCurrentVersion() {
         if (!isEnabled) {
             return true;
         }
         final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
-        return doesVersionHashMatch(attrs);
-    }
-
-    public boolean isOnDeployingVersion() {
-        final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
         return doesVersionHashMatch(attrs);
     }
 
@@ -168,8 +163,11 @@ public class FleetSegmentingHandler {
 
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isVersionEmittedByAllActiveWorkers =
-                new HashSet<>(activeWorkerMetrics).equals(new HashSet<>(workersOnVersionHash));
+        isVersionEmittedByAllActiveWorkers = toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
+    }
+
+    private static Set<String> toWorkerIds(final List<WorkerMetricStats> workers) {
+        return workers.stream().map(WorkerMetricStats::getWorkerId).collect(Collectors.toSet());
     }
 
     public List<WorkerMetricStats> filterWorkersOnVersionHash(final List<WorkerMetricStats> activeWorkers) {
@@ -183,7 +181,7 @@ public class FleetSegmentingHandler {
                 .collect(Collectors.toList());
     }
 
-    public List<WorkerMetricStats> filterWorkersWithNoVersionHash(final List<WorkerMetricStats> activeWorkers) {
+    public List<WorkerMetricStats> filterWorkersWithNoOrStaleVersionHash(final List<WorkerMetricStats> activeWorkers) {
         return activeWorkers.stream()
                 .filter(worker -> !doesWorkerHaveVersionHash(worker) || isWorkerVersionHashStale(worker))
                 .collect(Collectors.toList());

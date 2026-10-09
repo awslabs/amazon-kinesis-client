@@ -47,7 +47,7 @@ public class FleetSegmentingHandlerTest {
         clearInvocations();
         mockCoordinatorStateDAO = mock(CoordinatorStateDAO.class);
         mockVersionHeartbeatExecutor = mock(ScheduledExecutorService.class);
-        sampleVersionHash = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionNum());
+        sampleVersionHash = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionHash());
         config = new LeaseManagementConfig(
                 "dummyTableName",
                 "dummyApplicationName",
@@ -55,12 +55,13 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
         config.enableRollingDeploymentSystem(true);
+        config.leaseAssignmentStrategy(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
         handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
     }
 
     @Test
     void getVersionHash_returnsDeterministicValue() {
-        String expected = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionNum());
+        String expected = String.valueOf(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.getVersionHash());
         assertEquals(expected, handler.getVersionHash());
     }
 
@@ -162,31 +163,6 @@ public class FleetSegmentingHandlerTest {
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertTrue(disabledHandler.isOnCurrentVersion());
-    }
-
-    @Test
-    void isOnDeployingVersion_returnsTrue_whenVersionHashMatches() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.DEPLOYING_LEADER_HASH_KEY,
-                sampleVersionHash,
-                Instant.now().getEpochSecond());
-        assertTrue(handler.isOnDeployingVersion());
-    }
-
-    @Test
-    void isOnDeployingVersion_returnsFalse_whenVersionHashDoesNotMatch() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.DEPLOYING_LEADER_HASH_KEY,
-                "differentHash",
-                Instant.now().getEpochSecond());
-        assertFalse(handler.isOnDeployingVersion());
-    }
-
-    @Test
-    void isOnDeployingVersion_returnsFalse_whenNoDeployingLeaderItem() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.DEPLOYING_LEADER_HASH_KEY))
-                .thenReturn(null);
-        assertFalse(handler.isOnDeployingVersion());
     }
 
     @Test
