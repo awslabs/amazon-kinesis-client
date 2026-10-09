@@ -218,7 +218,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
             final double fleetAverageForWorkerMetrics = workerMetricsToFleetLevelAverageEntry.getValue();
             final List<WorkerMetricStats> workersToTakeLeasesFrom = getWorkersToTakeLeasesFromIfRequired(
                     leaseTakingCandidates, workerMetricsName, fleetAverageForWorkerMetrics);
-            log.info("Workers to take from : {}", workersToTakeLeasesFrom);
+            log.debug("Workers to take from : {}", workersToTakeLeasesFrom);
 
             final Map<String, Double> workerIdToThroughputToTakeForCurrentWorkerMetrics = new HashMap<>();
             double totalThroughputToTakeForCurrentWorkerMetrics = 0D;

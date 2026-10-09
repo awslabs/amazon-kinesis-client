@@ -260,7 +260,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: {@link LeaseAssignmentStrategy#WORKER_UTILIZATION_AWARE}</p>
      */
-    private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.LEASE_COUNT_BASED;
+    private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
 
     /**
      * Flag to enable the rolling deployment system.
