@@ -59,7 +59,7 @@ public class WorkerMetricStatsReporter implements Runnable {
                     .lastUpdateTime(Instant.now().getEpochSecond())
                     .supportCode(WorkerMetricStats.SUPPORT_CODE)
                     .supportCodeUpdateEpochSeconds(Instant.now().getEpochSecond())
-                    .properties(segmentingHandler.getVersionHashWithLastUpdatedTime())
+                    .properties(segmentingHandler.generateVersionHashWithLastUpdatedTimeMap())
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
             success = true;

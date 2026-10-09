@@ -260,7 +260,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: {@link LeaseAssignmentStrategy#WORKER_UTILIZATION_AWARE}</p>
      */
-    private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
+    private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.LEASE_COUNT_BASED;
 
     /**
      * Flag to enable the rolling deployment system.
@@ -275,7 +275,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: false</p>
      */
-    private boolean enableRollingDeploymentSystem = false;
+    private boolean enableRollingDeploymentSystem = true;
 
     /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
