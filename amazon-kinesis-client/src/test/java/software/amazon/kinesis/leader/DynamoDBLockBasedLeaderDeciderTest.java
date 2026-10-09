@@ -82,7 +82,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
         mockSegmentingHandler = mock(FleetSegmentingHandler.class);
         when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.LEADER_HASH_KEY);
-        when(mockSegmentingHandler.getVersionHashWithLastUpdatedTimeForLockTable())
+        when(mockSegmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable())
                 .thenReturn(new HashMap<>());
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);

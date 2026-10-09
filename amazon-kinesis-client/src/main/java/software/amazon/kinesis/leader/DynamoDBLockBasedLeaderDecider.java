@@ -161,7 +161,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
                 final Map<String, AttributeValue> lockAttributes = new HashMap<>(getLockAttributes());
-                lockAttributes.putAll(segmentingHandler.getVersionHashWithLastUpdatedTimeForLockTable());
+                lockAttributes.putAll(segmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable());
                 final Optional<LockItem> leaderLockItem =
                         lockClient.tryAcquireLock(AcquireLockOptions.builder(ddbLeaderKey)
                                 .withRefreshPeriod(heartbeatPeriodMillis)

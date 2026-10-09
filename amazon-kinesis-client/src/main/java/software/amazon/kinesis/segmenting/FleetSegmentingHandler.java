@@ -69,12 +69,14 @@ public class FleetSegmentingHandler {
                 2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
-        // start a thread to update the leader's version hash
-        versionHeartbeatExecutor.scheduleAtFixedRate(
-                this::updateLeaderVersionHashLut,
-                0,
-                config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
-                TimeUnit.MILLISECONDS);
+        // start a thread to update the leader's version hash only if segmenting is enabled
+        if (isEnabled) {
+            versionHeartbeatExecutor.scheduleAtFixedRate(
+                    this::updateLeaderVersionHashLastUpdateTime,
+                    0,
+                    config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
+                    TimeUnit.MILLISECONDS);
+        }
     }
 
     /**
@@ -122,16 +124,16 @@ public class FleetSegmentingHandler {
         return LeaderLock.DEPLOYING_LEADER_HASH_KEY;
     }
 
-    public Map<String, String> getVersionHashWithLastUpdatedTime() {
+    public Map<String, String> generateVersionHashWithLastUpdatedTimeMap() {
         final Map<String, String> workerProperties = new HashMap<>();
         workerProperties.put(VERSION_HASH_KEY, versionHash);
         workerProperties.put(VERSION_HASH_LUT_KEY, String.valueOf(Instant.now().getEpochSecond()));
         return workerProperties;
     }
 
-    public Map<String, AttributeValue> getVersionHashWithLastUpdatedTimeForLockTable() {
+    public Map<String, AttributeValue> generateVersionHashWithLastUpdatedTimeForLockTable() {
         Map<String, AttributeValue> workerProperties = new HashMap<>();
-        getVersionHashWithLastUpdatedTime().forEach((k, v) -> workerProperties.put(k, AttributeValue.fromS(v)));
+        generateVersionHashWithLastUpdatedTimeMap().forEach((k, v) -> workerProperties.put(k, AttributeValue.fromS(v)));
         return workerProperties;
     }
 
@@ -187,9 +189,9 @@ public class FleetSegmentingHandler {
                 .collect(Collectors.toList());
     }
 
-    private void updateLeaderVersionHashLut() {
-        // checking if worker is the leader to avoid unnecessary calls to DDB
-        if (!isLeader) {
+    private void updateLeaderVersionHashLastUpdateTime() {
+        // checking if worker is the leader or if segmenting is enabled to avoid unnecessary calls to DDB
+        if (!isLeader || !isEnabled) {
             return;
         }
         final String leaderKey = getHashKeyForLeaderLock();

@@ -190,9 +190,9 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getVersionHashWithLastUpdatedTime_returnsCorrectMap() {
+    void generateVersionHashWithLastUpdatedTime_Map_returnsCorrectMap() {
         final long before = Instant.now().getEpochSecond();
-        final Map<String, String> result = handler.getVersionHashWithLastUpdatedTime();
+        final Map<String, String> result = handler.generateVersionHashWithLastUpdatedTimeMap();
         final long after = Instant.now().getEpochSecond();
 
         assertTrue(result.containsKey("versionHash"));
@@ -204,9 +204,9 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getVersionHashWithLastUpdatedTimeForLockTable_returnsAttributeValueMap() {
+    void generateVersionHashWithLastUpdatedTimeMapForLockTable_returnsAttributeValueMap() {
         final long before = Instant.now().getEpochSecond();
-        final Map<String, AttributeValue> result = handler.getVersionHashWithLastUpdatedTimeForLockTable();
+        final Map<String, AttributeValue> result = handler.generateVersionHashWithLastUpdatedTimeForLockTable();
         final long after = Instant.now().getEpochSecond();
 
         assertEquals(sampleVersionHash, result.get("versionHash").s());

@@ -47,9 +47,9 @@ public enum LeaseAssignmentStrategy {
     LEASE_COUNT_BASED(1);
 
     @Getter
-    private final int versionNum;
+    private final int versionHash;
 
-    LeaseAssignmentStrategy(int versionNum) {
-        this.versionNum = versionNum;
+    LeaseAssignmentStrategy(int versionHash) {
+        this.versionHash = versionHash;
     }
 }
