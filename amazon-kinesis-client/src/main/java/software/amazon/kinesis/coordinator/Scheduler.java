@@ -122,6 +122,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
@@ -234,6 +235,8 @@ public class Scheduler implements Runnable {
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
 
     private boolean leasesSyncedOnAppInit = false;
+
+    private final FleetSegmentingHandler segmentingHandler;
 
     @Getter(AccessLevel.NONE)
     private final EntityDAO entityDAO;
@@ -358,6 +361,9 @@ public class Scheduler implements Runnable {
                 Executors.newCachedThreadPool(),
                 leaseManagementConfig.leaseTableScanTotalSegments());
 
+        this.segmentingHandler = new FleetSegmentingHandler(
+                leaseManagementConfig, coordinatorStateDAO, Executors.newSingleThreadScheduledExecutor());
+
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
         this.migrationStateMachine = new MigrationStateMachineImpl(
@@ -431,7 +437,8 @@ public class Scheduler implements Runnable {
                 metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
-                leaderSynced);
+                leaderSynced,
+                segmentingHandler);
         this.leaseCleanupManager = leaseManagementFactory.createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
@@ -486,23 +493,22 @@ public class Scheduler implements Runnable {
                 .lamThreadPool(Executors.newScheduledThreadPool(
                         1,
                         new ThreadFactoryBuilder().setNameFormat("lam-thread").build()))
-                .lamCreator((lamThreadPool, leaderDecider) -> {
-                    return new LeaseAssignmentManager(
-                            leaseRefresher,
-                            leaderDecider,
-                            leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
-                            leaseCoordinator.workerIdentifier(),
-                            leaseManagementConfig.failoverTimeMillis(),
-                            metricsFactory,
-                            lamThreadPool,
-                            System::nanoTime,
-                            leaseManagementConfig.maxLeasesForWorker(),
-                            leaseManagementConfig.gracefulLeaseHandoffConfig(),
-                            leaseManagementConfig.leaseAssignmentStrategy(),
-                            leaseManagementConfig.leaseAssignmentIntervalMillis(),
-                            streamIdCacheManager,
-                            lamDataManager);
-                })
+                .lamCreator((lamThreadPool, leaderDecider) -> new LeaseAssignmentManager(
+                        leaseRefresher,
+                        leaderDecider,
+                        leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
+                        leaseCoordinator.workerIdentifier(),
+                        leaseManagementConfig.failoverTimeMillis(),
+                        metricsFactory,
+                        lamThreadPool,
+                        System::nanoTime,
+                        leaseManagementConfig.maxLeasesForWorker(),
+                        leaseManagementConfig.gracefulLeaseHandoffConfig(),
+                        leaseManagementConfig.leaseAssignmentStrategy(),
+                        leaseManagementConfig.leaseAssignmentIntervalMillis(),
+                        streamIdCacheManager,
+                        lamDataManager,
+                        segmentingHandler))
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
@@ -512,11 +518,13 @@ public class Scheduler implements Runnable {
                         metricsFactory,
                         leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
                         leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
-                        tableMigrationStateMachine))
+                        tableMigrationStateMachine,
+                        segmentingHandler))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
                 .lamDataManager(lamDataManager)
+                .segmentingHandler(segmentingHandler)
                 .build();
     }
 

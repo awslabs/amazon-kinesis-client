@@ -36,12 +36,14 @@ import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
 import software.amazon.kinesis.leader.MigrationAdaptiveLeaderDecider;
+import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
@@ -95,6 +97,7 @@ public class DynamicMigrationComponentsInitializerTest {
     final MigrationAdaptiveLeaseAssignmentModeProvider mockConsumer =
             mock(MigrationAdaptiveLeaseAssignmentModeProvider.class);
     private final LAMDataManager mockLamDataManager = mock(LAMDataManager.class);
+    private final FleetSegmentingHandler mockSegmentingHandler = mock(FleetSegmentingHandler.class);
 
     private static final String APPLICATION_NAME = "TEST_APPLICATION";
 
@@ -106,6 +109,9 @@ public class DynamicMigrationComponentsInitializerTest {
         when(mockAdaptiveLeaderDeciderCreator.get()).thenReturn(mockMigrationAdaptiveLeaderDecider);
         when(mockDdbLockBasedLeaderDeciderCreator.get()).thenReturn(mockDdbLockLeaderDecider);
         when(mockDeterministicLeaderDeciderCreator.get()).thenReturn(mockDeterministicLeaderDecider);
+        when(mockSegmentingHandler.getVersionHash())
+                .thenReturn(String.valueOf(
+                        LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE.name().hashCode()));
 
         migrationInitializer = new DynamicMigrationComponentsInitializer(
                 mockMetricsFactory,
@@ -121,7 +127,8 @@ public class DynamicMigrationComponentsInitializerTest {
                 workerIdentifier,
                 workerUtilizationAwareAssignmentConfig,
                 mockConsumer,
-                mockLamDataManager);
+                mockLamDataManager,
+                mockSegmentingHandler);
     }
 
     // ========================

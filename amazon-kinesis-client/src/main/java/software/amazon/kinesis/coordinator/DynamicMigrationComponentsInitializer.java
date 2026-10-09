@@ -39,6 +39,7 @@ import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwa
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsReporter;
@@ -117,6 +118,8 @@ public final class DynamicMigrationComponentsInitializer {
 
     private final LAMDataManager lamDataManager;
 
+    private final FleetSegmentingHandler segmentingHandler;
+
     @Builder(access = AccessLevel.PACKAGE)
     DynamicMigrationComponentsInitializer(
             final MetricsFactory metricsFactory,
@@ -132,7 +135,8 @@ public final class DynamicMigrationComponentsInitializer {
             final String workerIdentifier,
             final WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider,
-            final LAMDataManager lamDataManager) {
+            final LAMDataManager lamDataManager,
+            final FleetSegmentingHandler segmentingHandler) {
         this.metricsFactory = metricsFactory;
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
@@ -150,6 +154,7 @@ public final class DynamicMigrationComponentsInitializer {
         this.ddbLockBasedLeaderDeciderCreator = ddbLockBasedLeaderDeciderCreator;
         this.leaseModeChangeConsumer = leaseAssignmentModeProvider;
         this.lamDataManager = lamDataManager;
+        this.segmentingHandler = segmentingHandler;
     }
 
     /**
@@ -275,7 +280,8 @@ public final class DynamicMigrationComponentsInitializer {
         log.info("Starting worker metrics reporter");
         // Start with a delay for workerStatsManager to capture some values and start reporting.
         workerMetricsReporterFuture = workerMetricsThreadPool.scheduleAtFixedRate(
-                new WorkerMetricStatsReporter(metricsFactory, workerIdentifier, workerMetricsManager, workerMetricsDAO),
+                new WorkerMetricStatsReporter(
+                        metricsFactory, workerIdentifier, workerMetricsManager, workerMetricsDAO, segmentingHandler),
                 workerUtilizationAwareAssignmentConfig.inMemoryWorkerMetricsCaptureFrequencyMillis() * 2L,
                 workerUtilizationAwareAssignmentConfig.workerMetricsReporterFreqInMillis(),
                 TimeUnit.MILLISECONDS);
