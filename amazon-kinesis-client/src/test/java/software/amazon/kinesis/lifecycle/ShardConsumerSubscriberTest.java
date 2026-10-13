@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -47,11 +48,13 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.utils.BlockingUtils;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -116,7 +119,8 @@ public class ShardConsumerSubscriberTest {
                 .cacheEntryTime(Instant.now())
                 .build();
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
+        subscriber = new ShardConsumerSubscriber(
+                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
@@ -149,21 +153,26 @@ public class ShardConsumerSubscriberTest {
     }
 
     @Test
-    public void consumerErrorSkipsEntryTest() throws Exception {
-        addItemsToReturn(20);
+    public void consumerErrorRetriesSameEntryTest() throws Exception {
+        subscriber.dispatchRetryInitialBackoffMillis = 1L;
+        for (int i = 0; i < 20; i++) {
+            addUniqueItem(i);
+        }
 
-        Throwable testException = new Throwable("ShardConsumerError");
-
+        List<String> delivered = Collections.synchronizedList(new ArrayList<>());
         doAnswer(new Answer() {
-                    int expectedInvocations = recordsPublisher.responses.size();
+                    int invocations = 0;
 
                     @Override
                     public Object answer(InvocationOnMock invocation) throws Throwable {
-                        expectedInvocations--;
-                        if (expectedInvocations == 10) {
-                            throw testException;
+                        invocations++;
+                        ProcessRecordsInput input = invocation.getArgumentAt(0, ProcessRecordsInput.class);
+                        delivered.add(input.records().get(0).partitionKey());
+                        // Fail the 10th batch twice; it must be retried, not skipped.
+                        if (invocations == 10 || invocations == 11) {
+                            throw new RuntimeException("ShardConsumerError");
                         }
-                        if (expectedInvocations <= 0) {
+                        if (invocations >= 22) {
                             synchronized (processedNotifier) {
                                 processedNotifier.notifyAll();
                             }
@@ -176,11 +185,102 @@ public class ShardConsumerSubscriberTest {
 
         startSubscriptionsAndWait();
 
-        assertThat(subscriber.getAndResetDispatchFailure(), equalTo(testException));
-        assertThat(subscriber.getAndResetDispatchFailure(), nullValue());
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            expected.add("Record-" + i);
+            if (i == 9) {
+                // Two failed attempts, then success, with order preserved.
+                expected.add("Record-" + i);
+                expected.add("Record-" + i);
+            }
+        }
+        assertEquals(expected, delivered);
+        assertThat(subscriber.getDispatchFailure(), nullValue());
+    }
 
-        verify(shardConsumer, times(20))
+    @Test
+    public void consumerErrorOnFirstBatchIsRetriedTest() throws Exception {
+        subscriber.dispatchRetryInitialBackoffMillis = 1L;
+        addItemsToReturn(1);
+
+        AtomicInteger invocations = new AtomicInteger();
+        doAnswer(invocation -> {
+                    if (invocations.incrementAndGet() == 1) {
+                        throw new RuntimeException("first attempt fails");
+                    }
+                    synchronized (processedNotifier) {
+                        processedNotifier.notifyAll();
+                    }
+                    return null;
+                })
+                .when(shardConsumer)
+                .handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
+
+        startSubscriptionsAndWait();
+
+        verify(shardConsumer, times(2))
                 .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
+        assertThat(subscriber.getDispatchFailure(), nullValue());
+    }
+
+    @Test
+    public void consumerErrorStopsRetryingOnShutdownTest() throws Exception {
+        subscriber.dispatchRetryInitialBackoffMillis = 1L;
+        addItemsToReturn(5);
+
+        when(shardConsumer.isShutdownRequested()).thenReturn(false, true);
+        AtomicInteger invocations = new AtomicInteger();
+        doAnswer(invocation -> {
+                    invocations.incrementAndGet();
+                    throw new RuntimeException("always fails");
+                })
+                .when(shardConsumer)
+                .handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
+
+        subscriber.startSubscriptions();
+        BlockingUtils.blockUntilConditionSatisfied(() -> invocations.get() >= 2, 2000);
+        Thread.sleep(100);
+
+        // Attempt 1 fails and is retried; attempt 2 fails with shutdown requested, so retrying stops.
+        // No later (prefetched) batch is dispatched after the failed one.
+        assertEquals(2, invocations.get());
+        assertThat(subscriber.getDispatchFailure(), nullValue());
+
+        // Once stopped, a restart (e.g. from healthCheck) must not resubscribe and pull more records.
+        final int indexBeforeRestart = recordsPublisher.currentIndex;
+        subscriber.startSubscriptions();
+        Thread.sleep(100);
+        assertEquals(2, invocations.get());
+        assertEquals(indexBeforeRestart, recordsPublisher.currentIndex);
+    }
+
+    @Test
+    public void consumerFatalErrorStopsConsumptionTest() throws Exception {
+        addItemsToReturn(5);
+
+        Error fatal = new Error("test fatal error");
+        AtomicInteger invocations = new AtomicInteger();
+        doAnswer(invocation -> {
+                    invocations.incrementAndGet();
+                    throw fatal;
+                })
+                .when(shardConsumer)
+                .handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
+
+        subscriber.startSubscriptions();
+        BlockingUtils.blockUntilConditionSatisfied(() -> subscriber.getDispatchFailure() != null, 2000);
+        Thread.sleep(100);
+
+        assertThat(subscriber.getDispatchFailure(), equalTo(fatal));
+        // Not retried, and no later (prefetched) batch is dispatched after the failed one.
+        assertEquals(1, invocations.get());
+
+        // Once stopped, a restart must not resubscribe and pull more records.
+        final int indexBeforeRestart = recordsPublisher.currentIndex;
+        subscriber.startSubscriptions();
+        Thread.sleep(100);
+        assertEquals(1, invocations.get());
+        assertEquals(indexBeforeRestart, recordsPublisher.currentIndex);
     }
 
     @Test
@@ -249,7 +349,8 @@ public class ShardConsumerSubscriberTest {
                         .setDaemon(true)
                         .build());
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
+        subscriber = new ShardConsumerSubscriber(
+                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -331,7 +432,8 @@ public class ShardConsumerSubscriberTest {
         // Mock record publisher which doesn't publish any records on first try which simulates any scenario which
         // causes first subscription try to fail.
         recordsPublisher = new RecordPublisherWithInitialFailureSubscription();
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
+        subscriber = new ShardConsumerSubscriber(
+                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -403,7 +505,8 @@ public class ShardConsumerSubscriberTest {
                 .when(failingService)
                 .execute(any());
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, failingService, bufferSize, shardConsumer, 0);
+        subscriber = new ShardConsumerSubscriber(
+                recordsPublisher, failingService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -661,7 +764,13 @@ public class ShardConsumerSubscriberTest {
                 ShardConsumer shardConsumer,
                 // Setup test expectations
                 int readTimeoutsToIgnoreBeforeWarning) {
-            super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
+            super(
+                    recordsPublisher,
+                    executorService,
+                    bufferSize,
+                    shardConsumer,
+                    readTimeoutsToIgnoreBeforeWarning,
+                    new NullMetricsFactory());
         }
 
         @Override

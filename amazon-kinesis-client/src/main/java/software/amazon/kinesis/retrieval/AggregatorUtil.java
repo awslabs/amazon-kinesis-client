@@ -98,7 +98,8 @@ public class AggregatorUtil {
         for (KinesisClientRecord r : records) {
             boolean isAggregated = true;
             long subSeqNum = 0;
-            ByteBuffer bb = r.data();
+            // Read from a duplicate so the input record's buffer is not consumed, allowing the batch to be retried.
+            ByteBuffer bb = r.data().duplicate();
 
             if (bb.remaining() >= magic.length) {
                 bb.get(magic);
@@ -198,7 +199,6 @@ public class AggregatorUtil {
             }
 
             if (!isAggregated) {
-                bb.rewind();
                 result.add(r);
             }
         }
