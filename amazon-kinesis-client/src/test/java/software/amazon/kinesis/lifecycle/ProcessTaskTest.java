@@ -73,7 +73,9 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.beans.HasPropertyWithValue.hasProperty;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -263,6 +265,49 @@ public class ProcessTaskTest {
         final ProcessRecordsInput processRecordsCall;
         final ExtendedSequenceNumber checkpointCall;
         final TaskResult taskResult;
+    }
+
+    @Test
+    public void testFailureBeforeDeliveryIsRethrown() {
+        final KinesisClientRecord r = makeKinesisClientRecord(
+                UUID.randomUUID().toString(), new BigInteger(128, new Random()).toString(), Instant.now());
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(Collections.singletonList(r))
+                .build();
+        final RuntimeException failure = new RuntimeException("deaggregation failed");
+        final AggregatorUtil failingAggregatorUtil = mock(AggregatorUtil.class);
+        when(failingAggregatorUtil.deaggregate(any())).thenThrow(failure);
+
+        try {
+            makeProcessTask(processRecordsInput, failingAggregatorUtil, true).call();
+            fail("Expected the pre-delivery failure to be rethrown");
+        } catch (RuntimeException e) {
+            assertSame(failure, e);
+        }
+        // Not delivered, and the checkpointer was not allowed to advance past this batch.
+        verifyNoInteractions(shardRecordProcessor);
+        verify(checkpointer, never()).largestPermittedCheckpointValue(any());
+    }
+
+    @Test
+    public void testApplicationExceptionIsNotRethrown() {
+        final String sqn = new BigInteger(128, new Random()).toString();
+        final KinesisClientRecord r = makeKinesisClientRecord(UUID.randomUUID().toString(), sqn, Instant.now());
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(Collections.singletonList(r))
+                .build();
+        when(checkpointer.lastCheckpointValue()).thenReturn(TRIM_HORIZON);
+        when(checkpointer.largestPermittedCheckpointValue()).thenReturn(TRIM_HORIZON);
+        doThrow(new RuntimeException("application failure"))
+                .when(shardRecordProcessor)
+                .processRecords(any());
+
+        TaskResult result = makeProcessTask(processRecordsInput).call();
+
+        // Application failures keep the existing behavior: the batch is considered processed.
+        assertThat(result.getException(), nullValue());
+        verify(shardRecordProcessor).processRecords(any());
+        verify(checkpointer).largestPermittedCheckpointValue(new ExtendedSequenceNumber(sqn, 0L));
     }
 
     @Test

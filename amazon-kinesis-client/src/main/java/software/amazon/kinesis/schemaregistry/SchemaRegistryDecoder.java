@@ -44,9 +44,11 @@ public class SchemaRegistryDecoder {
             return record;
         }
 
-        int length = record.data().remaining();
+        // Read from a duplicate so the input record's buffer is not consumed, allowing the batch to be retried.
+        final ByteBuffer buffer = record.data().duplicate();
+        int length = buffer.remaining();
         byte[] data = new byte[length];
-        record.data().get(data, 0, length);
+        buffer.get(data, 0, length);
 
         try {
             if (!isSchemaEncoded(data)) {
