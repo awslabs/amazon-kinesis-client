@@ -108,7 +108,12 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = consumerState == null ? ConsumerStates.INITIAL_STATE : consumerState;
         this.subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, this, readTimeoutsToIgnoreBeforeWarning);
+                recordsPublisher,
+                executorService,
+                bufferSize,
+                this,
+                readTimeoutsToIgnoreBeforeWarning,
+                shardConsumerArgument.metricsFactory());
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {
@@ -190,12 +195,9 @@ public class ShardConsumer {
         if (failure != null) {
             return failure;
         }
-        Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
+        Throwable dispatchFailure = subscriber.getDispatchFailure();
         if (dispatchFailure != null) {
-            log.warn(
-                    "{} : Exception occurred while dispatching incoming data.  The incoming data has been skipped",
-                    streamIdentifier,
-                    dispatchFailure);
+            log.error("{} : Fatal error occurred while dispatching incoming data.", streamIdentifier, dispatchFailure);
             return dispatchFailure;
         }
 

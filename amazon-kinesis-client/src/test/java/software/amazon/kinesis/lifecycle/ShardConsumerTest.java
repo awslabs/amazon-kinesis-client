@@ -31,6 +31,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +60,8 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -769,7 +770,7 @@ public class ShardConsumerTest {
     }
 
     @Test
-    public void testExceptionInProcessingStopsRequests() throws Exception {
+    public void testExceptionInProcessingRetriesSameBatch() throws Exception {
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(
@@ -783,15 +784,20 @@ public class ShardConsumerTest {
                 taskExecutionListener,
                 0,
                 new KinesisConsumerTaskFactory());
+        consumer.subscriber().dispatchRetryInitialBackoffMillis = 1L;
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(null);
 
         CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
         final RuntimeException expectedException = new RuntimeException("Whee");
+        final AtomicInteger calls = new AtomicInteger();
         when(processingTask.call()).thenAnswer(a -> {
             try {
-                throw expectedException;
+                if (calls.incrementAndGet() == 1) {
+                    throw expectedException;
+                }
+                return processingTaskResult;
             } finally {
                 taskCallBarrier.await();
             }
@@ -806,22 +812,17 @@ public class ShardConsumerTest {
         cache.awaitInitialSetup();
 
         cache.publish();
+        // First attempt fails, the same batch is retried and succeeds.
+        awaitAndResetBarrier(taskCallBarrier);
         awaitAndResetBarrier(taskCallBarrier);
         cache.awaitRequest();
 
-        Throwable healthCheckOutcome = consumer.healthCheck();
+        // The failure is retried, not skipped, so nothing is surfaced by healthCheck.
+        assertThat(consumer.healthCheck(), nullValue());
 
-        assertThat(healthCheckOutcome, equalTo(expectedException));
-
-        verify(cache.subscription, times(2)).request(anyLong());
+        verify(processingTask, times(2)).call();
         verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(processTaskInput);
-
-        initialTaskInput =
-                initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
     }
 
     @Test
