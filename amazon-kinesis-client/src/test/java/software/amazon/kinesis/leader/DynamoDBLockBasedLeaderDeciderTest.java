@@ -40,6 +40,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -73,10 +74,16 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     private TableMigrationStateMachine mockTableMigrationStateMachine;
 
+    private FleetSegmentingHandler mockSegmentingHandler;
+
     @BeforeEach
     void setup() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         leaseRefresher.createLeaseTableIfNotExists();
         mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
+        mockSegmentingHandler = mock(FleetSegmentingHandler.class);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        when(mockSegmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable())
+                .thenReturn(new HashMap<>());
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
@@ -93,7 +100,13 @@ class DynamoDBLockBasedLeaderDeciderTest {
             workerIdToLeaderDeciderMap.put(
                     workerId,
                     DynamoDBLockBasedLeaderDecider.create(
-                            dao, workerId, 100L, 10L, new NullMetricsFactory(), mockTableMigrationStateMachine));
+                            dao,
+                            workerId,
+                            100L,
+                            10L,
+                            new NullMetricsFactory(),
+                            mockTableMigrationStateMachine,
+                            mockSegmentingHandler));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
@@ -132,7 +145,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 .build();
         final GetItemResponse getItemResult = dynamoDBSyncClient.getItem(getItemRequest);
         // assert that after shutdown the lockItem is no longer present.
-        assertFalse(getItemResult.hasItem());
+        assertTrue(getItemResult.item().containsKey("isReleased")
+                && getItemResult.item().get("isReleased").s().equals("1"));
 
         // After shutdown, assert that leaderDecider returns false.
         assertFalse(decider.isLeader(workerId), "LeaderDecider did not return false after shutdown.");
@@ -276,7 +290,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         // Create the leader decider
         final String workerId = "migrationTestWorker";
         final DynamoDBLockBasedLeaderDecider decider = DynamoDBLockBasedLeaderDecider.create(
-                dao, workerId, 100L, 10L, new NullMetricsFactory(), mockMigrationSM);
+                dao, workerId, 100L, 10L, new NullMetricsFactory(), mockMigrationSM, mockSegmentingHandler);
         decider.initialize();
 
         // Step 1: isLeader() acquires lock on legacy table, but handleLeaderLockResult throws
