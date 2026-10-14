@@ -17,11 +17,17 @@ package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.ExecutorService;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -37,6 +43,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 @Data
+@Slf4j
 @Accessors(fluent = true)
 @KinesisClientInternalApi
 public class ShardConsumerArgument {
@@ -94,6 +101,11 @@ public class ShardConsumerArgument {
      * Consumer ID generated from lease table ARN to uniquely identify this KCL application
      */
     private String consumerId;
+
+    /** Hash key range cached by {@link #hashKeyRange()} once resolved; null until then. */
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile HashKeyRangeForLease cachedHashKeyRange;
 
     public ShardConsumerArgument(
             @NonNull ShardInfo shardInfo,
@@ -199,5 +211,61 @@ public class ShardConsumerArgument {
         this.leaseCleanupManager = leaseCleanupManager;
         this.schemaRegistryDecoder = schemaRegistryDecoder;
         this.consumerId = consumerId;
+    }
+
+    /**
+     * Returns the shard's hash key range, used to drop KPL user records outside the shard during deaggregation, or
+     * null to deaggregate without range filtering.
+     * <p>
+     * As before, no range filtering is done when {@code skipShardSyncAtWorkerInitializationIfLeasesExist} is set.
+     * Otherwise the range comes from the {@link ShardInfo}, which copies it from the lease when the assignment is
+     * created, falling back to the {@link ShardDetector} only if it is not set there. Cached once resolved; returns
+     * null (not cached) if it cannot be resolved yet.
+     */
+    public HashKeyRangeForLease hashKeyRange() {
+        if (skipShardSyncAtWorkerInitializationIfLeasesExist) {
+            return null;
+        }
+        final HashKeyRangeForLease cached = cachedHashKeyRange;
+        if (cached != null) {
+            return cached;
+        }
+
+        HashKeyRangeForLease range = shardInfo.hashKeyRange();
+        if (range == null) {
+            // Rarely reached: KCL has stored the hash key range on every lease it creates since 2.3, and the lease
+            // coordinator copies it into the ShardInfo. Fall back to the shard detector, which may call ListShards,
+            // only for a lease created by an older KCL (1.x or 2.x before 2.3) that the leader's
+            // PeriodicShardSyncManager has not backfilled yet, or a custom lease coordinator that does not set the
+            // range. Failures are caught and retried on the next batch.
+            range = hashKeyRangeFromShardDetector();
+            if (range == null) {
+                return null;
+            }
+        }
+
+        cachedHashKeyRange = range;
+        return range;
+    }
+
+    private HashKeyRangeForLease hashKeyRangeFromShardDetector() {
+        final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
+        try {
+            final Shard shard = shardDetector.shard(shardInfo.shardId());
+            if (shard != null && shard.hashKeyRange() != null) {
+                return HashKeyRangeForLease.fromHashKeyRange(shard.hashKeyRange());
+            }
+            log.warn(
+                    "{}: Cannot get the shard, so duplicate KPL user records in the event of resharding will not be"
+                            + " dropped during deaggregation of Amazon Kinesis records.",
+                    leaseKey);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "{}: Failed to get the shard hash key range, so duplicate KPL user records in the event of"
+                            + " resharding will not be dropped during deaggregation of Amazon Kinesis records.",
+                    leaseKey,
+                    e);
+        }
+        return null;
     }
 }

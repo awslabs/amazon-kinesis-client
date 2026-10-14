@@ -26,6 +26,7 @@ import lombok.ToString;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -42,6 +43,13 @@ public class ShardInfo {
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
     private final ExtendedSequenceNumber checkpoint;
+    /**
+     * Hash key range of the shard, copied from the lease when this assignment was created. Null if the lease has no
+     * range or the creator of this ShardInfo did not provide one. Not part of equality: ShardInfo is used as a map key
+     * and may be created with or without the range for the same lease.
+     */
+    @ToString.Exclude
+    private final HashKeyRangeForLease hashKeyRange;
 
     /**
      * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
@@ -78,6 +86,26 @@ public class ShardInfo {
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
             final String streamIdentifierSer) {
+        this(shardId, concurrencyToken, parentShardIds, checkpoint, streamIdentifierSer, null);
+    }
+
+    /**
+     * Creates a new ShardInfo object that also carries the shard's hash key range from the lease.
+     * The checkpoint and hash key range are not part of the equality.
+     * @param shardId
+     * @param concurrencyToken
+     * @param parentShardIds
+     * @param checkpoint
+     * @param streamIdentifierSer
+     * @param hashKeyRange hash key range of the shard, or null if unknown
+     */
+    public ShardInfo(
+            @NonNull final String shardId,
+            final String concurrencyToken,
+            final Collection<String> parentShardIds,
+            final ExtendedSequenceNumber checkpoint,
+            final String streamIdentifierSer,
+            final HashKeyRangeForLease hashKeyRange) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -89,6 +117,7 @@ public class ShardInfo {
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
         this.streamIdentifierSerOpt = Optional.ofNullable(streamIdentifierSer);
+        this.hashKeyRange = hashKeyRange;
     }
 
     /**
