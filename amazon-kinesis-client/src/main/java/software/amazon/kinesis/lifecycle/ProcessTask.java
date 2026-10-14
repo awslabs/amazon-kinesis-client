@@ -56,12 +56,7 @@ public class ProcessTask implements ConsumerTask {
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
     private final TaskType taskType = TaskType.PROCESS;
     private final long backoffTimeMillis;
-    /**
-     * Hash key range of the shard, used to drop KPL user records outside this shard during deaggregation.
-     * Null if the range could not be determined, in which case no range filtering is applied.
-     */
     private final HashKeyRangeForLease hashKeyRange;
-
     private final ThrottlingReporter throttlingReporter;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
     private final long idleTimeInMilliseconds;

@@ -309,6 +309,8 @@ public class ConsumerStatesTest {
         final Lease lease = new Lease();
         lease.hashKeyRange(range);
         when(leaseCoordinator.getCurrentlyHeldLease(anyString())).thenReturn(null, lease);
+        // Lease copy not readable on the first call and the shard detector cannot find the shard either.
+        when(shardDetector.shard(anyString())).thenReturn(null);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
 
         ConsumerTask first = state.createTask(arg, consumer, null, taskFactory);
@@ -318,6 +320,22 @@ public class ConsumerStatesTest {
         assertThat(first, procTask(HashKeyRangeForLease.class, "hashKeyRange", nullValue(HashKeyRangeForLease.class)));
         assertThat(second, procTask(HashKeyRangeForLease.class, "hashKeyRange", equalTo(range)));
         verify(leaseCoordinator, times(2)).getCurrentlyHeldLease(anyString());
+        verify(shardDetector, times(1)).shard(anyString());
+    }
+
+    @Test
+    public void leaseNotHeldFallsBackToShardDetector() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        // getCurrentlyHeldLease returns null while the in-memory lease copy is expired (e.g. renewal lagging).
+        when(leaseCoordinator.getCurrentlyHeldLease(anyString())).thenReturn(null);
+        when(shardDetector.shard(anyString())).thenReturn(shardWithRange("0", "100"));
+
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+        // Cached once resolved: no further lease or shard detector lookups.
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+
+        verify(leaseCoordinator, times(1)).getCurrentlyHeldLease(anyString());
+        verify(shardDetector, times(1)).shard(anyString());
     }
 
     @Test

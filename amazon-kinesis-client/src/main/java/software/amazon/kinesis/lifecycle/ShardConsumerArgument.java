@@ -232,16 +232,12 @@ public class ShardConsumerArgument {
         }
 
         final Lease lease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
-        if (lease == null) {
-            return null;
-        }
-
-        HashKeyRangeForLease range = lease.hashKeyRangeForLease();
+        HashKeyRangeForLease range = lease == null ? null : lease.hashKeyRangeForLease();
         if (range == null) {
-            // Rarely reached: KCL has stored the hash key range on every lease it creates since 2.3. A lease can only
-            // lack one if it was created by an older KCL (1.x or 2.x before 2.3) and the leader's
-            // PeriodicShardSyncManager has not backfilled it yet. Only then fall back to the shard
-            // detector, which may call ListShards; failures are caught and retried on the next batch.
+            // Rarely reached: KCL has stored the hash key range on every lease it creates since 2.3. Fall back to the
+            // shard detector, which may call ListShards, only if the lease copy is not readable right now (e.g. lease
+            // renewal is lagging) or the lease was created by an older KCL (1.x or 2.x before 2.3) and the leader's
+            // PeriodicShardSyncManager has not backfilled it yet. Failures are caught and retried on the next batch.
             range = hashKeyRangeFromShardDetector();
             if (range == null) {
                 return null;
