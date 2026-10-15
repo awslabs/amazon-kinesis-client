@@ -57,6 +57,8 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -325,15 +327,19 @@ public class ConsumerStatesTest {
     }
 
     @Test
-    public void shardDetectorFailureIsCaughtAndRetried() {
+    public void shardDetectorFailurePropagatesAndIsNotCached() {
         final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
-        when(shardDetector.shard(anyString()))
-                .thenThrow(new RuntimeException("ListShards failed"))
-                .thenReturn(shardWithRange("0", "100"));
+        final RuntimeException failure = new RuntimeException("ListShards failed");
+        when(shardDetector.shard(anyString())).thenThrow(failure).thenReturn(shardWithRange("0", "100"));
 
-        // Failure is not propagated and not cached.
-        assertThat(arg.hashKeyRange(), nullValue());
-        // Retried on the next call, then cached.
+        // The failure propagates (the shard consumer's dispatch retry retries the batch) and nothing is cached.
+        try {
+            arg.hashKeyRange();
+            fail("Expected the shard detector failure to propagate");
+        } catch (RuntimeException e) {
+            assertSame(failure, e);
+        }
+        // The next attempt resolves the range, which is then cached.
         assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
         assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
 

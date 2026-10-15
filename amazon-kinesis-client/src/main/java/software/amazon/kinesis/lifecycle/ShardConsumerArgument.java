@@ -237,7 +237,8 @@ public class ShardConsumerArgument {
             // coordinator copies it into the ShardInfo. Fall back to the shard detector, which may call ListShards,
             // only for a lease created by an older KCL (1.x or 2.x before 2.3) that the leader's
             // PeriodicShardSyncManager has not backfilled yet, or a custom lease coordinator that does not set the
-            // range. Failures are caught and retried on the next batch.
+            // range. A shard detector failure propagates, so the batch is not delivered unfiltered and is retried by
+            // the shard consumer's dispatch retry; nothing is cached until the range is resolved.
             range = hashKeyRangeFromShardDetector();
             if (range == null) {
                 return null;
@@ -249,23 +250,14 @@ public class ShardConsumerArgument {
     }
 
     private HashKeyRangeForLease hashKeyRangeFromShardDetector() {
-        final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
-        try {
-            final Shard shard = shardDetector.shard(shardInfo.shardId());
-            if (shard != null && shard.hashKeyRange() != null) {
-                return HashKeyRangeForLease.fromHashKeyRange(shard.hashKeyRange());
-            }
-            log.warn(
-                    "{}: Cannot get the shard, so duplicate KPL user records in the event of resharding will not be"
-                            + " dropped during deaggregation of Amazon Kinesis records.",
-                    leaseKey);
-        } catch (RuntimeException e) {
-            log.warn(
-                    "{}: Failed to get the shard hash key range, so duplicate KPL user records in the event of"
-                            + " resharding will not be dropped during deaggregation of Amazon Kinesis records.",
-                    leaseKey,
-                    e);
+        final Shard shard = shardDetector.shard(shardInfo.shardId());
+        if (shard != null && shard.hashKeyRange() != null) {
+            return HashKeyRangeForLease.fromHashKeyRange(shard.hashKeyRange());
         }
+        log.warn(
+                "{}: Cannot get the shard, so duplicate KPL user records in the event of resharding will not be"
+                        + " dropped during deaggregation of Amazon Kinesis records.",
+                ShardInfo.getLeaseKey(shardInfo));
         return null;
     }
 }
