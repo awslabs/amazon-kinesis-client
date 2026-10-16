@@ -57,6 +57,8 @@ public class ProcessTask implements ConsumerTask {
     private final TaskType taskType = TaskType.PROCESS;
     private final long backoffTimeMillis;
     private final HashKeyRangeForLease hashKeyRange;
+    private final boolean shouldTrimKplRecordsOutsideHashKeyRange;
+
     private final ThrottlingReporter throttlingReporter;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
     private final long idleTimeInMilliseconds;
@@ -78,6 +80,7 @@ public class ProcessTask implements ConsumerTask {
             @NonNull ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
             long backoffTimeMillis,
             HashKeyRangeForLease hashKeyRange,
+            boolean shouldTrimKplRecordsOutsideHashKeyRange,
             @NonNull ThrottlingReporter throttlingReporter,
             ProcessRecordsInput processRecordsInput,
             boolean shouldCallProcessRecordsEvenForEmptyRecordList,
@@ -100,6 +103,7 @@ public class ProcessTask implements ConsumerTask {
         this.leaseStatsRecorder = leaseStatsRecorder;
 
         this.hashKeyRange = hashKeyRange;
+        this.shouldTrimKplRecordsOutsideHashKeyRange = shouldTrimKplRecordsOutsideHashKeyRange;
         this.aggregatorUtil = aggregatorUtil;
 
         this.recordProcessorCheckpointer.checkpointer().operation(PROCESS_TASK_OPERATION);
@@ -211,7 +215,7 @@ public class ProcessTask implements ConsumerTask {
     }
 
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
-        if (hashKeyRange == null) {
+        if (!shouldTrimKplRecordsOutsideHashKeyRange || hashKeyRange == null) {
             return aggregatorUtil.deaggregate(records);
         } else {
             return aggregatorUtil.deaggregate(records, hashKeyRange.startingHashKey(), hashKeyRange.endingHashKey());

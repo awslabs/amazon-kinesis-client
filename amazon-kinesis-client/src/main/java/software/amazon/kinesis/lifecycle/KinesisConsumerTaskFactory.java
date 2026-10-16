@@ -54,6 +54,7 @@ public class KinesisConsumerTaskFactory implements ConsumerTaskFactory {
                 argument.recordProcessorCheckpointer(),
                 argument.taskBackoffTimeMillis(),
                 argument.hashKeyRange(),
+                argument.shouldTrimKplRecordsOutsideHashKeyRange(),
                 throttlingReporter,
                 processRecordsInput,
                 argument.shouldCallProcessRecordsEvenForEmptyRecordList(),

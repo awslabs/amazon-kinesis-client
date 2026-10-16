@@ -43,11 +43,7 @@ public class ShardInfo {
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
     private final ExtendedSequenceNumber checkpoint;
-    /**
-     * Hash key range of the shard, copied from the lease when this assignment was created. Null if the lease has no
-     * range or the creator of this ShardInfo did not provide one. Not part of equality: ShardInfo is used as a map key
-     * and may be created with or without the range for the same lease.
-     */
+    /** Shard hash key range from the lease, or null. Not part of equality (ShardInfo is a map key). */
     @ToString.Exclude
     private final HashKeyRangeForLease hashKeyRange;
 
@@ -90,14 +86,7 @@ public class ShardInfo {
     }
 
     /**
-     * Creates a new ShardInfo object that also carries the shard's hash key range from the lease.
-     * The checkpoint and hash key range are not part of the equality.
-     * @param shardId
-     * @param concurrencyToken
-     * @param parentShardIds
-     * @param checkpoint
-     * @param streamIdentifierSer
-     * @param hashKeyRange hash key range of the shard, or null if unknown
+     * Same as above, also carrying the shard's hash key range (nullable). The range is not part of the equality.
      */
     public ShardInfo(
             @NonNull final String shardId,
