@@ -105,7 +105,7 @@ public class ShardConsumerArgument {
     /** Hash key range cached by {@link #hashKeyRange()} once resolved; null until then. */
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
-    private volatile HashKeyRangeForLease cachedHashKeyRange;
+    private HashKeyRangeForLease cachedHashKeyRange;
 
     public ShardConsumerArgument(
             @NonNull ShardInfo shardInfo,
@@ -214,18 +214,18 @@ public class ShardConsumerArgument {
     }
 
     /**
-     * Returns the shard's hash key range, used to drop KPL user records outside the shard during deaggregation, or
-     * null to deaggregate without range filtering.
-     * <p>
-     * As before, no range filtering is done when {@code skipShardSyncAtWorkerInitializationIfLeasesExist} is set.
-     * Otherwise the range comes from the {@link ShardInfo}, which copies it from the lease when the assignment is
-     * created, falling back to the {@link ShardDetector} only if it is not set there. Cached once resolved; returns
-     * null (not cached) if it cannot be resolved yet.
+     * Whether to drop KPL user records outside the shard's hash key range (duplicates after a reshard). Previously
+     * ProcessTask only looked up the range, via ListShards, when this flag was not set, so trimming stays tied to it.
+     */
+    public boolean shouldTrimKplRecordsOutsideHashKeyRange() {
+        return !skipShardSyncAtWorkerInitializationIfLeasesExist;
+    }
+
+    /**
+     * Returns the shard's hash key range from the {@link ShardInfo} (copied from the lease), falling back to the
+     * {@link ShardDetector} only when trimming is enabled. Cached once resolved; null if not known.
      */
     public HashKeyRangeForLease hashKeyRange() {
-        if (skipShardSyncAtWorkerInitializationIfLeasesExist) {
-            return null;
-        }
         final HashKeyRangeForLease cached = cachedHashKeyRange;
         if (cached != null) {
             return cached;
@@ -233,12 +233,12 @@ public class ShardConsumerArgument {
 
         HashKeyRangeForLease range = shardInfo.hashKeyRange();
         if (range == null) {
-            // Rarely reached: KCL has stored the hash key range on every lease it creates since 2.3, and the lease
-            // coordinator copies it into the ShardInfo. Fall back to the shard detector, which may call ListShards,
-            // only for a lease created by an older KCL (1.x or 2.x before 2.3) that the leader's
-            // PeriodicShardSyncManager has not backfilled yet, or a custom lease coordinator that does not set the
-            // range. A shard detector failure propagates, so the batch is not delivered unfiltered and is retried by
-            // the shard consumer's dispatch retry; nothing is cached until the range is resolved.
+            if (!shouldTrimKplRecordsOutsideHashKeyRange()) {
+                // The fallback may call ListShards; only worth it when the range is used for trimming.
+                return null;
+            }
+            // Rare: legacy lease (pre-2.3, not yet backfilled) or a coordinator that doesn't set the range. A failure
+            // propagates so the batch is retried rather than delivered unfiltered.
             range = hashKeyRangeFromShardDetector();
             if (range == null) {
                 return null;

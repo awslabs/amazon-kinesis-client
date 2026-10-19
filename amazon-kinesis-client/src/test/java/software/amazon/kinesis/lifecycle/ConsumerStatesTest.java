@@ -358,13 +358,40 @@ public class ConsumerStatesTest {
     }
 
     @Test
-    public void skipShardSyncDisablesRangeFiltering() {
-        // The default argument has skipShardSyncAtWorkerInitializationIfLeasesExist = true. As before this change, no
-        // range filtering is done in that mode, so neither the ShardInfo range nor the shard detector is consulted.
+    public void skipShardSyncDisablesTrimmingButStillPassesShardInfoRange() {
+        // The default argument has skipShardSyncAtWorkerInitializationIfLeasesExist = true, which disables trimming.
+        when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        when(shardInfo.hashKeyRange()).thenReturn(range);
+        ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
+
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
+
+        assertThat(argument.shouldTrimKplRecordsOutsideHashKeyRange(), equalTo(false));
+        // The range is still passed to the task, but not used for trimming.
+        assertThat(task, procTask(HashKeyRangeForLease.class, "hashKeyRange", equalTo(range)));
+        assertThat(task, procTask(Boolean.class, "shouldTrimKplRecordsOutsideHashKeyRange", equalTo(false)));
+        verifyNoInteractions(shardDetector);
+    }
+
+    @Test
+    public void skipShardSyncDoesNotUseShardDetectorFallback() {
+        // skip=true and no range in the ShardInfo: the remote fallback is not used, since trimming is disabled.
         assertThat(argument.hashKeyRange(), nullValue());
 
-        verify(shardInfo, never()).hashKeyRange();
         verifyNoInteractions(shardDetector);
+    }
+
+    @Test
+    public void trimmingEnabledWhenSkipShardSyncIsFalse() {
+        when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        when(shardInfo.hashKeyRange()).thenReturn(HashKeyRangeForLease.deserialize("0", "100"));
+
+        ConsumerTask task = ShardConsumerState.PROCESSING.consumerState().createTask(arg, consumer, null, taskFactory);
+
+        assertThat(arg.shouldTrimKplRecordsOutsideHashKeyRange(), equalTo(true));
+        assertThat(task, procTask(Boolean.class, "shouldTrimKplRecordsOutsideHashKeyRange", equalTo(true)));
     }
 
     private ShardConsumerArgument argumentWithSkipShardSync(boolean skipShardSync) {
