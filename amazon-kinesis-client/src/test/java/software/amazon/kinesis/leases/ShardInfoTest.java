@@ -22,10 +22,12 @@ import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -118,5 +120,20 @@ public class ShardInfoTest {
         assertTrue(
                 "Shard info objects should have same hashCode for the same arguments",
                 equalShardInfo.hashCode() == testShardInfo.hashCode());
+    }
+
+    @Test
+    public void testHashKeyRangeIsNotPartOfEqualityOrToString() {
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        final ShardInfo withRange =
+                new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST, null, range);
+
+        assertThat(withRange.hashKeyRange(), equalTo(range));
+        assertThat(testShardInfo.hashKeyRange(), nullValue());
+        // ShardInfo is a map key for shard consumers; the range must not affect identity.
+        assertTrue(withRange.equals(testShardInfo));
+        assertTrue(testShardInfo.equals(withRange));
+        assertThat(withRange.hashCode(), equalTo(testShardInfo.hashCode()));
+        assertFalse(withRange.toString().contains("hashKeyRange"));
     }
 }
