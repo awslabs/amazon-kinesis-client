@@ -16,6 +16,7 @@ package software.amazon.kinesis.leases.dynamodb;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -25,15 +26,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
 import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -183,5 +189,44 @@ class DynamoDBLeaseCoordinatorTest {
 
         ExecutorService discoveryPool = getLeaseDiscoveryThreadPool();
         assertTrue(discoveryPool.isShutdown(), "leaseDiscoveryThreadPool should be shut down after stop() is called");
+    }
+
+    @Test
+    void convertLeaseToAssignmentCopiesHashKeyRange() {
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        final Lease lease = new Lease();
+        lease.leaseKey("shardId-000000000000");
+        lease.concurrencyToken(UUID.randomUUID());
+        lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease.hashKeyRange(range);
+
+        assertEquals(
+                range, DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease).hashKeyRange());
+    }
+
+    @Test
+    void convertMultiStreamLeaseToAssignmentCopiesHashKeyRange() {
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        final MultiStreamLease lease = new MultiStreamLease();
+        lease.streamIdentifier("123456789012:stream:1");
+        lease.shardId("shardId-000000000000");
+        lease.leaseKey(MultiStreamLease.getLeaseKey("123456789012:stream:1", "shardId-000000000000"));
+        lease.concurrencyToken(UUID.randomUUID());
+        lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        lease.hashKeyRange(range);
+
+        final ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
+        assertEquals(range, shardInfo.hashKeyRange());
+        assertEquals("123456789012:stream:1", shardInfo.streamIdentifierSerOpt().get());
+    }
+
+    @Test
+    void convertLeaseWithoutHashKeyRangeToAssignment() {
+        final Lease lease = new Lease();
+        lease.leaseKey("shardId-000000000000");
+        lease.concurrencyToken(UUID.randomUUID());
+        lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+
+        assertNull(DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease).hashKeyRange());
     }
 }
