@@ -20,11 +20,10 @@ import java.util.ListIterator;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.StreamIdentifier;
-import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -56,7 +55,9 @@ public class ProcessTask implements ConsumerTask {
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
     private final TaskType taskType = TaskType.PROCESS;
     private final long backoffTimeMillis;
-    private final Shard shard;
+    private final HashKeyRangeForLease hashKeyRange;
+    private final boolean shouldTrimKplRecordsOutsideHashKeyRange;
+
     private final ThrottlingReporter throttlingReporter;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
     private final long idleTimeInMilliseconds;
@@ -76,8 +77,8 @@ public class ProcessTask implements ConsumerTask {
             @NonNull ShardRecordProcessor shardRecordProcessor,
             @NonNull ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
             long backoffTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ShardDetector shardDetector,
+            HashKeyRangeForLease hashKeyRange,
+            boolean shouldTrimKplRecordsOutsideHashKeyRange,
             @NonNull ThrottlingReporter throttlingReporter,
             ProcessRecordsInput processRecordsInput,
             boolean shouldCallProcessRecordsEvenForEmptyRecordList,
@@ -97,17 +98,8 @@ public class ProcessTask implements ConsumerTask {
         this.metricsFactory = metricsFactory;
         this.schemaRegistryDecoder = schemaRegistryDecoder;
 
-        if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
-            this.shard = shardDetector.shard(shardInfo.shardId());
-        } else {
-            this.shard = null;
-        }
-
-        if (this.shard == null && !skipShardSyncAtWorkerInitializationIfLeasesExist) {
-            log.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
-                    + "in the event of resharding will not be dropped during deaggregation of Amazon "
-                    + "Kinesis records.");
-        }
+        this.hashKeyRange = hashKeyRange;
+        this.shouldTrimKplRecordsOutsideHashKeyRange = shouldTrimKplRecordsOutsideHashKeyRange;
         this.aggregatorUtil = aggregatorUtil;
 
         this.recordProcessorCheckpointer.checkpointer().operation(PROCESS_TASK_OPERATION);
@@ -209,13 +201,10 @@ public class ProcessTask implements ConsumerTask {
     }
 
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
-        if (shard == null) {
+        if (!shouldTrimKplRecordsOutsideHashKeyRange || hashKeyRange == null) {
             return aggregatorUtil.deaggregate(records);
         } else {
-            return aggregatorUtil.deaggregate(
-                    records,
-                    shard.hashKeyRange().startingHashKey(),
-                    shard.hashKeyRange().endingHashKey());
+            return aggregatorUtil.deaggregate(records, hashKeyRange.startingHashKey(), hashKeyRange.endingHashKey());
         }
     }
 

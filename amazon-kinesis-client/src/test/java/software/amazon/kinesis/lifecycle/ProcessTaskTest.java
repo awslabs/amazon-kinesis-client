@@ -46,10 +46,8 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ShardDetector;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -91,14 +89,10 @@ public class ProcessTaskTest {
     private static final byte[] SCHEMA_REGISTRY_PAYLOAD = new byte[] {01, 05, 03, 05};
 
     private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
-    private boolean skipShardSyncAtWorkerInitializationIfLeasesExist = true;
     private ShardInfo shardInfo;
 
     @Mock
     private ProcessRecordsInput processRecordsInput;
-
-    @Mock
-    private ShardDetector shardDetector;
 
     @Mock
     private GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
@@ -127,36 +121,45 @@ public class ProcessTaskTest {
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
-        return makeProcessTask(
-                processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist);
+        return makeProcessTask(processRecordsInput, new AggregatorUtil());
     }
 
     private ProcessTask makeProcessTask(
             ProcessRecordsInput processRecordsInput, GlueSchemaRegistryDeserializer deserializer) {
         return makeProcessTask(
-                processRecordsInput,
-                new AggregatorUtil(),
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new SchemaRegistryDecoder(deserializer));
+                processRecordsInput, new AggregatorUtil(), new SchemaRegistryDecoder(deserializer), null);
+    }
+
+    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil) {
+        return makeProcessTask(processRecordsInput, aggregatorUtil, null, null);
     }
 
     private ProcessTask makeProcessTask(
-            ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil, boolean skipShardSync) {
-        return makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSync, null);
+            ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil, HashKeyRangeForLease hashKeyRange) {
+        return makeProcessTask(processRecordsInput, aggregatorUtil, null, hashKeyRange);
     }
 
     private ProcessTask makeProcessTask(
             ProcessRecordsInput processRecordsInput,
             AggregatorUtil aggregatorUtil,
-            boolean skipShardSync,
-            SchemaRegistryDecoder schemaRegistryDecoder) {
+            SchemaRegistryDecoder schemaRegistryDecoder,
+            HashKeyRangeForLease hashKeyRange) {
+        return makeProcessTask(processRecordsInput, aggregatorUtil, schemaRegistryDecoder, hashKeyRange, true);
+    }
+
+    private ProcessTask makeProcessTask(
+            ProcessRecordsInput processRecordsInput,
+            AggregatorUtil aggregatorUtil,
+            SchemaRegistryDecoder schemaRegistryDecoder,
+            HashKeyRangeForLease hashKeyRange,
+            boolean shouldTrimKplRecordsOutsideHashKeyRange) {
         return new ProcessTask(
                 shardInfo,
                 shardRecordProcessor,
                 checkpointer,
                 taskBackoffTimeMillis,
-                skipShardSync,
-                shardDetector,
+                hashKeyRange,
+                shouldTrimKplRecordsOutsideHashKeyRange,
                 throttlingReporter,
                 processRecordsInput,
                 shouldCallProcessRecordsEvenForEmptyRecordList,
@@ -232,7 +235,7 @@ public class ProcessTaskTest {
         when(failingAggregatorUtil.deaggregate(any())).thenThrow(failure);
 
         try {
-            makeProcessTask(processRecordsInput, failingAggregatorUtil, true).call();
+            makeProcessTask(processRecordsInput, failingAggregatorUtil).call();
             fail("Expected the pre-delivery failure to be rethrown");
         } catch (RuntimeException e) {
             assertSame(failure, e);
@@ -411,6 +414,81 @@ public class ProcessTaskTest {
         String highHashKey = BigInteger.ONE.shiftLeft(68).toString();
 
         ControlledHashAggregatorUtil aggregatorUtil = new ControlledHashAggregatorUtil(lowHashKey, highHashKey);
+        KinesisClientRecord rawRecord = makeMixedRangeAggregatedRecord(aggregatorUtil, sequenceNumber);
+
+        when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
+        ProcessTask processTask = makeProcessTask(
+                processRecordsInput, aggregatorUtil, HashKeyRangeForLease.deserialize(lowHashKey, highHashKey));
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(
+                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+                new ExtendedSequenceNumber(rawRecord.sequenceNumber(), MIXED_RANGE_RECORD_COUNT + 1L));
+
+        assertThat(outcome.processRecordsCall.records().size(), equalTo(0));
+    }
+
+    @Test
+    public void testHashKeyRangeWithTrimmingDisabledDeaggregatesWithoutRangeFiltering() throws Exception {
+        BigInteger sequenceNumber = new BigInteger(120, ThreadLocalRandom.current());
+
+        String lowHashKey = BigInteger.ONE.shiftLeft(60).toString();
+        String highHashKey = BigInteger.ONE.shiftLeft(68).toString();
+
+        ControlledHashAggregatorUtil aggregatorUtil = new ControlledHashAggregatorUtil(lowHashKey, highHashKey);
+        KinesisClientRecord rawRecord = makeMixedRangeAggregatedRecord(aggregatorUtil, sequenceNumber);
+
+        when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
+        // The range is known, but trimming is disabled (skipShardSyncAtWorkerInitializationIfLeasesExist=true).
+        ProcessTask processTask = makeProcessTask(
+                processRecordsInput,
+                aggregatorUtil,
+                null,
+                HashKeyRangeForLease.deserialize(lowHashKey, highHashKey),
+                false);
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(
+                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+                new ExtendedSequenceNumber(rawRecord.sequenceNumber(), MIXED_RANGE_RECORD_COUNT + 1L));
+
+        assertEquals(
+                MIXED_RANGE_RECORD_COUNT,
+                outcome.getProcessRecordsCall().records().size());
+    }
+
+    @Test
+    public void testNoHashKeyRangeDeaggregatesWithoutRangeFiltering() throws Exception {
+        BigInteger sequenceNumber = new BigInteger(120, ThreadLocalRandom.current());
+
+        String lowHashKey = BigInteger.ONE.shiftLeft(60).toString();
+        String highHashKey = BigInteger.ONE.shiftLeft(68).toString();
+
+        ControlledHashAggregatorUtil aggregatorUtil = new ControlledHashAggregatorUtil(lowHashKey, highHashKey);
+        KinesisClientRecord rawRecord = makeMixedRangeAggregatedRecord(aggregatorUtil, sequenceNumber);
+
+        when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
+        ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, (HashKeyRangeForLease) null);
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(
+                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+                new ExtendedSequenceNumber(rawRecord.sequenceNumber(), MIXED_RANGE_RECORD_COUNT + 1L));
+
+        // The batch is delivered in full, deaggregated without range filtering.
+        assertEquals(
+                MIXED_RANGE_RECORD_COUNT,
+                outcome.getProcessRecordsCall().records().size());
+    }
+
+    private static final int MIXED_RANGE_RECORD_COUNT = 15;
+
+    /**
+     * Builds a single aggregated Kinesis record containing 5 KPL user records in range, 5 below range and 5 above
+     * range of the given {@link ControlledHashAggregatorUtil}.
+     */
+    private KinesisClientRecord makeMixedRangeAggregatedRecord(
+            ControlledHashAggregatorUtil aggregatorUtil, BigInteger sequenceNumber) throws Exception {
         AggregatedRecord.Builder aggregatedRecord = AggregatedRecord.newBuilder();
         Instant approximateArrivalTime = Instant.now();
         int recordIndex = 0;
@@ -446,31 +524,12 @@ public class ProcessTaskTest {
 
         ByteBuffer rawRecordData = ByteBuffer.wrap(bos.toByteArray());
 
-        KinesisClientRecord rawRecord = KinesisClientRecord.builder()
+        return KinesisClientRecord.builder()
                 .data(rawRecordData)
                 .approximateArrivalTimestamp(approximateArrivalTime)
                 .partitionKey("p-01")
                 .sequenceNumber(sequenceNumber.toString())
                 .build();
-
-        when(shardDetector.shard(any()))
-                .thenReturn(Shard.builder()
-                        .shardId("Shard-01")
-                        .hashKeyRange(HashKeyRange.builder()
-                                .startingHashKey(lowHashKey)
-                                .endingHashKey(highHashKey)
-                                .build())
-                        .build());
-
-        when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
-        ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
-        ShardRecordProcessorOutcome outcome = testWithRecords(
-                processTask,
-                new ExtendedSequenceNumber(
-                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
-                new ExtendedSequenceNumber(sequenceNumber.toString(), recordIndex + 1L));
-
-        assertThat(outcome.processRecordsCall.records().size(), equalTo(0));
     }
 
     @Test
@@ -514,17 +573,9 @@ public class ProcessTaskTest {
             rawRecords.add(rawRecord);
         }
 
-        when(shardDetector.shard(any()))
-                .thenReturn(Shard.builder()
-                        .shardId("Shard-01")
-                        .hashKeyRange(HashKeyRange.builder()
-                                .startingHashKey(lowHashKey)
-                                .endingHashKey(highHashKey)
-                                .build())
-                        .build());
-
         when(processRecordsInput.records()).thenReturn(rawRecords);
-        ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
+        ProcessTask processTask = makeProcessTask(
+                processRecordsInput, aggregatorUtil, HashKeyRangeForLease.deserialize(lowHashKey, highHashKey));
         ShardRecordProcessorOutcome outcome = testWithRecords(
                 processTask,
                 new ExtendedSequenceNumber(
@@ -760,7 +811,7 @@ public class ProcessTaskTest {
             AggregatorUtil aggregatorUtil) {
         when(processRecordsInput.records()).thenReturn(records);
         return testWithRecords(
-                makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSyncAtWorkerInitializationIfLeasesExist),
+                makeProcessTask(processRecordsInput, aggregatorUtil),
                 lastCheckpointValue,
                 largestPermittedCheckpointValue);
     }
