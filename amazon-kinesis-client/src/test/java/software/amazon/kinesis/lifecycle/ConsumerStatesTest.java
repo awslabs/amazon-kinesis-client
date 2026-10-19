@@ -30,7 +30,10 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -53,7 +56,14 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 
@@ -264,6 +274,151 @@ public class ConsumerStatesTest {
 
         assertThat(state.state(), equalTo(ShardConsumerState.PROCESSING));
         assertThat(state.taskType(), equalTo(TaskType.PROCESS));
+    }
+
+    @Test
+    public void processingStateRetrievesHashKeyRangeFromShardInfoOnlyOnce() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        when(shardInfo.hashKeyRange()).thenReturn(range);
+        ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
+
+        ConsumerTask first = state.createTask(arg, consumer, null);
+        ConsumerTask second = state.createTask(arg, consumer, null);
+
+        assertThat(first, procTask(HashKeyRangeForLease.class, "hashKeyRange", equalTo(range)));
+        assertThat(second, procTask(HashKeyRangeForLease.class, "hashKeyRange", equalTo(range)));
+        verify(shardInfo, times(1)).hashKeyRange();
+        // The live held-lease copy is not consulted.
+        verify(leaseCoordinator, never()).getCurrentlyHeldLease(anyString());
+        verifyZeroInteractions(shardDetector);
+    }
+
+    @Test
+    public void shardInfoWithoutRangeFallsBackToShardDetectorOnlyOnce() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        // shardInfo.hashKeyRange() is null: a legacy lease, or a custom lease coordinator that does not set it.
+        when(shardDetector.shard(anyString())).thenReturn(shardWithRange("0", "100"));
+
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+
+        verify(shardDetector, times(1)).shard(anyString());
+        verify(leaseCoordinator, never()).getCurrentlyHeldLease(anyString());
+    }
+
+    @Test
+    public void shardInfoRangeIsPreferredOverShardDetector() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        when(shardInfo.hashKeyRange()).thenReturn(HashKeyRangeForLease.deserialize("0", "100"));
+
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+
+        verifyZeroInteractions(shardDetector);
+    }
+
+    @Test
+    public void shardDetectorFailurePropagatesAndIsNotCached() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        final RuntimeException failure = new RuntimeException("ListShards failed");
+        when(shardDetector.shard(anyString())).thenThrow(failure).thenReturn(shardWithRange("0", "100"));
+
+        // The failure propagates (the shard consumer's dispatch retry retries the batch) and nothing is cached.
+        try {
+            arg.hashKeyRange();
+            fail("Expected the shard detector failure to propagate");
+        } catch (RuntimeException e) {
+            assertSame(failure, e);
+        }
+        // The next attempt resolves the range, which is then cached.
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+
+        verify(shardDetector, times(2)).shard(anyString());
+    }
+
+    @Test
+    public void shardNotFoundIsNotCached() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        when(shardDetector.shard(anyString())).thenReturn(null, shardWithRange("0", "100"));
+
+        assertThat(arg.hashKeyRange(), nullValue());
+        assertThat(arg.hashKeyRange(), equalTo(HashKeyRangeForLease.deserialize("0", "100")));
+
+        verify(shardDetector, times(2)).shard(anyString());
+    }
+
+    @Test
+    public void skipShardSyncDisablesTrimmingButStillPassesShardInfoRange() {
+        // The default argument has skipShardSyncAtWorkerInitializationIfLeasesExist = true, which disables trimming.
+        final HashKeyRangeForLease range = HashKeyRangeForLease.deserialize("0", "100");
+        when(shardInfo.hashKeyRange()).thenReturn(range);
+        ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
+
+        ConsumerTask task = state.createTask(argument, consumer, null);
+
+        assertThat(argument.shouldTrimKplRecordsOutsideHashKeyRange(), equalTo(false));
+        // The range is still passed to the task, but not used for trimming.
+        assertThat(task, procTask(HashKeyRangeForLease.class, "hashKeyRange", equalTo(range)));
+        assertThat(task, procTask(Boolean.class, "shouldTrimKplRecordsOutsideHashKeyRange", equalTo(false)));
+        verifyZeroInteractions(shardDetector);
+    }
+
+    @Test
+    public void skipShardSyncDoesNotUseShardDetectorFallback() {
+        // skip=true and no range in the ShardInfo: the remote fallback is not used, since trimming is disabled.
+        assertThat(argument.hashKeyRange(), nullValue());
+
+        verifyZeroInteractions(shardDetector);
+    }
+
+    @Test
+    public void trimmingEnabledWhenSkipShardSyncIsFalse() {
+        final ShardConsumerArgument arg = argumentWithSkipShardSync(false);
+        when(shardInfo.hashKeyRange()).thenReturn(HashKeyRangeForLease.deserialize("0", "100"));
+
+        ConsumerTask task = ShardConsumerState.PROCESSING.consumerState().createTask(arg, consumer, null);
+
+        assertThat(arg.shouldTrimKplRecordsOutsideHashKeyRange(), equalTo(true));
+        assertThat(task, procTask(Boolean.class, "shouldTrimKplRecordsOutsideHashKeyRange", equalTo(true)));
+    }
+
+    private ShardConsumerArgument argumentWithSkipShardSync(boolean skipShardSync) {
+        return new ShardConsumerArgument(
+                shardInfo,
+                StreamIdentifier.singleStreamInstance(STREAM_NAME),
+                leaseCoordinator,
+                executorService,
+                recordsPublisher,
+                shardRecordProcessor,
+                checkpointer,
+                recordProcessorCheckpointer,
+                parentShardPollIntervalMillis,
+                taskBackoffTimeMillis,
+                skipShardSync,
+                listShardsBackoffTimeInMillis,
+                maxListShardsRetryAttempts,
+                shouldCallProcessRecordsEvenForEmptyRecordList,
+                idleTimeInMillis,
+                INITIAL_POSITION_IN_STREAM,
+                cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards,
+                shardDetector,
+                new AggregatorUtil(),
+                hierarchicalShardSyncer,
+                metricsFactory,
+                leaseCleanupManager,
+                schemaRegistryDecoder);
+    }
+
+    private static Shard shardWithRange(String startingHashKey, String endingHashKey) {
+        return Shard.builder()
+                .shardId("shardId-000000000000")
+                .hashKeyRange(HashKeyRange.builder()
+                        .startingHashKey(startingHashKey)
+                        .endingHashKey(endingHashKey)
+                        .build())
+                .build();
     }
 
     @Test
