@@ -61,7 +61,7 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
     private final boolean useAbsoluteThreshold;
     private final Map<String, Double> workerMetricsToFleetLevelAverageMap = new HashMap<>();
     private final PriorityQueue<WorkerMetricStats> assignableWorkerSortedByAvailableCapacity;
-    private final int targetLeasePerWorker;
+    private final long targetLeasePerWorker;
 
     public VarianceBasedLeaseAssignmentDecider(
             final LeaseAssignmentManager.InMemoryStorageView inMemoryStorageView,
@@ -106,10 +106,10 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
                 .collect(Collectors.toList());
     }
 
-    private int getTargetLeasePerWorker() {
-        final int totalWorkers =
+    private long getTargetLeasePerWorker() {
+        final long totalWorkers =
                 Math.max(inMemoryStorageView.getAssignableWorkers().size(), 1);
-        return Math.max(inMemoryStorageView.getLeaseList().size() / totalWorkers, 1);
+        return Math.max(inMemoryStorageView.getAssignableLeaseCount() / totalWorkers, 1);
     }
 
     @Override
