@@ -461,10 +461,16 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                     lease.concurrencyToken().toString(),
                     lease.parentShardIds(),
                     lease.checkpoint(),
-                    ((MultiStreamLease) lease).streamIdentifier());
+                    ((MultiStreamLease) lease).streamIdentifier(),
+                    lease.hashKeyRangeForLease());
         } else {
             return new ShardInfo(
-                    lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(), lease.checkpoint());
+                    lease.leaseKey(),
+                    lease.concurrencyToken().toString(),
+                    lease.parentShardIds(),
+                    lease.checkpoint(),
+                    null,
+                    lease.hashKeyRangeForLease());
         }
     }
 
