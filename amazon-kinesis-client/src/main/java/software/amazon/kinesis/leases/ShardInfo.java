@@ -26,6 +26,7 @@ import lombok.ToString;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -42,6 +43,9 @@ public class ShardInfo {
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
     private final ExtendedSequenceNumber checkpoint;
+    /** Shard hash key range from the lease, or null. Not part of equality (ShardInfo is a map key). */
+    @ToString.Exclude
+    private final HashKeyRangeForLease hashKeyRange;
 
     /**
      * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
@@ -78,6 +82,19 @@ public class ShardInfo {
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
             final String streamIdentifierSer) {
+        this(shardId, concurrencyToken, parentShardIds, checkpoint, streamIdentifierSer, null);
+    }
+
+    /**
+     * Same as above, also carrying the shard's hash key range (nullable). The range is not part of the equality.
+     */
+    public ShardInfo(
+            @NonNull final String shardId,
+            final String concurrencyToken,
+            final Collection<String> parentShardIds,
+            final ExtendedSequenceNumber checkpoint,
+            final String streamIdentifierSer,
+            final HashKeyRangeForLease hashKeyRange) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -89,6 +106,7 @@ public class ShardInfo {
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
         this.streamIdentifierSerOpt = Optional.ofNullable(streamIdentifierSer);
+        this.hashKeyRange = hashKeyRange;
     }
 
     /**
