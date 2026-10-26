@@ -44,8 +44,8 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 @Slf4j
 @KinesisClientInternalApi
 public class ProcessTask implements ConsumerTask {
-    private static final String PROCESS_TASK_OPERATION = "ProcessTask";
-    private static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
+    static final String PROCESS_TASK_OPERATION = "ProcessTask";
+    static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
@@ -65,6 +65,11 @@ public class ProcessTask implements ConsumerTask {
     private final AggregatorUtil aggregatorUtil;
     private final String shardInfoId;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
+
+    /**
+     * Set once the batch has been handed to the record processor. Failures before this point must be retried.
+     */
+    private boolean delivered = false;
 
     public ProcessTask(
             @NonNull ShardInfo shardInfo,
@@ -166,17 +171,23 @@ public class ProcessTask implements ConsumerTask {
                             RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 }
 
-                recordProcessorCheckpointer.largestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
+                final ExtendedSequenceNumber largestPermittedCheckpointValue = filterAndGetMaxExtendedSequenceNumber(
                         shardScope,
                         records,
                         recordProcessorCheckpointer.lastCheckpointValue(),
-                        recordProcessorCheckpointer.largestPermittedCheckpointValue()));
+                        recordProcessorCheckpointer.largestPermittedCheckpointValue());
 
                 if (shouldCallProcessRecords(records)) {
-                    callProcessRecords(processRecordsInput, records);
+                    callProcessRecords(processRecordsInput, records, largestPermittedCheckpointValue);
                 }
                 success = true;
             } catch (RuntimeException e) {
+                if (!delivered) {
+                    // Failed before the batch reached the record processor: rethrow so the batch is retried, not
+                    // skipped.
+                    throw e;
+                }
+                // The record processor already received the batch; retrying would redeliver it.
                 log.error("ShardId {}: Caught exception: ", shardInfoId, e);
                 exception = e;
                 backoff();
@@ -228,7 +239,10 @@ public class ProcessTask implements ConsumerTask {
      * @param records
      *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
-    private void callProcessRecords(ProcessRecordsInput input, List<KinesisClientRecord> records) {
+    private void callProcessRecords(
+            ProcessRecordsInput input,
+            List<KinesisClientRecord> records,
+            ExtendedSequenceNumber largestPermittedCheckpointValue) {
         log.debug("Calling application processRecords() with {} records from {}", records.size(), shardInfoId);
 
         final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
@@ -247,6 +261,10 @@ public class ProcessTask implements ConsumerTask {
         MetricsUtil.addShardId(scope, shardInfo.shardId());
         final long startTime = System.currentTimeMillis();
         try {
+            // Only allow checkpointing up to this batch once it is delivered, so the application cannot checkpoint
+            // past a batch that failed before delivery and will be retried.
+            recordProcessorCheckpointer.largestPermittedCheckpointValue(largestPermittedCheckpointValue);
+            delivered = true;
             shardRecordProcessor.processRecords(processRecordsInput);
         } catch (Exception e) {
             log.error(
