@@ -3,6 +3,11 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+## Release 2.7.4 (2026-10-30)
+* [#1829](https://github.com/awslabs/amazon-kinesis-client/pull/1829) Resolve shard hash key range from the lease via ShardInfo instead of ListShards
+* [#1830](https://github.com/awslabs/amazon-kinesis-client/pull/1830) Retry records delivery in shardConsumer
+* [#1839](https://github.com/awslabs/amazon-kinesis-client/pull/1839) Emit RecordsFailedProcessing when the record processor throws
+
 ## Release 2.7.3 (2026-06-04)
 * [#1764](https://github.com/awslabs/amazon-kinesis-client/pull/1764) Fix FanoutRecordsPublisher restartFrom behavior at SHARD_END
 
