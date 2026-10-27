@@ -50,6 +50,7 @@ public class ProcessTask implements ConsumerTask {
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
     private static final String MILLIS_BEHIND_LATEST_METRIC = "MillisBehindLatest";
+    private static final String RECORDS_FAILED_PROCESSING_METRIC = "RecordsFailedProcessing";
 
     private final ShardInfo shardInfo;
     private final ShardRecordProcessor shardRecordProcessor;
@@ -175,7 +176,8 @@ public class ProcessTask implements ConsumerTask {
 
                 if (shouldCallProcessRecords(records)) {
                     publishLeaseStats(records);
-                    callProcessRecords(processRecordsInput, records, largestPermittedCheckpointValue);
+                    callProcessRecords(
+                            processRecordsInput, records, largestPermittedCheckpointValue, shardScope, appScope);
                 }
                 success = true;
             } catch (RuntimeException e) {
@@ -245,7 +247,9 @@ public class ProcessTask implements ConsumerTask {
     private void callProcessRecords(
             ProcessRecordsInput input,
             List<KinesisClientRecord> records,
-            ExtendedSequenceNumber largestPermittedCheckpointValue) {
+            ExtendedSequenceNumber largestPermittedCheckpointValue,
+            MetricsScope shardScope,
+            MetricsScope appScope) {
         log.debug("Calling application processRecords() with {} records from {}", records.size(), shardInfoId);
 
         final ProcessRecordsInput processRecordsInput = input.toBuilder()
@@ -253,11 +257,6 @@ public class ProcessTask implements ConsumerTask {
                 .checkpointer(recordProcessorCheckpointer)
                 .build();
 
-        final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
-        shardInfo
-                .streamIdentifierSerOpt()
-                .ifPresent(streamId -> MetricsUtil.addStreamId(scope, StreamIdentifier.multiStreamInstance(streamId)));
-        MetricsUtil.addShardId(scope, shardInfo.shardId());
         final long startTime = System.currentTimeMillis();
         try {
             // Only allow checkpointing up to this batch once it is delivered, so the application cannot checkpoint
@@ -271,9 +270,16 @@ public class ProcessTask implements ConsumerTask {
                     shardInfoId,
                     e);
             log.error("ShardId {}: Skipping over the following data records: {}", shardInfoId, records);
+            // KCL does not retry here, so this is an upper bound on records impacted by record processor failures.
+            if (!records.isEmpty()) {
+                shardScope.addData(
+                        RECORDS_FAILED_PROCESSING_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                appScope.addData(
+                        RECORDS_FAILED_PROCESSING_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            }
         } finally {
-            MetricsUtil.addLatency(scope, RECORD_PROCESSOR_PROCESS_RECORDS_METRIC, startTime, MetricsLevel.SUMMARY);
-            MetricsUtil.endScope(scope);
+            MetricsUtil.addLatency(
+                    shardScope, RECORD_PROCESSOR_PROCESS_RECORDS_METRIC, startTime, MetricsLevel.SUMMARY);
         }
     }
 
