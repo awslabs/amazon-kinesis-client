@@ -393,6 +393,54 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         assertTrue(expiredLeases.isEmpty());
     }
 
+    @Test
+    void balanceWorkerVariance_allLoadedWorkersAtTarget_emptyWorkerStealsUpToTargetMinusOne() {
+        // 3 workers at target (3 leases each) and 1 new worker with 0 leases. target = ceil(9 / 4) = 3.
+        // Like KCL 2.x, the new worker steals 1 lease at a time while it needs more than 1, ending at target - 1.
+        Map<String, Set<Lease>> workerToLeasesMap = workersWithLeaseCounts("worker1", 3, "worker2", 3, "worker3", 3);
+        workerToLeasesMap.put("newWorker", new HashSet<>());
+        stubStorageView(workerToLeasesMap);
+
+        decider.balanceWorkerVariance();
+
+        verify(inMemoryStorageView, times(2)).performLeaseAssignment(any(), eq("newWorker"));
+        verify(inMemoryStorageView, times(2)).performLeaseAssignment(any(), any());
+    }
+
+    @Test
+    void balanceWorkerVariance_workerNeedsOnlyOneLease_noStealFromWorkersAtTarget() {
+        // worker4 has target - 1 leases. target = ceil(11 / 4) = 3. Like KCL 2.x, it does not steal.
+        Map<String, Set<Lease>> workerToLeasesMap =
+                workersWithLeaseCounts("worker1", 3, "worker2", 3, "worker3", 3, "worker4", 2);
+        stubStorageView(workerToLeasesMap);
+
+        decider.balanceWorkerVariance();
+
+        verify(inMemoryStorageView, never()).performLeaseAssignment(any(), any());
+    }
+
+    private Map<String, Set<Lease>> workersWithLeaseCounts(Object... workerAndCount) {
+        Map<String, Set<Lease>> workerToLeasesMap = new HashMap<>();
+        for (int i = 0; i < workerAndCount.length; i += 2) {
+            String worker = (String) workerAndCount[i];
+            int count = (Integer) workerAndCount[i + 1];
+            Set<Lease> leases = new HashSet<>();
+            for (int j = 0; j < count; j++) {
+                leases.add(createLease(worker + "-lease" + j, worker, 100L));
+            }
+            workerToLeasesMap.put(worker, leases);
+        }
+        return workerToLeasesMap;
+    }
+
+    private void stubStorageView(Map<String, Set<Lease>> workerToLeasesMap) {
+        List<Lease> allLeases = new ArrayList<>();
+        workerToLeasesMap.values().forEach(allLeases::addAll);
+        when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
+        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>(workerToLeasesMap.keySet()));
+        when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
+    }
+
     private Lease createLease(String leaseKey, String owner, long lastCounterIncrement) {
         Lease lease = mock(Lease.class);
         when(lease.leaseKey()).thenReturn(leaseKey);

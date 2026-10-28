@@ -130,11 +130,12 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
             final int needed = target - underloaded.getValue();
             final int excess = overloaded.getValue() - target;
 
-            if (needed <= 0) {
+            if (needed <= 0 || (needed == 1 && excess <= 0)) {
                 left++;
                 continue;
             }
-            if (excess <= 0) {
+            // KCL 2.x DynamoDBLeaseTaker rule: steal 1 if we need > 1 and the most loaded worker has target leases.
+            if (excess < 0) {
                 right--;
                 continue;
             }
