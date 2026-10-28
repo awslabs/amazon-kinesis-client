@@ -677,15 +677,17 @@ public final class LeaseAssignmentManager {
 
         /**
          * Number of total leases that are assignable by the leader. With respect to the FleetSegmentingHandler,
-         * the current Leader should be able to assign all leases, and the deploying Leader can only assign leases
-         * whose owner has the same version.
+         * the current Leader should be able to assign unassigned leases and all owned leases, and the DeployingLeader
+         * can only assign leases whose owner has the same version.
          */
         public long getAssignableLeaseCount() {
-            final List<WorkerMetricStats> assignableWorkers = getAssignableWorkers();
-            final Set<String> assignableWorkerIds = assignableWorkers.stream()
+            if (segmentingHandler.isOnCurrentVersion()) {
+                return leaseList.size();
+            }
+            final Set<String> assignableWorkerIds = getAssignableWorkers().stream()
                     .map(WorkerMetricStats::getWorkerId)
                     .collect(Collectors.toSet());
-            return getLeaseList().stream()
+            return leaseList.stream()
                     .map(Lease::actualOwner)
                     .filter(Objects::nonNull)
                     .filter(assignableWorkerIds::contains)
