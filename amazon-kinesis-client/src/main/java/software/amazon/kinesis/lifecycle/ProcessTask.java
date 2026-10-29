@@ -159,11 +159,6 @@ public class ProcessTask implements ConsumerTask {
                     records = schemaRegistryDecoder.decode(records);
                 }
 
-                if (!records.isEmpty()) {
-                    shardScope.addData(
-                            RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
-                }
-
                 final ExtendedSequenceNumber largestPermittedCheckpointValue = filterAndGetMaxExtendedSequenceNumber(
                         shardScope,
                         records,
@@ -254,6 +249,10 @@ public class ProcessTask implements ConsumerTask {
             recordProcessorCheckpointer.largestPermittedCheckpointValue(largestPermittedCheckpointValue);
             delivered = true;
             shardRecordProcessor.processRecords(processRecordsInput);
+            // Only count records once processRecords() returns, so a failed batch is not reported as processed.
+            if (!records.isEmpty()) {
+                shardScope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            }
         } catch (Exception e) {
             log.error(
                     "ShardId {}: Application processRecords() threw an exception when processing shard ",
