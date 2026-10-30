@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -46,7 +47,7 @@ public class DynamoDBAsyncToSyncClientAdapterTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        adapter = new DynamoDbAsyncToSyncClientAdapter(mockAsyncClient);
+        adapter = new DynamoDbAsyncToSyncClientAdapter(mockAsyncClient, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
     @Test

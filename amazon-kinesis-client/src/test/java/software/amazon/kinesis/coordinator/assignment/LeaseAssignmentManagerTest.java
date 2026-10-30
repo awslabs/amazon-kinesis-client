@@ -114,7 +114,8 @@ class LeaseAssignmentManagerTest {
             dynamoDbAsyncClient,
             LEASE_TABLE_NAME,
             leaseSerializer,
-            new LeaseTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, LEASE_TABLE_NAME),
+            new LeaseTableCoordinatorStateDAODelegate(
+                    dynamoDbAsyncClient, LEASE_TABLE_NAME, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT),
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
             Runtime.getRuntime().availableProcessors());
     private WorkerMetricStatsDAO workerMetricsDAO;

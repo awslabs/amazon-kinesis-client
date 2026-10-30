@@ -84,7 +84,11 @@ class DynamoDBLockBasedLeaderDeciderTest {
             final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
             when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
             final CoordinatorStateDAO dao = new CoordinatorStateDAO(
-                    dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, provider);
+                    dynamoDBAsyncClient,
+                    c.coordinatorStateTableConfig(),
+                    TEST_LOCK_TABLE_NAME,
+                    provider,
+                    LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
             try {
                 dao.initialize();
             } catch (final InvalidStateException e) {
@@ -263,7 +267,11 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final CoordinatorConfig c = new CoordinatorConfig("TestMigrationApp");
         c.coordinatorStateTableConfig().tableName(legacyTableName);
         final CoordinatorStateDAO dao = new CoordinatorStateDAO(
-                dynamoDBAsyncClient, c.coordinatorStateTableConfig(), TEST_LOCK_TABLE_NAME, mockProvider);
+                dynamoDBAsyncClient,
+                c.coordinatorStateTableConfig(),
+                TEST_LOCK_TABLE_NAME,
+                mockProvider,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
         dao.initializeDelegates();
         dao.initialize();
 

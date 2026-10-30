@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.coordinator.delegate;
 
+import java.time.Duration;
+
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
@@ -21,8 +23,11 @@ import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 @KinesisClientInternalApi
 public class LeaseTableCoordinatorStateDAODelegate extends CoordinatorStateDAODelegate {
 
-    public LeaseTableCoordinatorStateDAODelegate(final DynamoDbAsyncClient dynamoDbAsyncClient, String leaseTableName) {
-        super(dynamoDbAsyncClient, leaseTableName, DynamoDBLeaseSerializer.LEASE_KEY_KEY);
+    public LeaseTableCoordinatorStateDAODelegate(
+            final DynamoDbAsyncClient dynamoDbAsyncClient,
+            final String leaseTableName,
+            final Duration dynamoDbRequestTimeout) {
+        super(dynamoDbAsyncClient, leaseTableName, DynamoDBLeaseSerializer.LEASE_KEY_KEY, dynamoDbRequestTimeout);
     }
 
     @Override

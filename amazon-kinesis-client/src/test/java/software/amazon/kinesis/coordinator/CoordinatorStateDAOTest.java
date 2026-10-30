@@ -518,6 +518,7 @@ public class CoordinatorStateDAOTest {
 
         final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
         when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
-        return new CoordinatorStateDAO(client, config, LEASE_TABLE_NAME, provider);
+        return new CoordinatorStateDAO(
+                client, config, LEASE_TABLE_NAME, provider, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 }

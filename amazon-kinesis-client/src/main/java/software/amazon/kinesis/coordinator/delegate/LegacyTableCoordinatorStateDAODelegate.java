@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.coordinator.delegate;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +62,14 @@ public class LegacyTableCoordinatorStateDAODelegate extends CoordinatorStateDAOD
     private volatile boolean enabled = true;
 
     public LegacyTableCoordinatorStateDAODelegate(
-            final DynamoDbAsyncClient dynamoDbAsyncClient, final CoordinatorConfig.CoordinatorStateTableConfig config) {
-        super(dynamoDbAsyncClient, config.tableName(), COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME);
+            final DynamoDbAsyncClient dynamoDbAsyncClient,
+            final CoordinatorConfig.CoordinatorStateTableConfig config,
+            final Duration dynamoDbRequestTimeout) {
+        super(
+                dynamoDbAsyncClient,
+                config.tableName(),
+                COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME,
+                dynamoDbRequestTimeout);
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.tableName = config.tableName();
     }

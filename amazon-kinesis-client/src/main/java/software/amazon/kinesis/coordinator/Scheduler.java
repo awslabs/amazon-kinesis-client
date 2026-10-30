@@ -317,7 +317,8 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.dynamoDBClient(),
                 coordinatorConfig().coordinatorStateTableConfig(),
                 leaseManagementConfig.tableName(),
-                tableMigrationStatusProvider);
+                tableMigrationStatusProvider,
+                leaseManagementConfig.dynamoDbRequestTimeout());
         this.tableMigrationStateMachine = new TableMigrationStateMachineImpl(
                 tableMigrationStatusProvider,
                 coordinatorStateDAO,

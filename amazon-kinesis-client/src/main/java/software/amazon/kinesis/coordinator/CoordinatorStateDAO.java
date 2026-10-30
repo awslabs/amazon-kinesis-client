@@ -15,6 +15,7 @@
 package software.amazon.kinesis.coordinator;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -131,11 +132,13 @@ public class CoordinatorStateDAO {
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final CoordinatorStateTableConfig coordinatorStateTableConfig,
             final String leaseTableName,
-            final TableMigrationStatusProvider tableMigrationStatusProvider) {
+            final TableMigrationStatusProvider tableMigrationStatusProvider,
+            final Duration dynamoDbRequestTimeout) {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
-        this.leaseTableDaoDelegate = new LeaseTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, leaseTableName);
-        this.legacyTableDaoDelegate =
-                new LegacyTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, coordinatorStateTableConfig);
+        this.leaseTableDaoDelegate =
+                new LeaseTableCoordinatorStateDAODelegate(dynamoDbAsyncClient, leaseTableName, dynamoDbRequestTimeout);
+        this.legacyTableDaoDelegate = new LegacyTableCoordinatorStateDAODelegate(
+                dynamoDbAsyncClient, coordinatorStateTableConfig, dynamoDbRequestTimeout);
         this.tableMigrationStatusProvider = tableMigrationStatusProvider;
         this.initialized = false;
     }

@@ -37,6 +37,7 @@ import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTab
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.leases.EntityType;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -119,7 +120,8 @@ class CoordinatorStateDAODelegateRoutingTest {
         CoordinatorStateTableConfig tableConfig = new CoordinatorConfig("test-app").coordinatorStateTableConfig();
         tableConfig.tableName(LEGACY_TABLE);
 
-        return new CoordinatorStateDAO(ddbClient, tableConfig, LEASE_TABLE, statusProvider);
+        return new CoordinatorStateDAO(
+                ddbClient, tableConfig, LEASE_TABLE, statusProvider, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
     @Test
