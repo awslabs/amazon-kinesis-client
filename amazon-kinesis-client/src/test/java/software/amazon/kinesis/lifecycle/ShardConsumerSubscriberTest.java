@@ -48,7 +48,6 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -119,8 +118,7 @@ public class ShardConsumerSubscriberTest {
                 .cacheEntryTime(Instant.now())
                 .build();
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
@@ -349,8 +347,7 @@ public class ShardConsumerSubscriberTest {
                         .setDaemon(true)
                         .build());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -432,8 +429,7 @@ public class ShardConsumerSubscriberTest {
         // Mock record publisher which doesn't publish any records on first try which simulates any scenario which
         // causes first subscription try to fail.
         recordsPublisher = new RecordPublisherWithInitialFailureSubscription();
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -505,8 +501,7 @@ public class ShardConsumerSubscriberTest {
                 .when(failingService)
                 .execute(any());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, failingService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, failingService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -764,13 +759,7 @@ public class ShardConsumerSubscriberTest {
                 ShardConsumer shardConsumer,
                 // Setup test expectations
                 int readTimeoutsToIgnoreBeforeWarning) {
-            super(
-                    recordsPublisher,
-                    executorService,
-                    bufferSize,
-                    shardConsumer,
-                    readTimeoutsToIgnoreBeforeWarning,
-                    new NullMetricsFactory());
+            super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
         }
 
         @Override

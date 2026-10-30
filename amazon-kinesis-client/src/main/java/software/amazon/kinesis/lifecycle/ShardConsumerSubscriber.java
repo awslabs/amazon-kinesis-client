@@ -16,7 +16,6 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -29,14 +28,8 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.metrics.MetricsLevel;
-import software.amazon.kinesis.metrics.MetricsScope;
-import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -45,15 +38,12 @@ import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 @Accessors(fluent = true)
 @KinesisClientInternalApi
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
-    private static final String DISPATCH_FAILURE_METRIC = "DispatchFailure";
-
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
     private final String shardInfoId;
-    private final MetricsFactory metricsFactory;
     private volatile int readTimeoutSinceLastRead = 0;
 
     @VisibleForTesting
@@ -94,15 +84,13 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             ExecutorService executorService,
             int bufferSize,
             ShardConsumer shardConsumer,
-            int readTimeoutsToIgnoreBeforeWarning,
-            MetricsFactory metricsFactory) {
+            int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
         this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
-        this.metricsFactory = metricsFactory;
     }
 
     void startSubscriptions() {
@@ -251,7 +239,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 // rather than skipping it, so no data is lost. Ordering is preserved since the next batch is not
                 // requested until this one succeeds.
                 attempt++;
-                emitDispatchFailureMetric();
                 if (shardConsumer.isShutdownRequested()) {
                     // Without this, a batch that always fails (poison pill) would keep the shard from shutting down.
                     log.warn(
@@ -283,7 +270,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 synchronized (lockObject) {
                     dispatchFailure = e;
                 }
-                emitDispatchFailureMetric();
                 return false;
             }
         }
@@ -298,31 +284,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             if (subscription != null) {
                 subscription.cancel();
             }
-        }
-    }
-
-    /**
-     * Emits a DispatchFailure count of 1 at both shard and application level. Best-effort: a metrics failure must
-     * never decide whether a batch is retried, so it is logged and swallowed.
-     */
-    private void emitDispatchFailureMetric() {
-        try {
-            final MetricsScope shardScope =
-                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.PROCESS_TASK_OPERATION);
-            shardConsumer
-                    .shardInfo()
-                    .streamIdentifierSerOpt()
-                    .ifPresent(streamId ->
-                            MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
-            MetricsUtil.addShardId(shardScope, shardConsumer.shardInfo().shardId());
-            final MetricsScope appScope =
-                    MetricsUtil.createMetricsWithOperation(metricsFactory, ProcessTask.APPLICATION_TRACKER_OPERATION);
-            for (MetricsScope scope : Arrays.asList(shardScope, appScope)) {
-                scope.addData(DISPATCH_FAILURE_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-                MetricsUtil.endScope(scope);
-            }
-        } catch (RuntimeException e) {
-            log.warn("{}: Failed to emit {} metric", shardInfoId, DISPATCH_FAILURE_METRIC, e);
         }
     }
 
