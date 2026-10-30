@@ -6,6 +6,14 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 
 ---
 
+### Release 3.5.4 (October 30, 2026)
+* [#1822](https://github.com/awslabs/amazon-kinesis-client/pull/1822) Retry records delivery in shardConsumer
+* [#1828](https://github.com/awslabs/amazon-kinesis-client/pull/1828) Resolve shard hash key range from the lease via ShardInfo instead of ListShards
+* [#1837](https://github.com/awslabs/amazon-kinesis-client/pull/1837) Allow workers below the target to take leases from workers at the target in lease count-based assignment
+* [#1838](https://github.com/awslabs/amazon-kinesis-client/pull/1838) Emit RecordsFailedProcessing when the record processor throws
+* [#1842](https://github.com/awslabs/amazon-kinesis-client/pull/1842) Bound DynamoDB lock client calls with dynamoDbRequestTimeout
+* [#1823](https://github.com/awslabs/amazon-kinesis-client/pull/1823) Bump com.fasterxml.jackson.core:jackson-databind from 2.21.5 to 2.21.7
+
 ### Release 3.5.3 (September 24, 2026)
 * [#1811](https://github.com/awslabs/amazon-kinesis-client/pull/1811) Table Migration metrics fixes
 * [#1812](https://github.com/awslabs/amazon-kinesis-client/pull/1812) Fix phase1 worker count to include workers with active metrics but no leases
