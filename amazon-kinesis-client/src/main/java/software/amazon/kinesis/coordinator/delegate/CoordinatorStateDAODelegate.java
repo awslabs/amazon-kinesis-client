@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.coordinator.delegate;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -87,11 +88,12 @@ public abstract class CoordinatorStateDAODelegate {
     public CoordinatorStateDAODelegate(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final String tableName,
-            final String partitionKeyAttributeName) {
+            final String partitionKeyAttributeName,
+            final Duration dynamoDbRequestTimeout) {
         this.dynamoDbAsyncClient = dynamoDbAsyncClient;
         this.tableName = tableName;
         this.partitionKeyAttributeName = partitionKeyAttributeName;
-        this.dynamoDbSyncClient = createDelegateClient();
+        this.dynamoDbSyncClient = new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient, dynamoDbRequestTimeout);
         registerDeserializers();
     }
 
@@ -138,10 +140,6 @@ public abstract class CoordinatorStateDAODelegate {
     }
 
     public abstract void initialize() throws DependencyException;
-
-    private DynamoDbClient createDelegateClient() {
-        return new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient);
-    }
 
     public AmazonDynamoDBLockClientOptionsBuilder getDDBLockClientOptionsBuilder() {
         return AmazonDynamoDBLockClientOptions.builder(dynamoDbSyncClient, tableName)

@@ -15,10 +15,15 @@
 
 package software.amazon.kinesis.coordinator;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import software.amazon.awssdk.core.exception.AbortedException;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.BatchGetItemRequest;
@@ -47,6 +52,7 @@ import software.amazon.awssdk.services.dynamodb.paginators.BatchGetItemIterable;
 import software.amazon.awssdk.services.dynamodb.paginators.QueryIterable;
 import software.amazon.awssdk.services.dynamodb.paginators.ScanIterable;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.FutureUtils;
 
 /**
  * DDB Lock client depends on DynamoDbClient and KCL only has DynamoDbAsyncClient configured.
@@ -56,9 +62,13 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @KinesisClientInternalApi
 public class DynamoDbAsyncToSyncClientAdapter implements DynamoDbClient {
     private final DynamoDbAsyncClient asyncClient;
+    // Upper bound on one call, so a hung HTTP client can't block a caller (e.g. isLeader) forever.
+    private final Duration dynamoDbRequestTimeout;
 
-    public DynamoDbAsyncToSyncClientAdapter(final DynamoDbAsyncClient asyncClient) {
+    public DynamoDbAsyncToSyncClientAdapter(
+            final DynamoDbAsyncClient asyncClient, final Duration dynamoDbRequestTimeout) {
         this.asyncClient = asyncClient;
+        this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
     }
 
     @Override
@@ -72,11 +82,18 @@ public class DynamoDbAsyncToSyncClientAdapter implements DynamoDbClient {
     }
 
     private <T> T handleException(final Supplier<CompletableFuture<T>> task) {
+        final CompletableFuture<T> future = task.get();
         try {
-            return task.get().join();
-        } catch (final CompletionException e) {
+            return FutureUtils.resolveOrCancelFuture(future, dynamoDbRequestTimeout);
+        } catch (final ExecutionException | CompletionException e) {
             rethrow(e.getCause());
             return null;
+        } catch (final TimeoutException e) {
+            throw SdkClientException.create("DynamoDB call did not complete within " + dynamoDbRequestTimeout, e);
+        } catch (final InterruptedException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw AbortedException.create("Interrupted while waiting for DynamoDB call", e);
         }
     }
 

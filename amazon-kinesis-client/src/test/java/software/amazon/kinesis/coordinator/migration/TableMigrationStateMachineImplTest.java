@@ -36,6 +36,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -131,7 +132,8 @@ class TableMigrationStateMachineImplTest {
         CoordinatorStateTableConfig tableConfig = new CoordinatorConfig("test-app").coordinatorStateTableConfig();
         tableConfig.tableName(LEGACY_TABLE);
 
-        return new CoordinatorStateDAO(ddbClient, tableConfig, LEASE_TABLE, statusProvider);
+        return new CoordinatorStateDAO(
+                ddbClient, tableConfig, LEASE_TABLE, statusProvider, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
     private CoordinatorConfig createCoordinatorConfig(boolean migrateAll) {
@@ -148,7 +150,8 @@ class TableMigrationStateMachineImplTest {
         CoordinatorStateTableConfig tableConfig = new CoordinatorConfig("test-app").coordinatorStateTableConfig();
         tableConfig.tableName("non-existent-table");
 
-        CoordinatorStateDAO dao = new CoordinatorStateDAO(ddbClient, tableConfig, LEASE_TABLE, statusProvider);
+        CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                ddbClient, tableConfig, LEASE_TABLE, statusProvider, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
@@ -170,7 +173,8 @@ class TableMigrationStateMachineImplTest {
         CoordinatorStateTableConfig tableConfig = new CoordinatorConfig("test-app").coordinatorStateTableConfig();
         tableConfig.tableName("non-existent-table");
 
-        CoordinatorStateDAO dao = new CoordinatorStateDAO(ddbClient, tableConfig, LEASE_TABLE, statusProvider);
+        CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                ddbClient, tableConfig, LEASE_TABLE, statusProvider, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
         CoordinatorConfig coordConfig = createCoordinatorConfig(false);
 
         TableMigrationStateMachineImpl sm = new TableMigrationStateMachineImpl(
