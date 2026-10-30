@@ -108,12 +108,7 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = consumerState == null ? ConsumerStates.INITIAL_STATE : consumerState;
         this.subscriber = new ShardConsumerSubscriber(
-                recordsPublisher,
-                executorService,
-                bufferSize,
-                this,
-                readTimeoutsToIgnoreBeforeWarning,
-                shardConsumerArgument.metricsFactory());
+                recordsPublisher, executorService, bufferSize, this, readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {

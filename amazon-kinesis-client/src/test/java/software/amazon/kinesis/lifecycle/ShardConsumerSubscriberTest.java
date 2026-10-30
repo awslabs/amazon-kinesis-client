@@ -50,7 +50,6 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -121,8 +120,7 @@ public class ShardConsumerSubscriberTest {
                 .cacheEntryTime(Instant.now())
                 .build();
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
@@ -147,8 +145,7 @@ public class ShardConsumerSubscriberTest {
                 .when(shardConsumer)
                 .handleInput(any(), any());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, 0, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 0, shardConsumer, 0);
 
         addItemsToReturn(1);
         startSubscriptionsAndWait();
@@ -177,8 +174,7 @@ public class ShardConsumerSubscriberTest {
                 .when(shardConsumer)
                 .handleInput(any(), any());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, 1, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 1, shardConsumer, 0);
 
         addItemsToReturn(1);
         startSubscriptionsAndWait();
@@ -293,8 +289,7 @@ public class ShardConsumerSubscriberTest {
     @Test
     public void consumerErrorStopsRetryingOnShutdownTest() throws Exception {
         // Synchronous (unbuffered) mode, so the publisher only advances when the subscriber requests more.
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, 0, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 0, shardConsumer, 0);
         subscriber.dispatchRetryInitialBackoffMillis = 1L;
         addItemsToReturn(5);
 
@@ -327,8 +322,7 @@ public class ShardConsumerSubscriberTest {
     @Test
     public void consumerFatalErrorStopsConsumptionTest() throws Exception {
         // Synchronous (unbuffered) mode, so the publisher only advances when the subscriber requests more.
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, 0, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, 0, shardConsumer, 0);
         addItemsToReturn(5);
 
         Error fatal = new Error("test fatal error");
@@ -422,8 +416,7 @@ public class ShardConsumerSubscriberTest {
                         .setDaemon(true)
                         .build());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -505,8 +498,7 @@ public class ShardConsumerSubscriberTest {
         // Mock record publisher which doesn't publish any records on first try which simulates any scenario which
         // causes first subscription try to fail.
         recordsPublisher = new RecordPublisherWithInitialFailureSubscription();
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, executorService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -578,8 +570,7 @@ public class ShardConsumerSubscriberTest {
                 .when(failingService)
                 .execute(any());
 
-        subscriber = new ShardConsumerSubscriber(
-                recordsPublisher, failingService, bufferSize, shardConsumer, 0, new NullMetricsFactory());
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, failingService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
         List<ProcessRecordsInput> received = new ArrayList<>();
@@ -837,13 +828,7 @@ public class ShardConsumerSubscriberTest {
                 ShardConsumer shardConsumer,
                 // Setup test expectations
                 int readTimeoutsToIgnoreBeforeWarning) {
-            super(
-                    recordsPublisher,
-                    executorService,
-                    bufferSize,
-                    shardConsumer,
-                    readTimeoutsToIgnoreBeforeWarning,
-                    new NullMetricsFactory());
+            super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
         }
 
         @Override
