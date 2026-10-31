@@ -1140,6 +1140,24 @@ public class ShardConsumerTest {
         return null;
     }
 
+    @Test
+    public void testWarningIsLoggedWhenConditionFirstHolds() {
+        assertTrue(ShardConsumer.shouldLogWarningAgain(null, Instant.now(), 1000L));
+    }
+
+    @Test
+    public void testWarningIsSuppressedWithinTheInterval() {
+        final Instant loggedAt = Instant.now();
+        assertFalse(ShardConsumer.shouldLogWarningAgain(loggedAt, loggedAt.plusMillis(999L), 1000L));
+    }
+
+    @Test
+    public void testWarningIsRepeatedOnceTheIntervalHasElapsed() {
+        final Instant loggedAt = Instant.now();
+        assertTrue(ShardConsumer.shouldLogWarningAgain(loggedAt, loggedAt.plusMillis(1000L), 1000L));
+        assertTrue(ShardConsumer.shouldLogWarningAgain(loggedAt, loggedAt.plusMillis(5000L), 1000L));
+    }
+
     private ShardConsumer createShardConsumer(final RecordsPublisher publisher) {
         return createShardConsumer(publisher, executorService, initialState);
     }

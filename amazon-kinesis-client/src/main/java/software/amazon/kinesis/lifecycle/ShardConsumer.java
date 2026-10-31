@@ -67,6 +67,19 @@ public class ShardConsumer {
     private boolean needsInitialization = true;
 
     private volatile Instant taskDispatchedAt;
+
+    /**
+     * When the "no data retrieved" warning was last emitted, or {@code null} while the condition
+     * does not hold. Keeps a sustained stall from logging on every health check.
+     */
+    private Instant lastNoDataRetrievedWarningAt;
+
+    /**
+     * When the "long running task" warning was last emitted, or {@code null} while the condition
+     * does not hold.
+     */
+    private Instant lastLongRunningTaskWarningAt;
+
     private volatile boolean taskIsRunning = false;
 
     /**
@@ -199,6 +212,16 @@ public class ShardConsumer {
         return null;
     }
 
+    /**
+     * Both warnings are evaluated on every health check, so a condition that persists would
+     * otherwise log continuously. Emit when the condition first holds, then at most once per
+     * {@code intervalMillis}.
+     */
+    @VisibleForTesting
+    static boolean shouldLogWarningAgain(Instant lastLoggedAt, Instant now, long intervalMillis) {
+        return lastLoggedAt == null || Duration.between(lastLoggedAt, now).toMillis() >= intervalMillis;
+    }
+
     Duration taskRunningTime() {
         if (taskDispatchedAt != null && taskIsRunning) {
             return Duration.between(taskDispatchedAt, Instant.now());
@@ -218,12 +241,18 @@ public class ShardConsumer {
     private void logNoDataRetrievedAfterTime() {
         logWarningForTaskAfterMillis.ifPresent(value -> {
             Instant lastDataArrival = subscriber.lastDataArrival();
-            if (lastDataArrival != null) {
-                Instant now = Instant.now();
-                Duration timeSince = Duration.between(subscriber.lastDataArrival(), now);
-                if (timeSince.toMillis() > value) {
-                    log.warn("{} : Last time data arrived: {} ({})", streamIdentifier, lastDataArrival, timeSince);
-                }
+            if (lastDataArrival == null) {
+                return;
+            }
+            Instant now = Instant.now();
+            Duration timeSince = Duration.between(lastDataArrival, now);
+            if (timeSince.toMillis() <= value) {
+                lastNoDataRetrievedWarningAt = null;
+                return;
+            }
+            if (shouldLogWarningAgain(lastNoDataRetrievedWarningAt, now, value)) {
+                lastNoDataRetrievedWarningAt = now;
+                log.warn("{} : Last time data arrived: {} ({})", streamIdentifier, lastDataArrival, timeSince);
             }
         });
     }
@@ -237,7 +266,13 @@ public class ShardConsumer {
                 log.debug("{} : {} Not submitting new task.", streamIdentifier, message);
             }
             logWarningForTaskAfterMillis.ifPresent(value -> {
-                if (taken.toMillis() > value) {
+                if (taken.toMillis() <= value) {
+                    lastLongRunningTaskWarningAt = null;
+                    return;
+                }
+                Instant now = Instant.now();
+                if (shouldLogWarningAgain(lastLongRunningTaskWarningAt, now, value)) {
+                    lastLongRunningTaskWarningAt = now;
                     log.warn("{} : {}", streamIdentifier, message);
                 }
             });
