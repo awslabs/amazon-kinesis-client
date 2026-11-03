@@ -206,6 +206,38 @@ public class ShardConsumer {
         return null;
     }
 
+    /**
+     * Whether the in-flight task has been running for at least the given duration.
+     *
+     * <p>Reads only volatile fields, so it answers even while the thread running the task holds this
+     * consumer's monitor.
+     *
+     * @param limit how long a task may run before it is considered stuck
+     * @return true when a task is in flight and has been running for at least {@code limit}
+     */
+    public boolean isTaskStuckFor(Duration limit) {
+        final Duration running = taskRunningTime();
+        return running != null && running.compareTo(limit) >= 0;
+    }
+
+    /**
+     * Gives up on this consumer without waiting for its in-flight task to return.
+     *
+     * <p>Cancels the subscription so that no further records are delivered, and marks the consumer as lost so
+     * that it is not driven again. The thread inside the record processor is left alone: it is not
+     * interrupted, because an interrupt does not reliably end every kind of wait and can turn a parked thread
+     * into a spinning one.
+     *
+     * <p>The record processor is deliberately not notified. Its thread is still inside
+     * {@code processRecords}, and calling back into it from here would run two of its methods at once.
+     */
+    public void abandon() {
+        if (subscriber != null) {
+            subscriber.stopDispatching();
+        }
+        markForShutdown(ShutdownReason.LEASE_LOST);
+    }
+
     String longRunningTaskMessage(Duration taken) {
         if (taken != null) {
             return String.format(

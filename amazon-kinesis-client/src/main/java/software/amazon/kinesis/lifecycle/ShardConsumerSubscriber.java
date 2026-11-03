@@ -284,8 +284,11 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     /**
      * Permanently stops this subscriber: cancels the upstream subscription and prevents resubscribing.
+     *
+     * <p>Also used when the consumer is abandoned, so that a batch still in flight upstream is dropped rather
+     * than dispatched to a consumer nobody drives any more.
      */
-    private void stopDispatching() {
+    void stopDispatching() {
         synchronized (lockObject) {
             dispatchStopped = true;
             if (subscription != null) {

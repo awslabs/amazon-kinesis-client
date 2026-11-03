@@ -130,6 +130,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -301,6 +302,56 @@ public class SchedulerTest {
                 processorConfig,
                 retrievalConfig);
         assertEquals(stageName, scheduler.applicationName());
+    }
+
+    @Test
+    public final void testStuckConsumerIsAbandonedAndItsLeaseReleased() {
+        final String shardId = "shardId-000000000000";
+        final ShardInfo shardInfo =
+                new ShardInfo(shardId, "concurrencyToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
+        final Lease heldLease = new Lease();
+        heldLease.leaseKey(shardId);
+
+        lifecycleConfig.abandonTaskAfterMillis(Optional.of(1L));
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.singletonList(shardInfo));
+        when(leaseCoordinator.getCurrentlyHeldLease(shardId)).thenReturn(heldLease);
+
+        final ShardConsumer stuckConsumer = mock(ShardConsumer.class);
+        when(stuckConsumer.isTaskStuckFor(any(Duration.class))).thenReturn(true);
+
+        final Scheduler schedulerSpy = spy(scheduler);
+        doReturn(stuckConsumer)
+                .when(schedulerSpy)
+                .buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
+
+        schedulerSpy.runProcessLoop();
+
+        verify(stuckConsumer).abandon();
+        verify(leaseCoordinator).dropLease(heldLease);
+        verify(stuckConsumer, never()).executeLifecycle();
+    }
+
+    @Test
+    public final void testStuckConsumerIsLeftAloneWhenNoLimitIsConfigured() {
+        final String shardId = "shardId-000000000000";
+        final ShardInfo shardInfo =
+                new ShardInfo(shardId, "concurrencyToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
+
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.singletonList(shardInfo));
+
+        final ShardConsumer stuckConsumer = mock(ShardConsumer.class);
+
+        final Scheduler schedulerSpy = spy(scheduler);
+        doReturn(stuckConsumer)
+                .when(schedulerSpy)
+                .buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
+
+        schedulerSpy.runProcessLoop();
+
+        verify(stuckConsumer, never()).isTaskStuckFor(any(Duration.class));
+        verify(stuckConsumer, never()).abandon();
+        verify(leaseCoordinator, never()).dropLease(any(Lease.class));
+        verify(stuckConsumer).executeLifecycle();
     }
 
     @Test
