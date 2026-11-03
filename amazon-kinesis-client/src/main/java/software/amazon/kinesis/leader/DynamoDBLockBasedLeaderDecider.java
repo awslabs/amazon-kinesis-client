@@ -135,8 +135,12 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         lockItem.ifPresent(
                 item -> log.info("Worker : {} is the current {}.", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
 
-        // If the lockItem is present and is expired, that means either current worker is not leader.
-        if (!lockItem.isPresent() || lockItem.get().isExpired()) {
+        // Non-owners must attempt acquisition on each check so the lock client can track an unchanged RVN
+        // across the lease duration. isExpired() on retrieved metadata cannot establish the remote owner's liveness.
+        // The lock client handles expiry observation and conditional writes, including races with heartbeats.
+        if (!lockItem.isPresent()
+                || !lockItem.get().getOwnerName().equals(workerId)
+                || lockItem.get().isExpired()) {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
                 final Optional<LockItem> leaderLockItem =
