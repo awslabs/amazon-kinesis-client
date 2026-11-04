@@ -41,11 +41,13 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
+import software.amazon.kinesis.segmenting.VersionStateUnavailableException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -118,6 +120,26 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     private static String getWorkerId(final int index) {
         return "worker" + index;
+    }
+
+    /**
+     * Finding 3: with no successful version read yet, the worker must contend for neither lock instead of defaulting
+     * to Leader.
+     */
+    @Test
+    void isLeader_versionStateUnavailable_doesNotAcquireAnyLock() {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock())
+                .thenThrow(new VersionStateUnavailableException("read failed", new RuntimeException()));
+
+        assertFalse(decider.isLeader(workerId));
+        verify(mockSegmentingHandler).setLeader(false);
+
+        // Once reads recover, the next eligible check takes the lock; nothing was held or written in between.
+        doReturn(LeaderLock.LEADER_HASH_KEY).when(mockSegmentingHandler).getHashKeyForLeaderLock();
+        final DynamoDBLockBasedLeaderDecider other = workerIdToLeaderDeciderMap.get(getWorkerId(2));
+        assertTrue(other.isLeader(getWorkerId(2)));
     }
 
     @Test

@@ -22,6 +22,9 @@ import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
@@ -54,6 +57,15 @@ public class FleetSegmentingHandler {
     private final long versionHashExpiryMillis;
     private final String workerId;
 
+    /**
+     * Last results computed from a successful read of the Leader lock's version state. When a read fails, the handler
+     * returns these instead of guessing (fail closed), so a transient read error can't change which lock this worker
+     * contends for or which leader responsibilities it runs. Null until the first successful read.
+     */
+    private volatile String lastKnownHashKeyForLeaderLock = null;
+
+    private volatile Boolean lastKnownIsOnCurrentVersion = null;
+
     public FleetSegmentingHandler(
             final LeaseManagementConfig config,
             final CoordinatorStateDAO coordinatorStateDAO,
@@ -81,7 +93,13 @@ public class FleetSegmentingHandler {
 
     /**
      * Returns the key of the leader lock to take depending on whether the worker is part of the deploying version.
+     *
+     * <p>If the Leader lock's version state can't be read, this returns the key from the last successful read rather
+     * than defaulting to "Leader". Defaulting would let a single transient read error make a deploying-version worker
+     * take the Leader lock and stamp its own version hash on it, flipping the fleet's algorithm.</p>
+     *
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
+     * @throws VersionStateUnavailableException if the read fails and no previous read has succeeded.
      */
     public String getHashKeyForLeaderLock() {
         // If segmenting handler is disabled, default to returning the Leader key
@@ -89,11 +107,35 @@ public class FleetSegmentingHandler {
             log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
+        final Map<String, AttributeValue> currentVersionAttrs;
+        try {
+            currentVersionAttrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
+        } catch (final Exception e) {
+            // if any transient failures occur when trying to use DDB, fallback to using the last known value
+            final String lastKnownKey = lastKnownHashKeyForLeaderLock;
+            if (lastKnownKey == null) {
+                // if there has never been a successful call, throw an Exception
+                throw new VersionStateUnavailableException(
+                        "Failed to read " + LeaderLock.LEADER_HASH_KEY
+                                + " version state and no previous value is known; not choosing a leader lock.",
+                        e);
+            }
+            log.warn(
+                    "Failed to read {} version state; keeping last known leader lock key {}.",
+                    LeaderLock.LEADER_HASH_KEY,
+                    lastKnownKey,
+                    e);
+            return lastKnownKey;
+        }
+        final String key = computeHashKeyForLeaderLock(currentVersionAttrs);
+        lastKnownHashKeyForLeaderLock = key;
+        return key;
+    }
+
+    private String computeHashKeyForLeaderLock(final Map<String, AttributeValue> currentVersionAttrs) {
         // If the current leader does not exist, default to obtaining the Leader lock.
         // If the current leader does exist but is expired, then the versioned workers were rolled back. For both
         // cases, obtain the normal leader lock.
-        final Map<String, AttributeValue> currentVersionAttrs =
-                getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
         if (currentVersionAttrs == null
                 || !currentVersionAttrs.containsKey(VERSION_HASH_KEY)
                 || isVersionHashExpired(currentVersionAttrs)) {
@@ -141,13 +183,30 @@ public class FleetSegmentingHandler {
      * The "current" version is the version that is currently deployed to all workers. Used by the leader to check
      * if it should handle the current Leader responsibilities (as opposed to the DeployingLeader responsibilities).
      * If the segmenting handler is disabled, the leader will behave as it normally would without segmenting.
+     *
+     * <p>If the version state can't be read, this returns the result of the last successful read, so a transient
+     * error doesn't make the real current leader skip expired-lease assignment and shard sync. With no previous
+     * successful read it returns false, so an unverified leader never takes on current-leader-only work.</p>
      */
     public boolean isOnCurrentVersion() {
         if (!isEnabled) {
             return true;
         }
-        final Map<String, AttributeValue> attrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
-        return doesVersionHashMatch(attrs);
+        final Map<String, AttributeValue> attrs;
+        try {
+            attrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
+        } catch (final Exception e) {
+            final Boolean lastKnown = lastKnownIsOnCurrentVersion;
+            log.warn(
+                    "Failed to read {} version state; using last known isOnCurrentVersion={}.",
+                    LeaderLock.LEADER_HASH_KEY,
+                    lastKnown,
+                    e);
+            return lastKnown != null && lastKnown;
+        }
+        final boolean result = doesVersionHashMatch(attrs);
+        lastKnownIsOnCurrentVersion = result;
+        return result;
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
@@ -158,9 +217,11 @@ public class FleetSegmentingHandler {
         if (lutStr == null) {
             return true;
         }
+        // TODO: add guard for parselong
         return isVersionHashExpired(Long.parseLong(lutStr));
     }
 
+    // TODO: check for empty set
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
         isVersionEmittedByAllActiveWorkers = toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
@@ -170,6 +231,9 @@ public class FleetSegmentingHandler {
         return workers.stream().map(WorkerMetricStats::getWorkerId).collect(Collectors.toSet());
     }
 
+    // TODO: NPE: getProperties().get(VERSION_HASH_KEY).equals(getVersionHash()) (:175-179). Any WorkerMetricStats row
+    // whose properties map exists without versionHash (the field predates the PR as an extensibility map) throws inside
+    // the LAM; 3 failures release the leader, the next leader reads the same row, and nobody assigns expired leases.
     public List<WorkerMetricStats> filterWorkersOnVersionHash(final List<WorkerMetricStats> activeWorkers) {
         return activeWorkers.stream()
                 .filter(workerMetricStats -> workerMetricStats.getProperties() != null
@@ -192,15 +256,16 @@ public class FleetSegmentingHandler {
         if (!isLeader || !isEnabled) {
             return;
         }
-        final String leaderKey = getHashKeyForLeaderLock();
-        final Map<String, ExpectedAttributeValue> expectations = getVersionHashHeartbeatExpectationMap(leaderKey);
-        final CoordinatorState state = CoordinatorState.builder()
-                .key(leaderKey)
-                .attributes(Collections.singletonMap(
-                        VERSION_HASH_LUT_KEY,
-                        AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond()))))
-                .build();
         try {
+            // Inside the try: an exception escaping a scheduleAtFixedRate task cancels all future heartbeats.
+            final String leaderKey = getHashKeyForLeaderLock();
+            final Map<String, ExpectedAttributeValue> expectations = getVersionHashHeartbeatExpectationMap(leaderKey);
+            final CoordinatorState state = CoordinatorState.builder()
+                    .key(leaderKey)
+                    .attributes(Collections.singletonMap(
+                            VERSION_HASH_LUT_KEY,
+                            AttributeValue.fromS(String.valueOf(Instant.now().getEpochSecond()))))
+                    .build();
             coordinatorStateDAO.updateCoordinatorStateWithExpectation(state, expectations);
         } catch (final Exception e) {
             log.error("Failed to update leader versionHashLut", e);
@@ -233,14 +298,10 @@ public class FleetSegmentingHandler {
         return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
     }
 
-    private Map<String, AttributeValue> getCoordinatorStateAttributes(final String key) {
-        try {
-            final CoordinatorState state = coordinatorStateDAO.getCoordinatorState(key);
-            return state != null ? state.getAttributes() : null;
-        } catch (final Exception e) {
-            log.error("Failed to get coordinator state for key {}", key, e);
-            return null;
-        }
+    private Map<String, AttributeValue> getCoordinatorStateAttributes(final String key)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final CoordinatorState state = coordinatorStateDAO.getCoordinatorState(key);
+        return state != null ? state.getAttributes() : null;
     }
 
     private boolean doesVersionHashMatch(final Map<String, AttributeValue> attrs) {

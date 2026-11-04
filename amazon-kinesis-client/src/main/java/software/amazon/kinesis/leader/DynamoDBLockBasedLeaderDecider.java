@@ -42,6 +42,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
+import software.amazon.kinesis.segmenting.VersionStateUnavailableException;
 
 /**
  * Implementation for LeaderDecider to elect leader using lock on dynamo db table. This class uses
@@ -141,7 +142,20 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         final AmazonDynamoDBLockClient lockClient = coordinatorStateDAO.getDDBLockClient();
         boolean response;
 
-        final String ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+        final String ddbLeaderKey;
+        try {
+            ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+        } catch (final VersionStateUnavailableException e) {
+            // The version state has never been read successfully, so this worker can't know which lock it is
+            // eligible for. Contend for neither lock this cycle rather than guessing "Leader". This worker can't hold
+            // a lock here: acquiring one required a successful read.
+            log.warn("Not contending for leadership this cycle: {}", e.getMessage(), e);
+            segmentingHandler.setLeader(false);
+            lastCheckTimeInMillis = System.currentTimeMillis();
+            lastIsLeaderResult = false;
+            publishIsLeaderMetrics(false);
+            return false;
+        }
 
         // If the version hash of a worker changes, and it is trying to get the lock of the other leader, release
         // the opposite lock if held. This can happen when a worker was originally the deploying leader, the
