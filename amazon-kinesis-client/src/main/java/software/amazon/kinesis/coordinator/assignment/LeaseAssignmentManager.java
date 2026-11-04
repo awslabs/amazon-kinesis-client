@@ -227,7 +227,7 @@ public final class LeaseAssignmentManager {
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
 
-            if (segmentingHandler.isOnCurrentVersion()) {
+            if (inMemoryStorageView.isOnCurrentVersion()) {
                 leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
                 MetricsUtil.addLatency(
                         metricsScope,
@@ -256,7 +256,7 @@ public final class LeaseAssignmentManager {
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
                 log.info(
                         "Running balanceWorkerVariance. isOnCurrentVersion=[{}] versionHash=[{}]",
-                        segmentingHandler.isOnCurrentVersion(),
+                        inMemoryStorageView.isOnCurrentVersion(),
                         segmentingHandler.getVersionHash());
                 leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
@@ -528,6 +528,14 @@ public final class LeaseAssignmentManager {
          */
         private double targetAverageThroughput;
 
+        /** Segment views computed once at the end of {@link #loadInMemoryStorageView}. */
+        private boolean onCurrentVersion = true;
+
+        private List<WorkerMetricStats> workersOnVersionHash = Collections.emptyList();
+        private List<WorkerMetricStats> workersWithNoVersionHash = Collections.emptyList();
+        private List<WorkerMetricStats> assignableWorkers = Collections.emptyList();
+        private long assignableLeaseCount = 0L;
+
         /**
          * Update {@ref inMemoryWorkerToLeasesMapping} with the change in ownership and update newLeaseAssignmentMap
          *
@@ -615,6 +623,33 @@ public final class LeaseAssignmentManager {
                             getTotalAssignedThroughput(workerMetrics.getWorkerId()) / targetAverageThroughput);
                 }
             });
+
+            // Compute the segment views once per run. Every decision in the run then uses the same answer, instead
+            // of calling isOnCurrentVersion() 6-10 times and possibly getting different answers mid-run (review
+            // finding 8). Workers are fixed after load and lease moves stay within the assignable workers, so these
+            // don't change during the run.
+            this.onCurrentVersion = segmentingHandler.isOnCurrentVersion();
+            this.workersOnVersionHash = segmentingHandler.isEnabled()
+                    ? segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics)
+                    : activeWorkerMetrics;
+            this.workersWithNoVersionHash =
+                    segmentingHandler.filterWorkersWithNoOrStaleVersionHash(activeWorkerMetrics);
+            this.assignableWorkers = onCurrentVersion ? activeWorkerMetrics : workersOnVersionHash;
+            this.assignableLeaseCount = computeAssignableLeaseCount();
+        }
+
+        private long computeAssignableLeaseCount() {
+            if (onCurrentVersion) {
+                return leaseList.size();
+            }
+            final Set<String> assignableWorkerIds = assignableWorkers.stream()
+                    .map(WorkerMetricStats::getWorkerId)
+                    .collect(Collectors.toSet());
+            return leaseList.stream()
+                    .map(Lease::actualOwner)
+                    .filter(Objects::nonNull)
+                    .filter(assignableWorkerIds::contains)
+                    .count();
         }
 
         private void updateWorkerThroughput(final String workerId, final double leaseThroughput) {
@@ -669,10 +704,7 @@ public final class LeaseAssignmentManager {
          * on the same version. Otherwise, return all the workers.
          */
         public List<WorkerMetricStats> getAssignableWorkers() {
-            if (segmentingHandler.isOnCurrentVersion()) {
-                return activeWorkerMetrics;
-            }
-            return getWorkersOnVersionHash();
+            return assignableWorkers;
         }
 
         /**
@@ -681,28 +713,20 @@ public final class LeaseAssignmentManager {
          * can only assign leases whose owner has the same version.
          */
         public long getAssignableLeaseCount() {
-            if (segmentingHandler.isOnCurrentVersion()) {
-                return leaseList.size();
-            }
-            final Set<String> assignableWorkerIds = getAssignableWorkers().stream()
-                    .map(WorkerMetricStats::getWorkerId)
-                    .collect(Collectors.toSet());
-            return leaseList.stream()
-                    .map(Lease::actualOwner)
-                    .filter(Objects::nonNull)
-                    .filter(assignableWorkerIds::contains)
-                    .count();
+            return assignableLeaseCount;
+        }
+
+        /** Whether this leader runs current Leader responsibilities in this run. Fixed at load time. */
+        public boolean isOnCurrentVersion() {
+            return onCurrentVersion;
         }
 
         public List<WorkerMetricStats> getWorkersOnVersionHash() {
-            if (!segmentingHandler.isEnabled()) {
-                return activeWorkerMetrics;
-            }
-            return segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics);
+            return workersOnVersionHash;
         }
 
         public List<WorkerMetricStats> getWorkersWithNoVersionHash() {
-            return segmentingHandler.filterWorkersWithNoOrStaleVersionHash(activeWorkerMetrics);
+            return workersWithNoVersionHash;
         }
     }
 

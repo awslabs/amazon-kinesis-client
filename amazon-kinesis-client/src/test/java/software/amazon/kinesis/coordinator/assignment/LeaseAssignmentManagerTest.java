@@ -1310,6 +1310,35 @@ class LeaseAssignmentManagerTest {
                         .count());
     }
 
+    /**
+     * Finding 8: the run reads isOnCurrentVersion() once and every step uses that answer. Here a later call would say
+     * "deploying", but the run started as the current leader, so both expired leases still go out fleet-wide.
+     */
+    @Test
+    void performAssignment_readsCurrentVersionOncePerRun() throws Exception {
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true, false);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        final WorkerMetricStats otherWorker = createDummyTakeWorkerMetrics("otherWorker");
+        otherWorker.setProperties(Collections.singletonMap("versionHash", "differentHash"));
+        workerMetricsDAO.updateMetrics(otherWorker);
+
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyUnAssignedLease("lease2"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        Mockito.verify(mockSegmentingHandler, Mockito.times(1)).isOnCurrentVersion();
+        assertTrue(leaseRefresher.listLeases().stream().allMatch(lease -> lease.leaseOwner() != null));
+        assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
+    }
+
     @Test
     void performAssignment_currentLeader_assignsToAllWorkers() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
