@@ -160,10 +160,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // If the version hash of a worker changes, and it is trying to get the lock of the other leader, release
         // the opposite lock if held. This can happen when a worker was originally the deploying leader, the
         // deployment finishes, and the same worker becomes the current leader.
-        if (ddbLeaderKey.equals(LeaderLock.LEADER_HASH_KEY)) {
-            releaseLeaderLock(lockClient, LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        } else {
-            releaseLeaderLock(lockClient, LeaderLock.LEADER_HASH_KEY);
+        // With segmenting disabled only the Leader key is ever used, so skip this (it costs a DynamoDB read).
+        if (segmentingHandler.isEnabled()) {
+            if (ddbLeaderKey.equals(LeaderLock.LEADER_HASH_KEY)) {
+                releaseLeaderLock(lockClient, LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+            } else {
+                releaseLeaderLock(lockClient, LeaderLock.LEADER_HASH_KEY);
+            }
         }
 
         // Get the lockItem from storage (if present)
@@ -175,7 +178,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
                 final Map<String, AttributeValue> lockAttributes = new HashMap<>(getLockAttributes());
-                lockAttributes.putAll(segmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable());
+                if (segmentingHandler.isEnabled()) {
+                    lockAttributes.putAll(segmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable());
+                }
                 final Optional<LockItem> leaderLockItem =
                         lockClient.tryAcquireLock(AcquireLockOptions.builder(ddbLeaderKey)
                                 .withRefreshPeriod(heartbeatPeriodMillis)
@@ -277,10 +282,15 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 log.info(
                         "Current worker : {} holds the lock, releasing it.",
                         lockItem.get().getOwnerName());
-                // LockItem.close() will release the lock if current worker owns it else this call is no op.
-                lockClient.releaseLock(ReleaseLockOptions.builder(lockItem.get())
-                        .withDeleteLock(false)
-                        .build());
+                if (segmentingHandler.isEnabled()) {
+                    // Keep the released item so other workers can still read its version hash.
+                    lockClient.releaseLock(ReleaseLockOptions.builder(lockItem.get())
+                            .withDeleteLock(false)
+                            .build());
+                } else {
+                    // Same as before segmenting: LockItem.close() releases the lock if this worker owns it.
+                    lockItem.get().close();
+                }
             }
         } catch (final Exception e) {
             log.error("Failed to complete releaseLeadershipIfHeld call.", e);

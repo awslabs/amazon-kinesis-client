@@ -170,12 +170,65 @@ class DynamoDBLockBasedLeaderDeciderTest {
                         AttributeValue.builder().s(LeaderLock.LEADER_HASH_KEY).build()))
                 .build();
         final GetItemResponse getItemResult = dynamoDBSyncClient.getItem(getItemRequest);
-        // assert that after shutdown the lockItem is no longer present.
-        assertTrue(getItemResult.item().containsKey("isReleased")
-                && getItemResult.item().get("isReleased").s().equals("1"));
+        // Segmenting is disabled here, so release behaves as before segmenting: the lock item is deleted.
+        assertFalse(getItemResult.hasItem());
 
         // After shutdown, assert that leaderDecider returns false.
         assertFalse(decider.isLeader(workerId), "LeaderDecider did not return false after shutdown.");
+    }
+
+    /** Finding 2: with segmenting off, no version hash is written to the lock item. */
+    @Test
+    void isLeader_segmentingDisabled_doesNotWriteVersionHashToLock() {
+        final String workerId = getWorkerId(1);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(false);
+        when(mockSegmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable())
+                .thenReturn(versionAttributes());
+
+        assertTrue(workerIdToLeaderDeciderMap.get(workerId).isLeader(workerId));
+
+        assertFalse(getLeaderItem().containsKey(FleetSegmentingHandler.VERSION_HASH_KEY));
+    }
+
+    /** With segmenting on, the lock carries the version hash and survives release so others can read it. */
+    @Test
+    void isLeader_segmentingEnabled_writesVersionHashAndKeepsReleasedItem() {
+        final String workerId = getWorkerId(1);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable())
+                .thenReturn(versionAttributes());
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+
+        assertTrue(decider.isLeader(workerId));
+        assertEquals(
+                "v1",
+                getLeaderItem().get(FleetSegmentingHandler.VERSION_HASH_KEY).s());
+
+        decider.shutdown();
+        final Map<String, AttributeValue> released = getLeaderItem();
+        assertEquals("1", released.get("isReleased").s());
+        assertEquals("v1", released.get(FleetSegmentingHandler.VERSION_HASH_KEY).s());
+    }
+
+    private static Map<String, AttributeValue> versionAttributes() {
+        final Map<String, AttributeValue> attrs = new HashMap<>();
+        attrs.put(FleetSegmentingHandler.VERSION_HASH_KEY, AttributeValue.fromS("v1"));
+        attrs.put("versionHashLut", AttributeValue.fromS(String.valueOf(System.currentTimeMillis() / 1000)));
+        return attrs;
+    }
+
+    private Map<String, AttributeValue> getLeaderItem() {
+        return dynamoDBSyncClient
+                .getItem(GetItemRequest.builder()
+                        .tableName(TEST_LOCK_TABLE_NAME)
+                        .consistentRead(true)
+                        .key(Collections.singletonMap(
+                                DynamoDBLeaseSerializer.LEASE_KEY_KEY,
+                                AttributeValue.builder()
+                                        .s(LeaderLock.LEADER_HASH_KEY)
+                                        .build()))
+                        .build())
+                .item();
     }
 
     @Test
