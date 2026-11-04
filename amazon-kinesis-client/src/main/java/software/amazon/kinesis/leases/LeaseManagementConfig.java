@@ -266,8 +266,11 @@ public class LeaseManagementConfig {
      * Flag to enable the rolling deployment system.
      *
      * <p>
-     * If set to true and a new LeaseAssignmentStrategy is being deployed, then the new strategy will only be
-     * applied to the growing subset of workers that receive the updated version until all workers receive the update.
+     * If set to true, workers will emit a verisonHash to DDB. If a new LeaseAssignmentStrategy gets deployed to the
+     * fleet such that updated workers start to emit a different version, then the new strategy will only be applied to
+     * the workers that are on the same version. Note that as a prerequisite, all existing workers must be emitting
+     * their version (i.e. this flag must be set to true for the next deployment to use the rolling deployment system).
+     * </p>
      *
      * <p>
      * If set to false, then the new assignment algorithm will take effect on all workers when a worker with the updated
@@ -275,7 +278,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: false</p>
      */
-    private boolean enableRollingDeploymentSystem = true;
+    private boolean enableRollingDeploymentSystem = false;
 
     /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
