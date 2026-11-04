@@ -21,6 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
@@ -85,6 +88,9 @@ public abstract class CoordinatorStateDAODelegate {
     private final Map<String, BiFunction<String, Map<String, AttributeValue>, CoordinatorState>> deserializers =
             new HashMap<>();
 
+    /** Upper bound on how long a single coordinator-state read waits for DynamoDB. */
+    private final Duration dynamoDbRequestTimeout;
+
     public CoordinatorStateDAODelegate(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final String tableName,
@@ -94,6 +100,7 @@ public abstract class CoordinatorStateDAODelegate {
         this.tableName = tableName;
         this.partitionKeyAttributeName = partitionKeyAttributeName;
         this.dynamoDbSyncClient = new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient, dynamoDbRequestTimeout);
+        this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         registerDeserializers();
     }
 
@@ -312,7 +319,9 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            final GetItemResponse result = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.getItem(request));
+            // Bounded: this read runs inside the leader decider's synchronized isLeader(), so an unbounded wait
+            // would stall every leadership check behind one slow call.
+            final GetItemResponse result = getWithTimeout(dynamoDbAsyncClient.getItem(request), key);
 
             final Map<String, AttributeValue> dynamoRecord = result.item();
             if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
@@ -445,8 +454,29 @@ public abstract class CoordinatorStateDAODelegate {
         // Fallback: generic CoordinatorState for unknown entity types (e.g., Leader lock)
         final CoordinatorState c =
                 CoordinatorState.builder().key(keyValue).attributes(attributes).build();
-        log.info("Retrieved generic coordinatorState {} attributes {}", c, attributes);
+        log.debug("Retrieved generic coordinatorState {} attributes {}", c, attributes);
         return c;
+    }
+
+    private <T> T getWithTimeout(final CompletableFuture<T> future, final String key) throws DependencyException {
+        try {
+            return FutureUtils.resolveOrCancelFuture(future, dynamoDbRequestTimeout);
+        } catch (final ExecutionException e) {
+            // Rethrow the SDK exception so the caller's existing catch blocks map it as before.
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new DependencyException(e.getCause());
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DependencyException(e);
+        } catch (final TimeoutException e) {
+            throw new DependencyException(
+                    String.format(
+                            "Timed out after %s getting coordinatorState %s from %s",
+                            dynamoDbRequestTimeout, key, tableName),
+                    e);
+        }
     }
 
     private Map<String, AttributeValue> toDynamoRecord(final CoordinatorState state) {
