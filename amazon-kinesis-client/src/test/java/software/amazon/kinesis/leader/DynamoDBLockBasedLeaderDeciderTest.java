@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,34 +89,37 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 .thenReturn(new HashMap<>());
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
-            final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
-            c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
-            final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
-            when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
-            final CoordinatorStateDAO dao = new CoordinatorStateDAO(
-                    dynamoDBAsyncClient,
-                    c.coordinatorStateTableConfig(),
-                    TEST_LOCK_TABLE_NAME,
-                    provider,
-                    LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
-            try {
-                dao.initialize();
-            } catch (final InvalidStateException e) {
-                throw new RuntimeException(e);
-            }
-            workerIdToLeaderDeciderMap.put(
-                    workerId,
-                    DynamoDBLockBasedLeaderDecider.create(
-                            dao,
-                            workerId,
-                            100L,
-                            10L,
-                            new NullMetricsFactory(),
-                            mockTableMigrationStateMachine,
-                            mockSegmentingHandler));
+            workerIdToLeaderDeciderMap.put(workerId, newDecider(workerId, 100L, 10L));
         });
 
         workerIdToLeaderDeciderMap.values().forEach(DynamoDBLockBasedLeaderDecider::initialize);
+    }
+
+    private DynamoDBLockBasedLeaderDecider newDecider(
+            final String workerId, final long leaseDurationMillis, final long heartbeatPeriodMillis) {
+        final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
+        c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
+        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
+        when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        final CoordinatorStateDAO dao = new CoordinatorStateDAO(
+                dynamoDBAsyncClient,
+                c.coordinatorStateTableConfig(),
+                TEST_LOCK_TABLE_NAME,
+                provider,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
+        try {
+            dao.initialize();
+        } catch (final InvalidStateException e) {
+            throw new RuntimeException(e);
+        }
+        return DynamoDBLockBasedLeaderDecider.create(
+                dao,
+                workerId,
+                leaseDurationMillis,
+                heartbeatPeriodMillis,
+                new NullMetricsFactory(),
+                mockTableMigrationStateMachine,
+                mockSegmentingHandler);
     }
 
     private static String getWorkerId(final int index) {
@@ -134,7 +138,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 .thenThrow(new VersionStateUnavailableException("read failed", new RuntimeException()));
 
         assertFalse(decider.isLeader(workerId));
-        verify(mockSegmentingHandler).setLeader(false);
+        verify(mockSegmentingHandler).setHeldLeaderKey(null);
 
         // Once reads recover, the next eligible check takes the lock; nothing was held or written in between.
         doReturn(LeaderLock.LEADER_HASH_KEY).when(mockSegmentingHandler).getHashKeyForLeaderLock();
@@ -217,16 +221,78 @@ class DynamoDBLockBasedLeaderDeciderTest {
         return attrs;
     }
 
+    /** Finding 6: a lock holder answers isLeader from local state and doesn't re-read the key on every call. */
+    @Test
+    void isLeader_holder_doesNotReevaluateKeyWithinHeartbeatPeriod() {
+        final String workerId = "longHeartbeatWorker";
+        final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 120_000L, 30_000L);
+        decider.initialize();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+
+        assertTrue(decider.isLeader(workerId));
+        for (int i = 0; i < 5; ++i) {
+            assertTrue(decider.isLeader(workerId));
+        }
+
+        verify(mockSegmentingHandler, times(1)).getHashKeyForLeaderLock();
+        decider.shutdown();
+    }
+
+    /** End of a deploy: the deploying leader releases DeployingLeader before taking Leader. */
+    @Test
+    void isLeader_keyChanges_releasesHeldLockThenAcquiresNewKey() throws InterruptedException {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertTrue(decider.isLeader(workerId));
+        verify(mockSegmentingHandler).setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+
+        // Past the 10ms heartbeat period, so the key is re-evaluated.
+        Thread.sleep(20);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        assertTrue(decider.isLeader(workerId));
+
+        assertEquals(
+                "1",
+                getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("isReleased").s());
+        verify(mockSegmentingHandler).setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+    }
+
+    /**
+     * Shutdown releases the lock this worker actually holds, even if the handler would now name the other key.
+     * Before, it released only the key the handler returned, which left a held DeployingLeader lock until expiry.
+     */
+    @Test
+    void shutdown_releasesHeldDeployingLeader_evenIfHandlerNowSaysLeader() {
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertTrue(decider.isLeader(workerId));
+
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        decider.shutdown();
+
+        assertEquals(
+                "1",
+                getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("isReleased").s());
+        verify(mockSegmentingHandler, times(1)).getHashKeyForLeaderLock();
+        verify(mockSegmentingHandler).setHeldLeaderKey(null);
+    }
+
     private Map<String, AttributeValue> getLeaderItem() {
+        return getItem(LeaderLock.LEADER_HASH_KEY);
+    }
+
+    private Map<String, AttributeValue> getItem(final String key) {
         return dynamoDBSyncClient
                 .getItem(GetItemRequest.builder()
                         .tableName(TEST_LOCK_TABLE_NAME)
                         .consistentRead(true)
                         .key(Collections.singletonMap(
                                 DynamoDBLeaseSerializer.LEASE_KEY_KEY,
-                                AttributeValue.builder()
-                                        .s(LeaderLock.LEADER_HASH_KEY)
-                                        .build()))
+                                AttributeValue.builder().s(key).build()))
                         .build())
                 .item();
     }

@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator;
@@ -50,21 +49,28 @@ public class FleetSegmentingHandler {
     @Getter
     private final boolean isEnabled;
 
-    @Setter
-    private volatile boolean isLeader = false;
+    /**
+     * Leader lock key this worker currently holds ("Leader" or "DeployingLeader"), or null if it holds neither. Set
+     * by the leader decider, which is the only component that knows which lock was actually acquired.
+     */
+    private volatile String heldLeaderKey = null;
+
+    /**
+     * Most recent key this worker held. Not cleared when the lock is lost, so a worker that was the DeployingLeader
+     * keeps reporting "not current" until it actually holds the Leader lock.
+     */
+    private volatile String lastHeldLeaderKey = null;
 
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final long versionHashExpiryMillis;
     private final String workerId;
 
     /**
-     * Last results computed from a successful read of the Leader lock's version state. When a read fails, the handler
+     * Last key computed from a successful read of the Leader lock's version state. When a read fails, the handler
      * returns these instead of guessing (fail closed), so a transient read error can't change which lock this worker
      * contends for or which leader responsibilities it runs. Null until the first successful read.
      */
     private volatile String lastKnownHashKeyForLeaderLock = null;
-
-    private volatile Boolean lastKnownIsOnCurrentVersion = null;
 
     public FleetSegmentingHandler(
             final LeaseManagementConfig config,
@@ -141,12 +147,12 @@ public class FleetSegmentingHandler {
                 || isVersionHashExpired(currentVersionAttrs)) {
             if (currentVersionAttrs != null) {
                 log.debug(
-                        "Returning {} (not on current version). attrs={}, myVersionHash={}, expiryMs={}, isLeader={}",
+                        "Returning {} (not on current version). attrs={}, myVersionHash={}, expiryMs={}, heldKey={}",
                         LeaderLock.LEADER_HASH_KEY,
                         currentVersionAttrs,
                         versionHash,
                         versionHashExpiryMillis,
-                        isLeader);
+                        heldLeaderKey);
             } else {
                 log.info("Returning {} due to null version attributes.", LeaderLock.LEADER_HASH_KEY);
             }
@@ -180,33 +186,33 @@ public class FleetSegmentingHandler {
     }
 
     /**
-     * The "current" version is the version that is currently deployed to all workers. Used by the leader to check
-     * if it should handle the current Leader responsibilities (as opposed to the DeployingLeader responsibilities).
-     * If the segmenting handler is disabled, the leader will behave as it normally would without segmenting.
+     * Whether this leader should handle the current Leader responsibilities (expired/unassigned lease assignment,
+     * shard sync) as opposed to the DeployingLeader responsibilities. If the segmenting handler is disabled, the
+     * leader behaves as it normally would without segmenting.
      *
-     * <p>If the version state can't be read, this returns the result of the last successful read, so a transient
-     * error doesn't make the real current leader skip expired-lease assignment and shard sync. With no previous
-     * successful read it returns false, so an unverified leader never takes on current-leader-only work.</p>
+     * <p>Decided by which lock this worker holds, not by re-reading the Leader item: only the holder of the Leader
+     * lock is current. This needs no DynamoDB read, so a throttled coordinator table can't make the real current
+     * leader skip its duties, and a DeployingLeader holder is never "current" just because the Leader item's version
+     * hash happens to match its own (the end-of-rollforward double-current case). A worker that has never held a
+     * leader lock, e.g. when a non-lock leader decider is active, is treated as current.</p>
      */
     public boolean isOnCurrentVersion() {
         if (!isEnabled) {
             return true;
         }
-        final Map<String, AttributeValue> attrs;
-        try {
-            attrs = getCoordinatorStateAttributes(LeaderLock.LEADER_HASH_KEY);
-        } catch (final Exception e) {
-            final Boolean lastKnown = lastKnownIsOnCurrentVersion;
-            log.warn(
-                    "Failed to read {} version state; using last known isOnCurrentVersion={}.",
-                    LeaderLock.LEADER_HASH_KEY,
-                    lastKnown,
-                    e);
-            return lastKnown != null && lastKnown;
+        return !LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(lastHeldLeaderKey);
+    }
+
+    /**
+     * Records which leader lock this worker holds after a leadership check. Called by the leader decider.
+     *
+     * @param key the held lock key, or null if this worker holds neither lock
+     */
+    public void setHeldLeaderKey(final String key) {
+        heldLeaderKey = key;
+        if (key != null) {
+            lastHeldLeaderKey = key;
         }
-        final boolean result = doesVersionHashMatch(attrs);
-        lastKnownIsOnCurrentVersion = result;
-        return result;
     }
 
     public boolean isWorkerVersionHashStale(final WorkerMetricStats worker) {
@@ -252,13 +258,14 @@ public class FleetSegmentingHandler {
     }
 
     private void updateLeaderVersionHashLastUpdateTime() {
-        // checking if worker is the leader or if segmenting is enabled to avoid unnecessary calls to DDB
-        if (!isLeader || !isEnabled) {
+        // Heartbeat the lock this worker actually holds. Recomputing the key could name the other lock, which made
+        // the owner-conditioned write a no-op and let the held lock's versionHashLut go stale. It also cost a read.
+        final String leaderKey = heldLeaderKey;
+        if (!isEnabled || leaderKey == null) {
             return;
         }
         try {
             // Inside the try: an exception escaping a scheduleAtFixedRate task cancels all future heartbeats.
-            final String leaderKey = getHashKeyForLeaderLock();
             final Map<String, ExpectedAttributeValue> expectations = getVersionHashHeartbeatExpectationMap(leaderKey);
             final CoordinatorState state = CoordinatorState.builder()
                     .key(leaderKey)

@@ -21,13 +21,10 @@ import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -127,37 +124,48 @@ public class FleetSegmentingHandlerTest {
         assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
+    // ---------------- isOnCurrentVersion (decided by the held lock, no reads) ----------------
+
     @Test
-    void isOnCurrentVersion_returnsTrue_whenVersionHashMatches() throws Exception {
+    void isOnCurrentVersion_trueWhenHoldingLeader() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+
+        assertTrue(handler.isOnCurrentVersion());
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
+    }
+
+    @Test
+    void isOnCurrentVersion_falseWhenHoldingDeployingLeader() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+
+        assertFalse(handler.isOnCurrentVersion());
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
+    }
+
+    /**
+     * Finding 4: a DeployingLeader holder must not become "current" because the Leader item's version hash now
+     * matches its own. It only becomes current once it actually holds the Leader lock.
+     */
+    @Test
+    void isOnCurrentVersion_deployingLeaderStaysNotCurrent_untilItHoldsLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertFalse(handler.isOnCurrentVersion());
+
+        // Losing the lock doesn't make a former deploying leader current either.
+        handler.setHeldLeaderKey(null);
+        assertFalse(handler.isOnCurrentVersion());
+
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
         assertTrue(handler.isOnCurrentVersion());
     }
 
+    /** Finding 1: with a non-lock leader decider (2.x-compatible modes) no lock is ever held; shard sync must run. */
     @Test
-    void isOnCurrentVersion_returnsFalse_whenVersionHashDoesNotMatch() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
-        assertFalse(handler.isOnCurrentVersion());
-    }
-
-    @Test
-    void isOnCurrentVersion_returnsFalse_whenItemNotPresent() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.LEADER_HASH_KEY))
-                .thenReturn(null);
-        assertFalse(handler.isOnCurrentVersion());
-    }
-
-    @Test
-    void isOnCurrentVersion_returnsFalse_whenVersionHashKeyMissing() throws Exception {
-        Map<String, AttributeValue> attrs = new HashMap<>();
-        attrs.put("someOtherKey", AttributeValue.fromS("value"));
-        CoordinatorState state = mock(CoordinatorState.class);
-        when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderLock.LEADER_HASH_KEY))
-                .thenReturn(state);
-
-        assertFalse(handler.isOnCurrentVersion());
+    void isOnCurrentVersion_trueWhenNoLockEverHeld() throws Exception {
+        assertTrue(handler.isOnCurrentVersion());
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     @Test
@@ -335,7 +343,7 @@ public class FleetSegmentingHandlerTest {
 
         FleetSegmentingHandler handler =
                 new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO, mockVersionHeartbeatExecutor);
-        handler.setLeader(false);
+        handler.setHeldLeaderKey(null);
 
         // Capture the scheduled runnable
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -371,7 +379,7 @@ public class FleetSegmentingHandlerTest {
 
         FleetSegmentingHandler handler =
                 new FleetSegmentingHandler(heartbeatConfig, heartbeatDAO, mockVersionHeartbeatExecutor);
-        handler.setLeader(true);
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
 
         // Capture the scheduled runnable
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -387,74 +395,24 @@ public class FleetSegmentingHandlerTest {
         Mockito.verify(heartbeatDAO, times(1)).updateCoordinatorStateWithExpectation(any(), anyMap());
     }
 
+    /** The heartbeat refreshes the lock this worker holds, without re-reading which key to use. */
+    @Test
+    void versionHashHeartbeat_writesHeldDeployingLeaderKey_withoutReading() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(runnableCaptor.capture(), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        runnableCaptor.getValue().run();
+
+        final ArgumentCaptor<CoordinatorState> stateCaptor = ArgumentCaptor.forClass(CoordinatorState.class);
+        Mockito.verify(mockCoordinatorStateDAO).updateCoordinatorStateWithExpectation(stateCaptor.capture(), anyMap());
+        assertEquals(
+                LeaderLock.DEPLOYING_LEADER_HASH_KEY, stateCaptor.getValue().getKey());
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
+    }
+
     // ---------------- transient read errors (fail closed) ----------------
-
-    /** Finding 3: a read error must not turn into "take Leader" once a previous read said DeployingLeader. */
-    @Test
-    void getHashKeyForLeaderLock_keepsLastKnownKey_whenReadFails() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, "some-other-version", Instant.now().getEpochSecond());
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
-
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new ProvisionedThroughputException("throttled", null));
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
-    }
-
-    @Test
-    void getHashKeyForLeaderLock_throwsUnavailable_whenFirstReadFails() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new DependencyException(new RuntimeException("timeout")));
-
-        assertThrows(VersionStateUnavailableException.class, () -> handler.getHashKeyForLeaderLock());
-    }
-
-    @Test
-    void getHashKeyForLeaderLock_usesFreshValue_afterReadRecovers() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new DependencyException(new RuntimeException("timeout")));
-        assertThrows(VersionStateUnavailableException.class, () -> handler.getHashKeyForLeaderLock());
-
-        Mockito.reset(mockCoordinatorStateDAO);
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
-
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
-    }
-
-    /** Finding 6 side effect: a read error must not make the real current leader skip its duties. */
-    @Test
-    void isOnCurrentVersion_keepsLastKnownTrue_whenReadFails() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
-        assertTrue(handler.isOnCurrentVersion());
-
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new ProvisionedThroughputException("throttled", null));
-
-        assertTrue(handler.isOnCurrentVersion());
-    }
-
-    @Test
-    void isOnCurrentVersion_keepsLastKnownFalse_whenReadFails() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, "some-other-version", Instant.now().getEpochSecond());
-        assertFalse(handler.isOnCurrentVersion());
-
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new ProvisionedThroughputException("throttled", null));
-
-        assertFalse(handler.isOnCurrentVersion());
-    }
-
-    @Test
-    void isOnCurrentVersion_returnsFalse_whenFirstReadFails() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
-                .thenThrow(new DependencyException(new RuntimeException("timeout")));
-
-        assertFalse(handler.isOnCurrentVersion());
-    }
 
     private void mockCoordinatorState(CoordinatorStateDAO dao, String key, String versionHash, long lut)
             throws Exception {
