@@ -218,7 +218,9 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
 
         try {
-            tableMigrationStateMachine.handleLeaderLockResult(response);
+            // Only the holder of the Leader lock drives table migration; the DeployingLeader only rebalances leases.
+            tableMigrationStateMachine.handleLeaderLockResult(
+                    response && LeaderLock.LEADER_HASH_KEY.equals(ddbLeaderKey));
         } catch (final DependencyException | InvalidStateException e) {
             log.warn("handleLeaderLockResult failed, releasing lock and returning false", e);
             heldLeaderKey = response ? ddbLeaderKey : heldLeaderKey;

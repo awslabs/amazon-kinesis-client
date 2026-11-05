@@ -266,6 +266,19 @@ class DynamoDBLockBasedLeaderDeciderTest {
         verify(mockSegmentingHandler).setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
     }
 
+    /** Review comment #18: only the Leader holder drives table migration; the DeployingLeader reports false. */
+    @Test
+    void isLeader_deployingLeader_reportsNotLeaderToTableMigration() throws Exception {
+        final String workerId = getWorkerId(1);
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+
+        assertTrue(workerIdToLeaderDeciderMap.get(workerId).isLeader(workerId));
+
+        verify(mockTableMigrationStateMachine).handleLeaderLockResult(false);
+        verify(mockTableMigrationStateMachine, org.mockito.Mockito.never()).handleLeaderLockResult(true);
+    }
+
     /**
      * Shutdown releases the lock this worker actually holds, even if the handler would now name the other key.
      * Before, it released only the key the handler returned, which left a held DeployingLeader lock until expiry.

@@ -1707,6 +1707,47 @@ public class SchedulerTest {
         assertThrows(IllegalArgumentException.class, () -> leaseManagementConfig.leaseTableScanTotalSegments(0));
     }
 
+    /**
+     * Review comment #18: the deploying leader returns true from isLeader() but must only rebalance leases. It must
+     * not run multi-stream sync (new-stream shard sync, stale-stream lease deletion) or start StreamInfoManager.
+     */
+    @Test
+    public void runProcessLoop_deployingLeader_skipsStreamSyncAndStreamInfo() throws Exception {
+        final Scheduler schedulerSpy = setUpLeaderForProcessLoop(false);
+
+        schedulerSpy.runProcessLoop();
+
+        verify(schedulerSpy, never()).checkAndSyncStreamShardsAndLeases();
+        verify(streamInfoManager, never()).start();
+        verify(streamInfoManager).stop(false);
+    }
+
+    @Test
+    public void runProcessLoop_currentLeader_runsStreamSyncAndStreamInfo() throws Exception {
+        final Scheduler schedulerSpy = setUpLeaderForProcessLoop(true);
+
+        schedulerSpy.runProcessLoop();
+
+        verify(schedulerSpy).checkAndSyncStreamShardsAndLeases();
+        verify(streamInfoManager).start();
+    }
+
+    private Scheduler setUpLeaderForProcessLoop(final boolean onCurrentVersion) throws Exception {
+        final software.amazon.kinesis.coordinator.LeaderDecider leaderDecider =
+                mock(software.amazon.kinesis.coordinator.LeaderDecider.class);
+        when(leaderDecider.isLeader(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        final software.amazon.kinesis.segmenting.FleetSegmentingHandler handler =
+                mock(software.amazon.kinesis.segmenting.FleetSegmentingHandler.class);
+        when(handler.isOnCurrentVersion()).thenReturn(onCurrentVersion);
+        setSchedulerFieldToAccessible("leaderDecider", leaderDecider);
+        setSchedulerFieldToAccessible("segmentingHandler", handler);
+        setSchedulerFieldToAccessible("streamInfoManager", streamInfoManager);
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(Collections.emptyList());
+        final Scheduler schedulerSpy = spy(scheduler);
+        org.mockito.Mockito.doReturn(Collections.emptySet()).when(schedulerSpy).checkAndSyncStreamShardsAndLeases();
+        return schedulerSpy;
+    }
+
     private void setSchedulerFieldToAccessible(final String varName, final Object mockComponent)
             throws NoSuchFieldException, IllegalAccessException {
         Field field = Scheduler.class.getDeclaredField(varName);
