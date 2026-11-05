@@ -38,6 +38,7 @@ public class FleetSegmentingHandler {
     public static final String VERSION_HASH_KEY = "versionHash";
     private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
     private static final String LEADER_LOCK_OWNER_KEY = "ownerName";
+    private static final String LOCK_IS_RELEASED_KEY = "isReleased";
 
     @Getter
     private final String versionHash;
@@ -62,6 +63,10 @@ public class FleetSegmentingHandler {
 
     private final CoordinatorStateDAO coordinatorStateDAO;
     private final long versionHashExpiryMillis;
+
+    /** Runs the version heartbeat. Owned by this handler and stopped by {@link #shutdown()}. */
+    private final ScheduledExecutorService versionHeartbeatExecutor;
+
     private final String workerId;
 
     /**
@@ -76,6 +81,7 @@ public class FleetSegmentingHandler {
             final CoordinatorStateDAO coordinatorStateDAO,
             final ScheduledExecutorService versionHeartbeatExecutor) {
         this.coordinatorStateDAO = coordinatorStateDAO;
+        this.versionHeartbeatExecutor = versionHeartbeatExecutor;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         isEnabled = config.enableRollingDeploymentSystem();
         workerId = config.workerIdentifier();
@@ -203,6 +209,19 @@ public class FleetSegmentingHandler {
     }
 
     /**
+     * Stops the version heartbeat. Called by the Scheduler during shutdown, before the leader lock is released, so a
+     * shut-down worker can't keep refreshing versionHashLut. Safe to call more than once.
+     */
+    public void shutdown() {
+        heldLeaderKey = null;
+        if (versionHeartbeatExecutor != null && !versionHeartbeatExecutor.isShutdown()) {
+            log.info("Shutting down fleet segmenting version heartbeat for worker {}.", workerId);
+            // shutdownNow so a queued heartbeat doesn't run after the lock is released.
+            versionHeartbeatExecutor.shutdownNow();
+        }
+    }
+
+    /**
      * Records which leader lock this worker holds after a leadership check. Called by the leader decider.
      *
      * @param key the held lock key, or null if this worker holds neither lock
@@ -299,6 +318,13 @@ public class FleetSegmentingHandler {
                 ExpectedAttributeValue.builder()
                         .value(AttributeValue.fromS(versionHash))
                         .build());
+        // A released lock keeps ownerName, so also require that it isn't released. The lock client removes
+        // isReleased when a lock is acquired and sets it on release. Without this, a worker could keep a released
+        // lock's
+        // versionHashLut fresh, making a version nobody is leading look alive (review finding 10).
+        expectations.put(
+                LOCK_IS_RELEASED_KEY,
+                ExpectedAttributeValue.builder().exists(false).build());
         expectations.put(
                 LEADER_LOCK_OWNER_KEY,
                 ExpectedAttributeValue.builder()

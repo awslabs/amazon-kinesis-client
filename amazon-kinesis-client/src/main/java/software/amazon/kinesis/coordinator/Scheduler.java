@@ -362,8 +362,14 @@ public class Scheduler implements Runnable {
                 Executors.newCachedThreadPool(),
                 leaseManagementConfig.leaseTableScanTotalSegments());
 
+        // Daemon thread, and stopped in shutdown(), so the version heartbeat never outlives the Scheduler.
         this.segmentingHandler = new FleetSegmentingHandler(
-                leaseManagementConfig, coordinatorStateDAO, Executors.newSingleThreadScheduledExecutor());
+                leaseManagementConfig,
+                coordinatorStateDAO,
+                Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+                        .setNameFormat("fleet-segmenting-version-heartbeat-%d")
+                        .setDaemon(true)
+                        .build()));
 
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
@@ -1152,6 +1158,8 @@ public class Scheduler implements Runnable {
             shutdown = true;
             shutdownStartTimeMillis = System.currentTimeMillis();
 
+            // Stop the version heartbeat before the leader decider releases its lock.
+            segmentingHandler.shutdown();
             migrationStateMachine.shutdown();
             migrationComponentsInitializer.shutdown();
             tableMigrationStateMachine.shutdown();

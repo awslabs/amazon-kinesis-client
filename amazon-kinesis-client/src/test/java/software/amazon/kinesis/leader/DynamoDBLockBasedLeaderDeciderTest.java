@@ -45,8 +45,11 @@ import software.amazon.kinesis.segmenting.VersionStateUnavailableException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -97,6 +100,17 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     private DynamoDBLockBasedLeaderDecider newDecider(
             final String workerId, final long leaseDurationMillis, final long heartbeatPeriodMillis) {
+        return DynamoDBLockBasedLeaderDecider.create(
+                newDao(),
+                workerId,
+                leaseDurationMillis,
+                heartbeatPeriodMillis,
+                new NullMetricsFactory(),
+                mockTableMigrationStateMachine,
+                mockSegmentingHandler);
+    }
+
+    private CoordinatorStateDAO newDao() {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
         c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
         final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
@@ -112,14 +126,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         } catch (final InvalidStateException e) {
             throw new RuntimeException(e);
         }
-        return DynamoDBLockBasedLeaderDecider.create(
-                dao,
-                workerId,
-                leaseDurationMillis,
-                heartbeatPeriodMillis,
-                new NullMetricsFactory(),
-                mockTableMigrationStateMachine,
-                mockSegmentingHandler);
+        return dao;
     }
 
     private static String getWorkerId(final int index) {
@@ -279,6 +286,53 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("isReleased").s());
         verify(mockSegmentingHandler, times(1)).getHashKeyForLeaderLock();
         verify(mockSegmentingHandler).setHeldLeaderKey(null);
+    }
+
+    /**
+     * Finding 10: a released lock keeps ownerName, so an owner-only heartbeat condition kept refreshing a released
+     * lock's versionHashLut. With the isReleased condition the write is rejected until the lock is held again.
+     */
+    @Test
+    void versionHeartbeat_rejectedOnReleasedLock_acceptedOnHeldLock() throws Exception {
+        final String owner = "heartbeatOwner";
+        final LeaseManagementConfig config = new LeaseManagementConfig(
+                "dummyTableName",
+                "dummyApplicationName",
+                mock(software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient.class),
+                mock(software.amazon.awssdk.services.kinesis.KinesisAsyncClient.class),
+                owner);
+        config.enableRollingDeploymentSystem(true);
+        final java.util.concurrent.ScheduledExecutorService executor =
+                mock(java.util.concurrent.ScheduledExecutorService.class);
+        final FleetSegmentingHandler handler = new FleetSegmentingHandler(config, newDao(), executor);
+        final org.mockito.ArgumentCaptor<Runnable> heartbeat = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        verify(executor).scheduleAtFixedRate(heartbeat.capture(), anyLong(), anyLong(), any());
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+
+        putLeaderItem(owner, handler.getVersionHash(), "100", true);
+        heartbeat.getValue().run();
+        assertEquals("100", getLeaderItem().get("versionHashLut").s(), "released lock was refreshed");
+
+        putLeaderItem(owner, handler.getVersionHash(), "100", false);
+        heartbeat.getValue().run();
+        assertNotEquals("100", getLeaderItem().get("versionHashLut").s(), "held lock was not refreshed");
+    }
+
+    private void putLeaderItem(final String owner, final String versionHash, final String lut, final boolean released) {
+        final Map<String, AttributeValue> item = new HashMap<>();
+        item.put(DynamoDBLeaseSerializer.LEASE_KEY_KEY, AttributeValue.fromS(LeaderLock.LEADER_HASH_KEY));
+        item.put("ownerName", AttributeValue.fromS(owner));
+        item.put("leaseDuration", AttributeValue.fromS("120000"));
+        item.put("recordVersionNumber", AttributeValue.fromS(UUID.randomUUID().toString()));
+        item.put(FleetSegmentingHandler.VERSION_HASH_KEY, AttributeValue.fromS(versionHash));
+        item.put("versionHashLut", AttributeValue.fromS(lut));
+        if (released) {
+            item.put("isReleased", AttributeValue.fromS("1"));
+        }
+        dynamoDBSyncClient.putItem(PutItemRequest.builder()
+                .tableName(TEST_LOCK_TABLE_NAME)
+                .item(item)
+                .build());
     }
 
     private Map<String, AttributeValue> getLeaderItem() {

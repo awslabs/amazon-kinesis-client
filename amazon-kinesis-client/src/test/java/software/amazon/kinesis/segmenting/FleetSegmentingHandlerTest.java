@@ -361,6 +361,45 @@ public class FleetSegmentingHandlerTest {
         assertFalse(expectations.getValue().containsKey("versionHashLut"));
     }
 
+    // ---------------- shutdown and zombie heartbeat (review finding 10) ----------------
+
+    @Test
+    void shutdown_stopsHeartbeatExecutor_andIsIdempotent() {
+        handler.shutdown();
+        when(mockVersionHeartbeatExecutor.isShutdown()).thenReturn(true);
+        handler.shutdown();
+
+        Mockito.verify(mockVersionHeartbeatExecutor, times(1)).shutdownNow();
+    }
+
+    @Test
+    void shutdown_heartbeatNoLongerWrites() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+        final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(runnableCaptor.capture(), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        handler.shutdown();
+        runnableCaptor.getValue().run();
+
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).updateCoordinatorStateWithExpectation(any(), anyMap());
+    }
+
+    @Test
+    void versionHashHeartbeat_requiresLockNotReleased() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+        final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(runnableCaptor.capture(), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        runnableCaptor.getValue().run();
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Map<String, ExpectedAttributeValue>> expectations = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(mockCoordinatorStateDAO).updateCoordinatorStateWithExpectation(any(), expectations.capture());
+        assertFalse(expectations.getValue().get("isReleased").exists());
+    }
+
     @Test
     void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSameWorkerIds() {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
