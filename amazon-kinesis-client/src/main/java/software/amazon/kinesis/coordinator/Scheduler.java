@@ -69,7 +69,6 @@ import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachineImpl;
-import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
@@ -736,14 +735,33 @@ public class Scheduler implements Runnable {
     }
 
     /**
-     * Fleet segmenting is only valid once the application runs the KCL 3.x algorithms (client version 3X) and
-     * single-table migration has finished. Throws if the migration state machine isn't initialized yet, which the
-     * segmenting handler treats as "not allowed".
+     * Fleet segmenting is only valid once the application runs the KCL 3.x algorithms (client version 3X), and not
+     * while single-table migration is in progress:
+     * <ul>
+     *   <li>INIT / DEPLOYED (phase 1, or an app that stays on the legacy coordinator table): no entries are moved,
+     *   and the lock and coordinator writes both use the legacy table. Allowed.</li>
+     *   <li>PENDING (phase 2): coordinator entries are moved between tables, and the lock (legacy table) and
+     *   coordinator writes (lease table) use different tables. Not allowed.</li>
+     *   <li>COMPLETE: everything uses the lease table. Allowed.</li>
+     *   <li>UNKNOWN: status not determined yet. Not allowed.</li>
+     * </ul>
+     * It also requires the coordinator-state write table to match the lock table, which isn't the case for a worker
+     * that initialized before the status changed. Throws if the migration state machine isn't initialized yet, which
+     * the segmenting handler treats as "not allowed".
      */
-    private boolean isFleetSegmentingAllowed() {
-        return migrationStateMachine.getCurrentClientVersion() == ClientVersion.CLIENT_VERSION_3X
-                && tableMigrationStatusProvider.getTableMigrationStatus()
-                        == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
+    @VisibleForTesting
+    boolean isFleetSegmentingAllowed() {
+        if (migrationStateMachine.getCurrentClientVersion() != ClientVersion.CLIENT_VERSION_3X) {
+            return false;
+        }
+        switch (tableMigrationStatusProvider.getTableMigrationStatus()) {
+            case TABLE_MIGRATION_STATUS_INIT:
+            case TABLE_MIGRATION_STATUS_DEPLOYED:
+            case TABLE_MIGRATION_STATUS_COMPLETE:
+                return coordinatorStateDAO.isWriteRoutingAlignedWithLockClient();
+            default:
+                return false;
+        }
     }
 
     /**

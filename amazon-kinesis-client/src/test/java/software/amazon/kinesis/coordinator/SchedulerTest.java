@@ -66,8 +66,11 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdOnboardingState;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfoDAO;
@@ -1730,6 +1733,39 @@ public class SchedulerTest {
 
         verify(schedulerSpy).checkAndSyncStreamShardsAndLeases();
         verify(streamInfoManager).start();
+    }
+
+    /**
+     * Fleet segmenting is allowed in client version 3X outside single-table migration (INIT, DEPLOYED, COMPLETE),
+     * and not while migration is in progress (PENDING) or before the status is known (UNKNOWN).
+     */
+    @Test
+    public void isFleetSegmentingAllowed_onlyOutsideTableMigration() throws Exception {
+        final MigrationStateMachine stateMachine = mock(MigrationStateMachine.class);
+        when(stateMachine.getCurrentClientVersion()).thenReturn(ClientVersion.CLIENT_VERSION_3X);
+        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
+        final CoordinatorStateDAO dao = mock(CoordinatorStateDAO.class);
+        when(dao.isWriteRoutingAlignedWithLockClient()).thenReturn(true);
+        setSchedulerFieldToAccessible("migrationStateMachine", stateMachine);
+        setSchedulerFieldToAccessible("tableMigrationStatusProvider", provider);
+        setSchedulerFieldToAccessible("coordinatorStateDAO", dao);
+
+        for (final TableMigrationStatus status : TableMigrationStatus.values()) {
+            when(provider.getTableMigrationStatus()).thenReturn(status);
+            final boolean expected = status == TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT
+                    || status == TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED
+                    || status == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
+            assertEquals(status.toString(), expected, scheduler.isFleetSegmentingAllowed());
+        }
+
+        // Write routing out of step with the lock table (worker initialized before the status changed).
+        when(provider.getTableMigrationStatus()).thenReturn(TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE);
+        when(dao.isWriteRoutingAlignedWithLockClient()).thenReturn(false);
+        assertFalse(scheduler.isFleetSegmentingAllowed());
+
+        // Not in client version 3X.
+        when(stateMachine.getCurrentClientVersion()).thenReturn(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
+        assertFalse(scheduler.isFleetSegmentingAllowed());
     }
 
     private Scheduler setUpLeaderForProcessLoop(final boolean onCurrentVersion) throws Exception {

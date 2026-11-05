@@ -381,6 +381,19 @@ public class CoordinatorStateDAO {
     }
 
     /**
+     * Whether coordinator-state writes go to the same table as the leader lock returned by
+     * {@link #getDDBLockClient()}. Writes are routed by the status cached at initialization, while the lock client
+     * follows the live status, so they diverge during PENDING and for a worker that initialized before the status
+     * changed (e.g. initialized in DEPLOYED, still running after COMPLETE). Writes that must land on the lock item,
+     * such as the fleet segmenting version heartbeat, are only safe while this is true.
+     */
+    public boolean isWriteRoutingAlignedWithLockClient() {
+        final boolean writesToLeaseTable = cachedStatus == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE
+                || cachedStatus == TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING;
+        return writesToLeaseTable == isTableMigrationComplete();
+    }
+
+    /**
      * Shutdown both lock clients, closing their background heartbeat threads.
      * Should be called during scheduler shutdown to ensure no background threads
      * remain running.
