@@ -81,6 +81,10 @@ import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.TRIM_HORIZON;
 
 class LeaseAssignmentManagerTest {
+
+    /** Metrics factory used by the LeaseAssignmentManager under test; tests that check metrics replace it. */
+    private software.amazon.kinesis.metrics.MetricsFactory lamMetricsFactory = new NullMetricsFactory();
+
     @Mock
     StreamIdCacheManager streamIdCacheManager;
 
@@ -1339,6 +1343,53 @@ class LeaseAssignmentManagerTest {
         assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
     }
 
+    /** Review comment #21: a run reports whether it was a current Leader run or a DeployingLeader run. */
+    @Test
+    void performAssignment_segmentingEnabled_reportsRunRole() throws Exception {
+        final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        leaseAssignmentManagerRunnable.run();
+
+        Mockito.verify(scope).addData(eq("DeployingLeaderRuns"), eq(1.0), any(), any());
+        Mockito.verify(scope, Mockito.never()).addData(eq("CurrentLeaderRuns"), Mockito.anyDouble(), any(), any());
+    }
+
+    @Test
+    void performAssignment_segmentingDisabled_noRoleMetrics() throws Exception {
+        final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(false);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        leaseAssignmentManagerRunnable.run();
+
+        Mockito.verify(scope, Mockito.never()).addData(eq("CurrentLeaderRuns"), Mockito.anyDouble(), any(), any());
+        Mockito.verify(scope, Mockito.never()).addData(eq("DeployingLeaderRuns"), Mockito.anyDouble(), any(), any());
+    }
+
+    private software.amazon.kinesis.metrics.MetricsScope captureLamMetrics() {
+        final software.amazon.kinesis.metrics.MetricsFactory factory =
+                mock(software.amazon.kinesis.metrics.MetricsFactory.class);
+        final software.amazon.kinesis.metrics.MetricsScope scope =
+                mock(software.amazon.kinesis.metrics.MetricsScope.class);
+        when(factory.createMetrics()).thenReturn(scope);
+        lamMetricsFactory = factory;
+        return scope;
+    }
+
     @Test
     void performAssignment_currentLeader_assignsToAllWorkers() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
@@ -1631,7 +1682,7 @@ class LeaseAssignmentManagerTest {
                 config,
                 TEST_LEADER_WORKER_ID,
                 leaseDurationMillis,
-                new NullMetricsFactory(),
+                lamMetricsFactory,
                 scheduledExecutorService,
                 nanoTimeProvider,
                 maxLeasesPerWorker,

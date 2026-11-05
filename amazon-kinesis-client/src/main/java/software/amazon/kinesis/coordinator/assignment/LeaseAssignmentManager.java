@@ -202,6 +202,14 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
+            // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs.
+            if (segmentingHandler.isEnabled()) {
+                metricsScope.addData(
+                        inMemoryStorageView.isOnCurrentVersion() ? "CurrentLeaderRuns" : "DeployingLeaderRuns",
+                        1,
+                        StandardUnit.COUNT,
+                        MetricsLevel.SUMMARY);
+            }
 
             final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
 
@@ -261,12 +269,19 @@ public final class LeaseAssignmentManager {
                 leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
+                final int reassignments = inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
+                        - totalNewAssignmentBeforeWorkerVarianceBalancing;
                 metricsScope.addData(
-                        "NumOfLeasesReassignment",
-                        inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
-                                - totalNewAssignmentBeforeWorkerVarianceBalancing,
-                        StandardUnit.COUNT,
-                        MetricsLevel.SUMMARY);
+                        "NumOfLeasesReassignment", reassignments, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                if (segmentingHandler.isEnabled()) {
+                    metricsScope.addData(
+                            inMemoryStorageView.isOnCurrentVersion()
+                                    ? "CurrentLeaderNumOfLeasesReassignment"
+                                    : "DeployingLeaderNumOfLeasesReassignment",
+                            reassignments,
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
             }
 
             if (inMemoryStorageView.leaseToNewAssignedWorkerMap.isEmpty()) {

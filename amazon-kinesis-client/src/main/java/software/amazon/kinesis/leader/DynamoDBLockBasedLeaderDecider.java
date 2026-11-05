@@ -252,6 +252,14 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 MetricsUtil.createMetricsWithOperation(metricsFactory, METRIC_OPERATION_LEADER_DECIDER);
         metricsScope.addData(
                 METRIC_OPERATION_LEADER_DECIDER_IS_LEADER, response ? 1 : 0, StandardUnit.COUNT, MetricsLevel.DETAILED);
+        // Only while segmenting is active, so a disabled worker emits exactly what it did before segmenting.
+        if (segmentingHandler.isEnabled()) {
+            metricsScope.addData(
+                    METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER,
+                    response && LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(heldLeaderKey) ? 1 : 0,
+                    StandardUnit.COUNT,
+                    MetricsLevel.DETAILED);
+        }
         MetricsUtil.endScope(metricsScope);
     }
 

@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
@@ -50,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -100,12 +102,20 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     private DynamoDBLockBasedLeaderDecider newDecider(
             final String workerId, final long leaseDurationMillis, final long heartbeatPeriodMillis) {
+        return newDecider(workerId, leaseDurationMillis, heartbeatPeriodMillis, new NullMetricsFactory());
+    }
+
+    private DynamoDBLockBasedLeaderDecider newDecider(
+            final String workerId,
+            final long leaseDurationMillis,
+            final long heartbeatPeriodMillis,
+            final software.amazon.kinesis.metrics.MetricsFactory metricsFactory) {
         return DynamoDBLockBasedLeaderDecider.create(
                 newDao(),
                 workerId,
                 leaseDurationMillis,
                 heartbeatPeriodMillis,
-                new NullMetricsFactory(),
+                metricsFactory,
                 mockTableMigrationStateMachine,
                 mockSegmentingHandler);
     }
@@ -264,6 +274,49 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 "1",
                 getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("isReleased").s());
         verify(mockSegmentingHandler).setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+    }
+
+    /** Review comment #21: the decider reports whether this worker is the DeployingLeader. */
+    @Test
+    void isLeader_deployingLeader_emitsIsDeployingLeaderMetric() {
+        final software.amazon.kinesis.metrics.MetricsFactory factory =
+                mock(software.amazon.kinesis.metrics.MetricsFactory.class);
+        final software.amazon.kinesis.metrics.MetricsScope scope =
+                mock(software.amazon.kinesis.metrics.MetricsScope.class);
+        when(factory.createMetrics()).thenReturn(scope);
+        final String workerId = "metricsWorker";
+        final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 100L, 10L, factory);
+        decider.initialize();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.getHashKeyForLeaderLock()).thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(scope)
+                .addData(eq(LeaderDecider.METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER), eq(1.0), any(), any());
+        decider.shutdown();
+    }
+
+    @Test
+    void isLeader_segmentingDisabled_doesNotEmitIsDeployingLeaderMetric() {
+        final software.amazon.kinesis.metrics.MetricsFactory factory =
+                mock(software.amazon.kinesis.metrics.MetricsFactory.class);
+        final software.amazon.kinesis.metrics.MetricsScope scope =
+                mock(software.amazon.kinesis.metrics.MetricsScope.class);
+        when(factory.createMetrics()).thenReturn(scope);
+        final String workerId = "metricsWorker";
+        final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 100L, 10L, factory);
+        decider.initialize();
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(scope, org.mockito.Mockito.never())
+                .addData(
+                        eq(LeaderDecider.METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER),
+                        org.mockito.ArgumentMatchers.anyDouble(),
+                        any(),
+                        any());
+        decider.shutdown();
     }
 
     /** Review comment #18: only the Leader holder drives table migration; the DeployingLeader reports false. */
