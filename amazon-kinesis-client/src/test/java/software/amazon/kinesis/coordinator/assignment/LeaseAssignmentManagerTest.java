@@ -1364,8 +1364,8 @@ class LeaseAssignmentManagerTest {
     }
 
     /**
-     * Deploying leader: workers on its own fresh hash are on the deploying version; everyone else, including workers
-     * with no hash, is on the current version. Reassignments are reported under the deploying-version name.
+     * Deploying leader reports only its own segment: workers on its own fresh hash. Reassignments are reported under
+     * the deploying-version name.
      */
     @Test
     void performAssignment_deployingLeader_reportsWorkersPerVersionAndReassignments() throws Exception {
@@ -1384,15 +1384,16 @@ class LeaseAssignmentManagerTest {
         leaseAssignmentManagerRunnable.run();
 
         Mockito.verify(scope).addData(eq("NumWorkersOnDeployingVersion"), eq(1.0), any(), any());
-        Mockito.verify(scope).addData(eq("NumWorkersOnCurrentVersion"), eq(1.0), any(), any());
+        Mockito.verify(scope, Mockito.never())
+                .addData(eq("NumWorkersOnCurrentVersion"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope).addData(eq("NumOfLeaseReassignmentsDeployingVersion"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope, Mockito.never())
                 .addData(eq("NumOfLeaseReassignmentsCurrentVersion"), Mockito.anyDouble(), any(), any());
     }
 
     /**
-     * Current leader: workers on its own hash and workers with no or stale hash are on the current version; workers
-     * on another fresh hash are on the deploying version.
+     * Current leader reports only its own segment: workers on its hash plus workers with no or a stale hash. Workers
+     * on another fresh hash belong to the deploying leader, which reports them.
      */
     @Test
     void performAssignment_currentLeader_reportsWorkersPerVersionAndReassignments() throws Exception {
@@ -1411,8 +1412,9 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        Mockito.verify(scope).addData(eq("NumWorkersOnDeployingVersion"), eq(1.0), any(), any());
         Mockito.verify(scope).addData(eq("NumWorkersOnCurrentVersion"), eq(2.0), any(), any());
+        Mockito.verify(scope, Mockito.never())
+                .addData(eq("NumWorkersOnDeployingVersion"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope).addData(eq("NumOfLeaseReassignmentsCurrentVersion"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope, Mockito.never())
                 .addData(eq("NumOfLeaseReassignmentsDeployingVersion"), Mockito.anyDouble(), any(), any());
