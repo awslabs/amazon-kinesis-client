@@ -361,6 +361,63 @@ public class FleetSegmentingHandlerTest {
         assertFalse(expectations.getValue().containsKey("versionHashLut"));
     }
 
+    // ---------------- segmenting only in 3X with table migration COMPLETE (comments #17, #20) ----------------
+
+    @Test
+    void isEnabled_falseWhenNotAllowed_evenWithFlagOn() throws Exception {
+        final FleetSegmentingHandler gated =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, () -> false);
+
+        assertFalse(gated.isEnabled());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, gated.getHashKeyForLeaderLock());
+        gated.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertTrue(gated.isOnCurrentVersion());
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
+    }
+
+    @Test
+    void isEnabled_falseWhenAllowedCheckThrows() {
+        final FleetSegmentingHandler gated =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, () -> {
+                    throw new UnsupportedOperationException("state machine not initialized");
+                });
+
+        assertFalse(gated.isEnabled());
+    }
+
+    /** Segmenting becomes active at runtime (e.g. the app reaches 3X), so the check is evaluated on every call. */
+    @Test
+    void isEnabled_followsAllowedCheckAtCallTime() {
+        final java.util.concurrent.atomic.AtomicBoolean allowed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final FleetSegmentingHandler gated =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, allowed::get);
+        assertFalse(gated.isEnabled());
+
+        allowed.set(true);
+
+        assertTrue(gated.isEnabled());
+    }
+
+    /** The heartbeat is scheduled when the flag is on, but only writes while segmenting is allowed. */
+    @Test
+    void versionHashHeartbeat_scheduledWithFlag_butWritesOnlyWhenAllowed() throws Exception {
+        final java.util.concurrent.atomic.AtomicBoolean allowed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final ScheduledExecutorService executor = mock(ScheduledExecutorService.class);
+        final FleetSegmentingHandler gated =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, executor, allowed::get);
+        gated.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+        final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(executor)
+                .scheduleAtFixedRate(runnableCaptor.capture(), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        runnableCaptor.getValue().run();
+        Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).updateCoordinatorStateWithExpectation(any(), anyMap());
+
+        allowed.set(true);
+        runnableCaptor.getValue().run();
+        Mockito.verify(mockCoordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), anyMap());
+    }
+
     // ---------------- shutdown and zombie heartbeat (review finding 10) ----------------
 
     @Test

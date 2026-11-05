@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
@@ -46,8 +47,15 @@ public class FleetSegmentingHandler {
     @Getter
     private volatile boolean isVersionEmittedByAllActiveWorkers = false;
 
-    @Getter
-    private final boolean isEnabled;
+    /** Value of {@code enableRollingDeploymentSystem}. */
+    private final boolean configEnabled;
+
+    /**
+     * Whether the application is in a state where segmenting may run. Segmenting is only valid for the KCL 3.x lease
+     * assignment manager after single-table migration has finished, so the Scheduler supplies "client version is 3X
+     * and table migration is COMPLETE". Evaluated on every call because both change while the worker runs.
+     */
+    private final BooleanSupplier segmentingAllowed;
 
     /**
      * Leader lock key this worker currently holds ("Leader" or "DeployingLeader"), or null if it holds neither. Set
@@ -80,10 +88,19 @@ public class FleetSegmentingHandler {
             final LeaseManagementConfig config,
             final CoordinatorStateDAO coordinatorStateDAO,
             final ScheduledExecutorService versionHeartbeatExecutor) {
+        this(config, coordinatorStateDAO, versionHeartbeatExecutor, () -> true);
+    }
+
+    public FleetSegmentingHandler(
+            final LeaseManagementConfig config,
+            final CoordinatorStateDAO coordinatorStateDAO,
+            final ScheduledExecutorService versionHeartbeatExecutor,
+            final BooleanSupplier segmentingAllowed) {
+        this.segmentingAllowed = segmentingAllowed;
         this.coordinatorStateDAO = coordinatorStateDAO;
         this.versionHeartbeatExecutor = versionHeartbeatExecutor;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
-        isEnabled = config.enableRollingDeploymentSystem();
+        configEnabled = config.enableRollingDeploymentSystem();
         workerId = config.workerIdentifier();
 
         // The expiry threshold will be the max of two leader heartbeats or two cycles of workers emitting metrics,
@@ -92,13 +109,31 @@ public class FleetSegmentingHandler {
                 2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
 
-        if (isEnabled) {
-            // start a thread to update the leader's version hash only if segmenting is enabled
+        if (configEnabled) {
+            // Scheduled whenever the flag is on; each tick checks isEnabled(), since segmenting may only become
+            // allowed after construction (client version 3X, table migration COMPLETE).
             versionHeartbeatExecutor.scheduleAtFixedRate(
                     this::updateLeaderVersionHashLastUpdateTime,
                     0,
                     config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                     TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * Whether segmenting is active right now: the config flag is on, and the application is on client version 3X with
+     * table migration COMPLETE. When this is false the worker behaves exactly as it did before segmenting.
+     */
+    public boolean isEnabled() {
+        if (!configEnabled) {
+            return false;
+        }
+        try {
+            return segmentingAllowed.getAsBoolean();
+        } catch (final RuntimeException e) {
+            // e.g. the migration state machine isn't initialized yet; segmenting stays off until it is.
+            log.debug("Segmenting not allowed yet: {}", e.getMessage());
+            return false;
         }
     }
 
@@ -114,7 +149,7 @@ public class FleetSegmentingHandler {
      */
     public String getHashKeyForLeaderLock() {
         // If segmenting handler is disabled, default to returning the Leader key
-        if (!isEnabled) {
+        if (!isEnabled()) {
             log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
@@ -202,7 +237,7 @@ public class FleetSegmentingHandler {
      * leader lock, e.g. when a non-lock leader decider is active, is treated as current.</p>
      */
     public boolean isOnCurrentVersion() {
-        if (!isEnabled) {
+        if (!isEnabled()) {
             return true;
         }
         return !LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(lastHeldLeaderKey);
@@ -291,7 +326,7 @@ public class FleetSegmentingHandler {
         // Heartbeat the lock this worker actually holds. Recomputing the key could name the other lock, which made
         // the owner-conditioned write a no-op and let the held lock's versionHashLut go stale. It also cost a read.
         final String leaderKey = heldLeaderKey;
-        if (!isEnabled || leaderKey == null) {
+        if (!isEnabled() || leaderKey == null) {
             return;
         }
         try {

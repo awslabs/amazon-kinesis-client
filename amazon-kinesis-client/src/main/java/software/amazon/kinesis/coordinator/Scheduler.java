@@ -64,10 +64,12 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.assignment.MigrationAwareLAMDataManager;
+import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
@@ -239,6 +241,9 @@ public class Scheduler implements Runnable {
     private final FleetSegmentingHandler segmentingHandler;
 
     @Getter(AccessLevel.NONE)
+    private final TableMigrationStatusProvider tableMigrationStatusProvider;
+
+    @Getter(AccessLevel.NONE)
     private final EntityDAO entityDAO;
 
     @Getter(AccessLevel.NONE)
@@ -316,6 +321,7 @@ public class Scheduler implements Runnable {
         final LeaseManagementFactory leaseManagementFactory =
                 this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
         final TableMigrationStatusProvider tableMigrationStatusProvider = new TableMigrationStatusProvider();
+        this.tableMigrationStatusProvider = tableMigrationStatusProvider;
         this.coordinatorStateDAO = new CoordinatorStateDAO(
                 leaseManagementConfig.dynamoDBClient(),
                 coordinatorConfig().coordinatorStateTableConfig(),
@@ -363,13 +369,16 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.leaseTableScanTotalSegments());
 
         // Daemon thread, and stopped in shutdown(), so the version heartbeat never outlives the Scheduler.
+        // Segmenting is only allowed once the app runs the 3.x algorithms (client version 3X) and single-table
+        // migration has finished; both are read at call time because they change while the worker runs.
         this.segmentingHandler = new FleetSegmentingHandler(
                 leaseManagementConfig,
                 coordinatorStateDAO,
                 Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
                         .setNameFormat("fleet-segmenting-version-heartbeat-%d")
                         .setDaemon(true)
-                        .build()));
+                        .build()),
+                this::isFleetSegmentingAllowed);
 
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
@@ -721,6 +730,17 @@ public class Scheduler implements Runnable {
 
     private boolean isLeader() {
         return leaderDecider.isLeader(leaseManagementConfig.workerIdentifier());
+    }
+
+    /**
+     * Fleet segmenting is only valid once the application runs the KCL 3.x algorithms (client version 3X) and
+     * single-table migration has finished. Throws if the migration state machine isn't initialized yet, which the
+     * segmenting handler treats as "not allowed".
+     */
+    private boolean isFleetSegmentingAllowed() {
+        return migrationStateMachine.getCurrentClientVersion() == ClientVersion.CLIENT_VERSION_3X
+                && tableMigrationStatusProvider.getTableMigrationStatus()
+                        == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE;
     }
 
     /**
