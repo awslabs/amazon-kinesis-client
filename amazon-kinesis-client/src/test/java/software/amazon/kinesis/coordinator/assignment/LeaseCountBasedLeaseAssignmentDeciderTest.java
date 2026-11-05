@@ -58,6 +58,15 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
     private final Supplier<Long> nanoTimeProvider = () -> CURRENT_TIME_NANOS;
 
     private LeaseCountBasedLeaseAssignmentDecider createDecider(Set<String> workerIds) {
+        stubAssignableWorkers(workerIds);
+        return new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
+    }
+
+    /**
+     * Stubs the workers the decider balances across. The decider reads them from getAssignableWorkers() and
+     * getWorkersOnVersionHash(), which return only the leader's segment when fleet segmenting is active.
+     */
+    private void stubAssignableWorkers(Set<String> workerIds) {
         List<WorkerMetricStats> workerMetrics = workerIds.stream()
                 .map(id -> {
                     WorkerMetricStats stats = new WorkerMetricStats();
@@ -72,7 +81,6 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
                 .thenReturn(true);
         when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))
                 .thenReturn(true);
-        return new LeaseCountBasedLeaseAssignmentDecider(inMemoryStorageView, MAX_LEASES_FOR_WORKER, nanoTimeProvider);
     }
 
     @BeforeEach
@@ -475,6 +483,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>(workerToLeasesMap.keySet()));
         when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
+        stubAssignableWorkers(workerToLeasesMap.keySet());
     }
 
     private Lease createLease(String leaseKey, String owner, long lastCounterIncrement) {
