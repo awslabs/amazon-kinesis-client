@@ -356,7 +356,7 @@ public class FleetSegmentingHandler {
         // A released lock keeps ownerName, so also require that it isn't released. The lock client removes
         // isReleased when a lock is acquired and sets it on release. Without this, a worker could keep a released
         // lock's
-        // versionHashLut fresh, making a version nobody is leading look alive (review finding 10).
+        // versionHashLut fresh, making a version nobody is leading look alive.
         expectations.put(
                 LOCK_IS_RELEASED_KEY,
                 ExpectedAttributeValue.builder().exists(false).build());

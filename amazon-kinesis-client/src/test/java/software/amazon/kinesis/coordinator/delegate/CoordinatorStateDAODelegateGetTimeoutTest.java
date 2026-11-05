@@ -18,7 +18,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Review finding 6: getCoordinatorState runs inside the leader decider's synchronized isLeader(), so it must not wait
+ * getCoordinatorState runs inside the leader decider's synchronized isLeader(), so it must not wait
  * on DynamoDB forever.
  */
 class CoordinatorStateDAODelegateGetTimeoutTest {

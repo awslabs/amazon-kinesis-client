@@ -640,8 +640,8 @@ public final class LeaseAssignmentManager {
             });
 
             // Compute the segment views once per run. Every decision in the run then uses the same answer, instead
-            // of calling isOnCurrentVersion() 6-10 times and possibly getting different answers mid-run (review
-            // finding 8). Workers are fixed after load and lease moves stay within the assignable workers, so these
+            // of calling isOnCurrentVersion() 6-10 times and possibly getting different answers mid-run.
+            // Workers are fixed after load and lease moves stay within the assignable workers, so these
             // don't change during the run.
             this.onCurrentVersion = segmentingHandler.isOnCurrentVersion();
             this.workersOnVersionHash = segmentingHandler.isEnabled()

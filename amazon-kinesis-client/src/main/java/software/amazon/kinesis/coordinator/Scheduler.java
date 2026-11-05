@@ -704,7 +704,7 @@ public class Scheduler implements Runnable {
             // check for new streams and sync with the scheduler state
             // Only the current leader runs these. While segmenting, the deploying leader also returns true from
             // isLeader(), but its only job is rebalancing its own segment; two leaders running stream sync and
-            // stale-stream lease deletion at once can race (review comment #18).
+            // stale-stream lease deletion at once can race.
             if (isLeader() && segmentingHandler.isOnCurrentVersion()) {
                 checkAndSyncStreamShardsAndLeases();
                 leaderSynced.set(true);

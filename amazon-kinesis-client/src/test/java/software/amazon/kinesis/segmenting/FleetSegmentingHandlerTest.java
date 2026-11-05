@@ -136,7 +136,7 @@ public class FleetSegmentingHandlerTest {
     }
 
     /**
-     * Finding 4: a DeployingLeader holder must not become "current" because the Leader item's version hash now
+     * A DeployingLeader holder must not become "current" because the Leader item's version hash now
      * matches its own. It only becomes current once it actually holds the Leader lock.
      */
     @Test
@@ -154,7 +154,7 @@ public class FleetSegmentingHandlerTest {
         assertTrue(handler.isOnCurrentVersion());
     }
 
-    /** Finding 1: with a non-lock leader decider (2.x-compatible modes) no lock is ever held; shard sync must run. */
+    /** With a non-lock leader decider (2.x-compatible modes) no lock is ever held; shard sync must run. */
     @Test
     void isOnCurrentVersion_trueWhenNoLockEverHeld() throws Exception {
         assertTrue(handler.isOnCurrentVersion());
@@ -260,7 +260,7 @@ public class FleetSegmentingHandlerTest {
         assertEquals(matching, result.get(0));
     }
 
-    // ---------------- robustness (review finding 9) ----------------
+    // ---------------- robustness against bad version data ----------------
 
     /** A properties map without versionHash (the field predates segmenting) must not throw inside the LAM. */
     @Test
@@ -353,7 +353,7 @@ public class FleetSegmentingHandlerTest {
         assertFalse(expectations.getValue().containsKey("versionHashLut"));
     }
 
-    // ---------------- segmenting only in 3X with table migration COMPLETE (comments #17, #20) ----------------
+    // ---------------- segmenting only in 3X with table migration COMPLETE ----------------
 
     @Test
     void isEnabled_falseWhenNotAllowed_evenWithFlagOn() throws Exception {
@@ -410,7 +410,7 @@ public class FleetSegmentingHandlerTest {
         Mockito.verify(mockCoordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), anyMap());
     }
 
-    // ---------------- shutdown and zombie heartbeat (review finding 10) ----------------
+    // ---------------- shutdown and released-lock heartbeat ----------------
 
     @Test
     void shutdown_stopsHeartbeatExecutor_andIsIdempotent() {

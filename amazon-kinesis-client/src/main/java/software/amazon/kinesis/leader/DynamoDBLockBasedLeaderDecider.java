@@ -151,7 +151,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // Which lock to contend for. A worker that already holds a lock keeps using that key and only re-evaluates
         // it once per heartbeat period. getHashKeyForLeaderLock() reads the coordinator table, and isLeader() runs
         // about once a second on the leader, so re-evaluating on every call made the leader's leadership depend on
-        // coordinator-table reads (review finding 6).
+        // coordinator-table reads.
         final long now = System.currentTimeMillis();
         final String ddbLeaderKey;
         if (heldLeaderKey != null && lastKeyEvaluationTimeMillis + heartbeatPeriodMillis > now) {

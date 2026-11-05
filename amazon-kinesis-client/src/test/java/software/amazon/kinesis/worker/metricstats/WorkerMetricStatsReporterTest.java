@@ -36,7 +36,7 @@ class WorkerMetricStatsReporterTest {
                 new NullMetricsFactory(), WORKER_ID, metricsManager, metricsDAO, segmentingHandler);
     }
 
-    /** Finding 2: with segmenting off, the reporter writes the same entry as before segmenting. */
+    /** With segmenting off, the reporter writes the same entry as before segmenting. */
     @Test
     void run_segmentingDisabled_leavesPropertiesUnset() throws Exception {
         when(segmentingHandler.isEnabled()).thenReturn(false);

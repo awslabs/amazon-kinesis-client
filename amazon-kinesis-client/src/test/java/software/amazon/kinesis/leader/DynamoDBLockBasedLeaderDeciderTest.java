@@ -144,7 +144,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
     }
 
     /**
-     * Finding 3, read-failure path only: a worker whose version-state read fails and that has never read it
+     * Read-failure path only: a worker whose version-state read fails and that has never read it
      * successfully sits out one cycle instead of guessing "Leader". It holds nothing and writes nothing, and the same
      * worker contends normally once a read succeeds. (A successful read of a Leader item with no versionHash, as on
      * a first rollout, takes the normal path: see isLeader_firstRollout_updatedWorkersContendForLeader.)
@@ -252,7 +252,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertFalse(decider.isLeader(workerId), "LeaderDecider did not return false after shutdown.");
     }
 
-    /** Finding 2: with segmenting off, no version hash is written to the lock item. */
+    /** With segmenting off, no version hash is written to the lock item. */
     @Test
     void isLeader_segmentingDisabled_doesNotWriteVersionHashToLock() {
         final String workerId = getWorkerId(1);
@@ -292,7 +292,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         return attrs;
     }
 
-    /** Finding 6: a lock holder answers isLeader from local state and doesn't re-read the key on every call. */
+    /** A lock holder answers isLeader from local state and doesn't re-read the key on every call. */
     @Test
     void isLeader_holder_doesNotReevaluateKeyWithinHeartbeatPeriod() {
         final String workerId = "longHeartbeatWorker";
@@ -330,7 +330,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         verify(mockSegmentingHandler).setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
     }
 
-    /** Review comment #21: the decider reports whether this worker is the DeployingLeader. */
+    /** The decider reports whether this worker is the DeployingLeader. */
     @Test
     void isLeader_deployingLeader_emitsIsDeployingLeaderMetric() {
         final software.amazon.kinesis.metrics.MetricsFactory factory =
@@ -373,7 +373,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         decider.shutdown();
     }
 
-    /** Review comment #18: only the Leader holder drives table migration; the DeployingLeader reports false. */
+    /** Only the Leader holder drives table migration; the DeployingLeader reports false. */
     @Test
     void isLeader_deployingLeader_reportsNotLeaderToTableMigration() throws Exception {
         final String workerId = getWorkerId(1);
@@ -409,7 +409,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
     }
 
     /**
-     * Finding 10: a released lock keeps ownerName, so an owner-only heartbeat condition kept refreshing a released
+     * A released lock keeps ownerName, so an owner-only heartbeat condition kept refreshing a released
      * lock's versionHashLut. With the isReleased condition the write is rejected until the lock is held again.
      */
     @Test

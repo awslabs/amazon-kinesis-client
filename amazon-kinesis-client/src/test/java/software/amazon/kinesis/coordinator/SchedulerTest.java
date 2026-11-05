@@ -1708,7 +1708,7 @@ public class SchedulerTest {
     }
 
     /**
-     * Review comment #18: the deploying leader returns true from isLeader() but must only rebalance leases. It must
+     * The deploying leader returns true from isLeader() but must only rebalance leases. It must
      * not run multi-stream sync (new-stream shard sync, stale-stream lease deletion) or start StreamInfoManager.
      */
     @Test

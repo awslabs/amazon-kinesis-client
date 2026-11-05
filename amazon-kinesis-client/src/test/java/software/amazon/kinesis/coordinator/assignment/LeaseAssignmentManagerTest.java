@@ -1315,7 +1315,7 @@ class LeaseAssignmentManagerTest {
     }
 
     /**
-     * Finding 8: the run reads isOnCurrentVersion() once and every step uses that answer. Here a later call would say
+     * The run reads isOnCurrentVersion() once and every step uses that answer. Here a later call would say
      * "deploying", but the run started as the current leader, so both expired leases still go out fleet-wide.
      */
     @Test
@@ -1343,7 +1343,7 @@ class LeaseAssignmentManagerTest {
         assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
     }
 
-    /** Review comment #21: a run reports whether it was a current Leader run or a DeployingLeader run. */
+    /** A run reports whether it was a current Leader run or a DeployingLeader run. */
     @Test
     void performAssignment_segmentingEnabled_reportsRunRole() throws Exception {
         final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
