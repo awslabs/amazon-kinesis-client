@@ -64,6 +64,7 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
 import software.amazon.kinesis.coordinator.assignment.MigrationAwareLAMDataManager;
+import software.amazon.kinesis.coordinator.migration.ClientVersion;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
@@ -122,6 +123,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.WorkerMetricsSelector;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
@@ -235,6 +237,11 @@ public class Scheduler implements Runnable {
 
     private boolean leasesSyncedOnAppInit = false;
 
+    private final FleetSegmentingHandler segmentingHandler;
+
+    @Getter(AccessLevel.NONE)
+    private final TableMigrationStatusProvider tableMigrationStatusProvider;
+
     @Getter(AccessLevel.NONE)
     private final EntityDAO entityDAO;
 
@@ -313,6 +320,7 @@ public class Scheduler implements Runnable {
         final LeaseManagementFactory leaseManagementFactory =
                 this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
         final TableMigrationStatusProvider tableMigrationStatusProvider = new TableMigrationStatusProvider();
+        this.tableMigrationStatusProvider = tableMigrationStatusProvider;
         this.coordinatorStateDAO = new CoordinatorStateDAO(
                 leaseManagementConfig.dynamoDBClient(),
                 coordinatorConfig().coordinatorStateTableConfig(),
@@ -358,6 +366,18 @@ public class Scheduler implements Runnable {
                 coordinatorStateDAO.getLeaseTableDaoDelegate(),
                 Executors.newCachedThreadPool(),
                 leaseManagementConfig.leaseTableScanTotalSegments());
+
+        // Daemon thread, and stopped in shutdown(), so the version heartbeat never outlives the Scheduler.
+        // Segmenting is only allowed once the app runs the 3.x algorithms (client version 3X) and single-table
+        // migration has finished; both are read at call time because they change while the worker runs.
+        this.segmentingHandler = new FleetSegmentingHandler(
+                leaseManagementConfig,
+                coordinatorStateDAO,
+                Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+                        .setNameFormat("fleet-segmenting-version-heartbeat-%d")
+                        .setDaemon(true)
+                        .build()),
+                this::isFleetSegmentingAllowed);
 
         this.migrationComponentsInitializer =
                 createDynamicMigrationComponentsInitializer(leaseSerializer, tableMigrationStatusProvider);
@@ -432,7 +452,8 @@ public class Scheduler implements Runnable {
                 metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
-                leaderSynced);
+                leaderSynced,
+                segmentingHandler);
         this.leaseCleanupManager = leaseManagementFactory.createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
@@ -487,23 +508,22 @@ public class Scheduler implements Runnable {
                 .lamThreadPool(Executors.newScheduledThreadPool(
                         1,
                         new ThreadFactoryBuilder().setNameFormat("lam-thread").build()))
-                .lamCreator((lamThreadPool, leaderDecider) -> {
-                    return new LeaseAssignmentManager(
-                            leaseRefresher,
-                            leaderDecider,
-                            leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
-                            leaseCoordinator.workerIdentifier(),
-                            leaseManagementConfig.failoverTimeMillis(),
-                            metricsFactory,
-                            lamThreadPool,
-                            System::nanoTime,
-                            leaseManagementConfig.maxLeasesForWorker(),
-                            leaseManagementConfig.gracefulLeaseHandoffConfig(),
-                            leaseManagementConfig.leaseAssignmentStrategy(),
-                            leaseManagementConfig.leaseAssignmentIntervalMillis(),
-                            streamIdCacheManager,
-                            lamDataManager);
-                })
+                .lamCreator((lamThreadPool, leaderDecider) -> new LeaseAssignmentManager(
+                        leaseRefresher,
+                        leaderDecider,
+                        leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
+                        leaseCoordinator.workerIdentifier(),
+                        leaseManagementConfig.failoverTimeMillis(),
+                        metricsFactory,
+                        lamThreadPool,
+                        System::nanoTime,
+                        leaseManagementConfig.maxLeasesForWorker(),
+                        leaseManagementConfig.gracefulLeaseHandoffConfig(),
+                        leaseManagementConfig.leaseAssignmentStrategy(),
+                        leaseManagementConfig.leaseAssignmentIntervalMillis(),
+                        streamIdCacheManager,
+                        lamDataManager,
+                        segmentingHandler))
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
@@ -513,11 +533,13 @@ public class Scheduler implements Runnable {
                         metricsFactory,
                         leaseManagementConfig.dynamoDbLockBasedLeaderLeaseDurationInMillis(),
                         leaseManagementConfig.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
-                        tableMigrationStateMachine))
+                        tableMigrationStateMachine,
+                        segmentingHandler))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
                 .lamDataManager(lamDataManager)
+                .segmentingHandler(segmentingHandler)
                 .build();
     }
 
@@ -679,7 +701,10 @@ public class Scheduler implements Runnable {
             cleanupShardConsumers(assignedShards);
 
             // check for new streams and sync with the scheduler state
-            if (isLeader()) {
+            // Only the current leader runs these. While segmenting, the deploying leader also returns true from
+            // isLeader(), but its only job is rebalancing its own segment; two leaders running stream sync and
+            // stale-stream lease deletion at once can race.
+            if (isLeader() && segmentingHandler.isOnCurrentVersion()) {
                 checkAndSyncStreamShardsAndLeases();
                 leaderSynced.set(true);
                 streamInfoManager.start();
@@ -707,6 +732,36 @@ public class Scheduler implements Runnable {
 
     private boolean isLeader() {
         return leaderDecider.isLeader(leaseManagementConfig.workerIdentifier());
+    }
+
+    /**
+     * Fleet segmenting is only valid once the application runs the KCL 3.x algorithms (client version 3X), and not
+     * while single-table migration is in progress:
+     * <ul>
+     *   <li>INIT / DEPLOYED (phase 1, or an app that stays on the legacy coordinator table): no entries are moved,
+     *   and the lock and coordinator writes both use the legacy table. Allowed.</li>
+     *   <li>PENDING (phase 2): coordinator entries are moved between tables, and the lock (legacy table) and
+     *   coordinator writes (lease table) use different tables. Not allowed.</li>
+     *   <li>COMPLETE: everything uses the lease table. Allowed.</li>
+     *   <li>UNKNOWN: status not determined yet. Not allowed.</li>
+     * </ul>
+     * It also requires the coordinator-state write table to match the lock table, which isn't the case for a worker
+     * that initialized before the status changed. Throws if the migration state machine isn't initialized yet, which
+     * the segmenting handler treats as "not allowed".
+     */
+    @VisibleForTesting
+    boolean isFleetSegmentingAllowed() {
+        if (migrationStateMachine.getCurrentClientVersion() != ClientVersion.CLIENT_VERSION_3X) {
+            return false;
+        }
+        switch (tableMigrationStatusProvider.getTableMigrationStatus()) {
+            case TABLE_MIGRATION_STATUS_INIT:
+            case TABLE_MIGRATION_STATUS_DEPLOYED:
+            case TABLE_MIGRATION_STATUS_COMPLETE:
+                return coordinatorStateDAO.isWriteRoutingAlignedWithLockClient();
+            default:
+                return false;
+        }
     }
 
     /**
@@ -1144,6 +1199,8 @@ public class Scheduler implements Runnable {
             shutdown = true;
             shutdownStartTimeMillis = System.currentTimeMillis();
 
+            // Stop the version heartbeat before the leader decider releases its lock.
+            segmentingHandler.shutdown();
             migrationStateMachine.shutdown();
             migrationComponentsInitializer.shutdown();
             tableMigrationStateMachine.shutdown();

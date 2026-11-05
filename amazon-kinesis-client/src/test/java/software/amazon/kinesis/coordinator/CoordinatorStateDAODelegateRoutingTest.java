@@ -290,4 +290,54 @@ class CoordinatorStateDAODelegateRoutingTest {
             throw new RuntimeException(e);
         }
     }
+
+    // ---------------- isWriteRoutingAlignedWithLockClient ----------------
+
+    /**
+     * Writes are routed by the status cached at initialize(); the lock client follows the live status. They agree in
+     * INIT/DEPLOYED (both legacy) and COMPLETE (both lease table), and disagree in PENDING and for a worker that
+     * initialized before the status changed to COMPLETE.
+     */
+    @Test
+    void isWriteRoutingAlignedWithLockClient_matchesCachedAndLiveStatus() throws Exception {
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_INIT,
+                true);
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED,
+                true);
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE,
+                true);
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING,
+                false);
+        // Initialized in DEPLOYED, still running after the table went COMPLETE.
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_DEPLOYED,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE,
+                false);
+        // Initialized in PENDING, still running after COMPLETE: both now use the lease table.
+        assertAligned(
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_PENDING,
+                TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE,
+                true);
+    }
+
+    private void assertAligned(
+            final TableMigrationStatus atInitialize, final TableMigrationStatus live, final boolean expected)
+            throws Exception {
+        when(statusProvider.getTableMigrationStatus()).thenReturn(atInitialize);
+        final CoordinatorStateDAO dao = createDao();
+        dao.initializeDelegates();
+        dao.initialize();
+        when(statusProvider.getTableMigrationStatus()).thenReturn(live);
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                expected, dao.isWriteRoutingAlignedWithLockClient(), atInitialize + " -> " + live);
+    }
 }

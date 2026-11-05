@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.LockItem;
+import com.amazonaws.services.dynamodbv2.ReleaseLockOptions;
 import com.amazonaws.services.dynamodbv2.model.LockCurrentlyUnavailableException;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,8 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
+import software.amazon.kinesis.segmenting.VersionStateUnavailableException;
 
 /**
  * Implementation for LeaderDecider to elect leader using lock on dynamo db table. This class uses
@@ -61,9 +64,16 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     private final String workerId;
     private final MetricsFactory metricsFactory;
     private final TableMigrationStateMachine tableMigrationStateMachine;
+    private final FleetSegmentingHandler segmentingHandler;
 
     private long lastCheckTimeInMillis = 0L;
     private boolean lastIsLeaderResult = false;
+
+    // Leader lock key this worker holds (Leader or DeployingLeader), or null. Guarded by this object's monitor.
+    private String heldLeaderKey = null;
+
+    // When heldLeaderKey was last re-evaluated against the coordinator table.
+    private long lastKeyEvaluationTimeMillis = 0L;
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     @VisibleForTesting
@@ -73,11 +83,17 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final Long leaseDuration,
             final Long heartbeatPeriod,
             final MetricsFactory metricsFactory,
-            final TableMigrationStateMachine tableMigrationStateMachine) {
+            final TableMigrationStateMachine tableMigrationStateMachine,
+            final FleetSegmentingHandler segmentingHandler) {
         coordinatorStateDao.initializeLockClients(leaseDuration, heartbeatPeriod, workerId);
 
         return new DynamoDBLockBasedLeaderDecider(
-                coordinatorStateDao, heartbeatPeriod, workerId, metricsFactory, tableMigrationStateMachine);
+                coordinatorStateDao,
+                heartbeatPeriod,
+                workerId,
+                metricsFactory,
+                tableMigrationStateMachine,
+                segmentingHandler);
     }
 
     public static DynamoDBLockBasedLeaderDecider create(
@@ -86,14 +102,16 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             final MetricsFactory metricsFactory,
             long leaseDurationInMillis,
             long heartbeatPeriodInMillis,
-            final TableMigrationStateMachine tableMigrationStateMachine) {
+            final TableMigrationStateMachine tableMigrationStateMachine,
+            final FleetSegmentingHandler segmentingHandler) {
         return create(
                 coordinatorStateDao,
                 workerId,
                 leaseDurationInMillis,
                 heartbeatPeriodInMillis,
                 metricsFactory,
-                tableMigrationStateMachine);
+                tableMigrationStateMachine,
+                segmentingHandler);
     }
 
     @Override
@@ -118,7 +136,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // this is to avoid unnecessary calls to dynamoDB.
         // Different modules in KCL can request for isLeader check within heartbeatPeriodMillis, and this optimization
         // will help in those cases.
-        // In case the last call returned true, we want to check the source always to ensure the correctness of leader.
+        // If the last call returned true, the held lock is checked below from the lock client's local state.
         if (!lastIsLeaderResult && lastCheckTimeInMillis + heartbeatPeriodMillis > System.currentTimeMillis()) {
             publishIsLeaderMetrics(lastIsLeaderResult);
             return lastIsLeaderResult;
@@ -130,29 +148,63 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         final AmazonDynamoDBLockClient lockClient = coordinatorStateDAO.getDDBLockClient();
         boolean response;
 
-        // Get the lockItem from storage (if present)
-        final Optional<LockItem> lockItem = lockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
-        lockItem.ifPresent(
-                item -> log.info("Worker : {} is the current {}.", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
+        // Which lock to contend for. A worker that already holds a lock keeps using that key and only re-evaluates
+        // it once per heartbeat period. getHashKeyForLeaderLock() reads the coordinator table, and isLeader() runs
+        // about once a second on the leader, so re-evaluating on every call made the leader's leadership depend on
+        // coordinator-table reads.
+        final long now = System.currentTimeMillis();
+        final String ddbLeaderKey;
+        if (heldLeaderKey != null && lastKeyEvaluationTimeMillis + heartbeatPeriodMillis > now) {
+            ddbLeaderKey = heldLeaderKey;
+        } else {
+            try {
+                ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+            } catch (final VersionStateUnavailableException e) {
+                // The version state has never been read successfully, so this worker can't know which lock it is
+                // eligible for. Contend for neither lock this cycle rather than guessing "Leader". This worker can't
+                // hold a lock here: acquiring one required a successful read.
+                log.warn("Not contending for leadership this cycle: {}", e.getMessage(), e);
+                recordResult(null, false);
+                return false;
+            }
+            lastKeyEvaluationTimeMillis = now;
+        }
+
+        // If the key changed while holding a lock (e.g. the deploying leader at the end of a deploy, or a former
+        // current leader whose version is no longer current), give up the lock this worker holds before contending
+        // for the other one. Only the locally held lock is released, so this needs no DynamoDB read.
+        if (heldLeaderKey != null && !heldLeaderKey.equals(ddbLeaderKey)) {
+            log.info(
+                    "Leader lock key changed from {} to {}, releasing {}.", heldLeaderKey, ddbLeaderKey, heldLeaderKey);
+            releaseLeadershipIfHeld(lockClient);
+        }
+
+        // For a lock this worker holds, getLock is answered from the lock client's local map without I/O.
+        final Optional<LockItem> lockItem = lockClient.getLock(ddbLeaderKey, Optional.empty());
+        lockItem.ifPresent(item -> log.debug("Worker : {} is the current {}.", item.getOwnerName(), ddbLeaderKey));
 
         // If the lockItem is present and is expired, that means either current worker is not leader.
         if (!lockItem.isPresent() || lockItem.get().isExpired()) {
             try {
                 // Current worker does not hold the lock, try to acquireOne.
+                final Map<String, AttributeValue> lockAttributes = new HashMap<>(getLockAttributes());
+                if (segmentingHandler.isEnabled()) {
+                    lockAttributes.putAll(segmentingHandler.generateVersionHashWithLastUpdatedTimeForLockTable());
+                }
                 final Optional<LockItem> leaderLockItem =
-                        lockClient.tryAcquireLock(AcquireLockOptions.builder(LeaderLock.LEADER_HASH_KEY)
+                        lockClient.tryAcquireLock(AcquireLockOptions.builder(ddbLeaderKey)
                                 .withRefreshPeriod(heartbeatPeriodMillis)
                                 .withTimeUnit(TimeUnit.MILLISECONDS)
                                 .withShouldSkipBlockingWait(true)
-                                .withAdditionalAttributes(getLockAttributes())
+                                .withAdditionalAttributes(lockAttributes)
                                 .build());
-                leaderLockItem.ifPresent(
-                        item -> log.info("Worker : {} is new {}", item.getOwnerName(), LeaderLock.LEADER_HASH_KEY));
+                leaderLockItem.ifPresent(item -> log.info("Worker : {} is new {}", item.getOwnerName(), ddbLeaderKey));
                 // if leaderLockItem optional is empty, that means the lock is not acquired by this worker.
                 response = leaderLockItem.isPresent();
             } catch (final InterruptedException e) {
                 // Something bad happened, don't assume leadership and also release lock just in case the
                 // lock was granted and still interrupt happened.
+                heldLeaderKey = ddbLeaderKey;
                 releaseLeadershipIfHeld(lockClient);
                 log.error("Acquiring lock was interrupted in between", e);
                 response = false;
@@ -166,17 +218,26 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         }
 
         try {
-            tableMigrationStateMachine.handleLeaderLockResult(response);
+            // Only the holder of the Leader lock drives table migration; the DeployingLeader only rebalances leases.
+            tableMigrationStateMachine.handleLeaderLockResult(
+                    response && LeaderLock.LEADER_HASH_KEY.equals(ddbLeaderKey));
         } catch (final DependencyException | InvalidStateException e) {
             log.warn("handleLeaderLockResult failed, releasing lock and returning false", e);
+            heldLeaderKey = response ? ddbLeaderKey : heldLeaderKey;
             releaseLeadershipIfHeld(lockClient);
             response = false;
         }
 
+        recordResult(response ? ddbLeaderKey : null, response);
+        return response;
+    }
+
+    private void recordResult(final String heldKey, final boolean response) {
+        heldLeaderKey = heldKey;
+        segmentingHandler.setHeldLeaderKey(heldKey);
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
-        return response;
     }
 
     private Map<String, AttributeValue> getLockAttributes() {
@@ -191,6 +252,14 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
                 MetricsUtil.createMetricsWithOperation(metricsFactory, METRIC_OPERATION_LEADER_DECIDER);
         metricsScope.addData(
                 METRIC_OPERATION_LEADER_DECIDER_IS_LEADER, response ? 1 : 0, StandardUnit.COUNT, MetricsLevel.DETAILED);
+        // Only while segmenting is active, so a disabled worker emits exactly what it did before segmenting.
+        if (segmentingHandler.isEnabled()) {
+            metricsScope.addData(
+                    METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER,
+                    response && LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(heldLeaderKey) ? 1 : 0,
+                    StandardUnit.COUNT,
+                    MetricsLevel.DETAILED);
+        }
         MetricsUtil.endScope(metricsScope);
     }
 
@@ -218,25 +287,43 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
     }
 
     /**
-     * Release the leader lock on the specified lock client if this worker holds it.
+     * Release the leader lock this worker holds, if any, on the specified lock client. Only the key recorded when the
+     * lock was acquired is released. Asking the segmenting handler which key to release could name the other lock,
+     * which left the held lock in place until it expired, and it cost a coordinator-table read.
      *
      * @param lockClient the lock client to check and release on
      */
     private void releaseLeadershipIfHeld(final AmazonDynamoDBLockClient lockClient) {
+        final String keyToRelease = heldLeaderKey;
+        if (keyToRelease == null) {
+            return;
+        }
         try {
-            final Optional<LockItem> lockItem = lockClient.getLock(LeaderLock.LEADER_HASH_KEY, Optional.empty());
+            // Held locks are in the lock client's local map, so this getLock does no I/O.
+            final Optional<LockItem> lockItem = lockClient.getLock(keyToRelease, Optional.empty());
             if (lockItem.isPresent()
                     && !lockItem.get().isExpired()
                     && lockItem.get().getOwnerName().equals(workerId)) {
 
                 log.info(
-                        "Current worker : {} holds the lock, releasing it.",
-                        lockItem.get().getOwnerName());
-                // LockItem.close() will release the lock if current worker owns it else this call is no op.
-                lockItem.get().close();
+                        "Current worker : {} holds the {} lock, releasing it.",
+                        lockItem.get().getOwnerName(),
+                        keyToRelease);
+                if (segmentingHandler.isEnabled()) {
+                    // Keep the released item so other workers can still read its version hash.
+                    lockClient.releaseLock(ReleaseLockOptions.builder(lockItem.get())
+                            .withDeleteLock(false)
+                            .build());
+                } else {
+                    // Same as before segmenting: LockItem.close() releases the lock if this worker owns it.
+                    lockItem.get().close();
+                }
             }
         } catch (final Exception e) {
             log.error("Failed to complete releaseLeadershipIfHeld call.", e);
+        } finally {
+            heldLeaderKey = null;
+            segmentingHandler.setHeldLeaderKey(null);
         }
     }
 }
