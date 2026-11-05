@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
@@ -265,6 +266,99 @@ public class FleetSegmentingHandlerTest {
 
         assertEquals(1, result.size());
         assertEquals(matching, result.get(0));
+    }
+
+    // ---------------- robustness (review finding 9) ----------------
+
+    /** A properties map without versionHash (the field predates segmenting) must not throw inside the LAM. */
+    @Test
+    void filterWorkersOnVersionHash_toleratesPropertiesWithoutVersionHash() {
+        final WorkerMetricStats noHash = mock(WorkerMetricStats.class);
+        when(noHash.getProperties()).thenReturn(Collections.singletonMap("someOtherProperty", "x"));
+
+        assertTrue(handler.filterWorkersOnVersionHash(Collections.singletonList(noHash))
+                .isEmpty());
+    }
+
+    @Test
+    void isWorkerVersionHashStale_trueWhenLutUnparseable() {
+        final WorkerMetricStats worker = mock(WorkerMetricStats.class);
+        final Map<String, String> props = new HashMap<>();
+        props.put("versionHash", sampleVersionHash);
+        props.put("versionHashLut", "not-a-number");
+        when(worker.getProperties()).thenReturn(props);
+
+        assertTrue(handler.isWorkerVersionHashStale(worker));
+    }
+
+    /** A Leader item with a versionHash but no versionHashLut must expire, not look fresh forever. */
+    @Test
+    void getHashKeyForLeaderLock_returnsLeader_whenLeaderLutMissing() throws Exception {
+        final Map<String, AttributeValue> attrs = new HashMap<>();
+        attrs.put("versionHash", AttributeValue.fromS("some-other-version"));
+        final CoordinatorState state = mock(CoordinatorState.class);
+        when(state.getAttributes()).thenReturn(attrs);
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
+                .thenReturn(state);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void getHashKeyForLeaderLock_returnsLeader_whenLeaderLutUnparseable() throws Exception {
+        final Map<String, AttributeValue> attrs = new HashMap<>();
+        attrs.put("versionHash", AttributeValue.fromS("some-other-version"));
+        attrs.put("versionHashLut", AttributeValue.fromS("not-a-number"));
+        final CoordinatorState state = mock(CoordinatorState.class);
+        when(state.getAttributes()).thenReturn(attrs);
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderLock.LEADER_HASH_KEY)))
+                .thenReturn(state);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    /** Seeing zero active workers must not end the rollout. */
+    @Test
+    void setIsVersionEmittedByAllActiveWorkers_falseWhenNoActiveWorkers() {
+        handler.setIsVersionEmittedByAllActiveWorkers(Collections.emptyList(), Collections.emptyList());
+
+        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
+    }
+
+    /** The flag is only refreshed by a leader's run, so losing leadership clears it. */
+    @Test
+    void setHeldLeaderKey_null_clearsVersionEmittedFlag() {
+        final WorkerMetricStats w1 = mock(WorkerMetricStats.class);
+        when(w1.getWorkerId()).thenReturn("worker1");
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
+        assertTrue(handler.isVersionEmittedByAllActiveWorkers());
+
+        handler.setHeldLeaderKey(null);
+
+        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
+    }
+
+    /** The heartbeat is conditioned on this worker's version, so it also repairs an item missing its lut. */
+    @Test
+    void versionHashHeartbeat_expectsOwnerAndOwnVersionHash() throws Exception {
+        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+        final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+        Mockito.verify(mockVersionHeartbeatExecutor)
+                .scheduleAtFixedRate(runnableCaptor.capture(), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        runnableCaptor.getValue().run();
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Map<String, ExpectedAttributeValue>> expectations = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(mockCoordinatorStateDAO).updateCoordinatorStateWithExpectation(any(), expectations.capture());
+        assertEquals(
+                sampleVersionHash,
+                expectations.getValue().get("versionHash").value().s());
+        assertEquals(
+                "dummyWorkerId",
+                expectations.getValue().get("ownerName").value().s());
+        assertFalse(expectations.getValue().containsKey("versionHashLut"));
     }
 
     @Test

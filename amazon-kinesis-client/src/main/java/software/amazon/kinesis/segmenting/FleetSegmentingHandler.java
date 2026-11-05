@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.ComparisonOperator;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
@@ -212,6 +211,10 @@ public class FleetSegmentingHandler {
         heldLeaderKey = key;
         if (key != null) {
             lastHeldLeaderKey = key;
+        } else {
+            // The flag is only computed by a leader's assignment run. Once this worker holds no lock it is never
+            // refreshed, so clear it rather than keep steering this worker to the Leader key on an old observation.
+            isVersionEmittedByAllActiveWorkers = false;
         }
     }
 
@@ -219,34 +222,42 @@ public class FleetSegmentingHandler {
         if (worker.getProperties() == null) {
             return true;
         }
-        String lutStr = worker.getProperties().get(VERSION_HASH_LUT_KEY);
+        final String lutStr = worker.getProperties().get(VERSION_HASH_LUT_KEY);
         if (lutStr == null) {
             return true;
         }
-        // TODO: add guard for parselong
-        return isVersionHashExpired(Long.parseLong(lutStr));
+        try {
+            return isVersionHashExpired(Long.parseLong(lutStr));
+        } catch (final NumberFormatException e) {
+            log.warn(
+                    "Unparseable {} '{}' on worker {}; treating as stale.",
+                    VERSION_HASH_LUT_KEY,
+                    lutStr,
+                    worker.getWorkerId());
+            return true;
+        }
     }
 
-    // TODO: check for empty set
+    /**
+     * Records whether every active worker reports this worker's version hash. An empty active fleet (e.g. every
+     * WorkerMetricStats entry transiently expired) says nothing about the rollout, so it counts as "not all".
+     */
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isVersionEmittedByAllActiveWorkers = toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
+        isVersionEmittedByAllActiveWorkers = !activeWorkerMetrics.isEmpty()
+                && toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
     }
 
     private static Set<String> toWorkerIds(final List<WorkerMetricStats> workers) {
         return workers.stream().map(WorkerMetricStats::getWorkerId).collect(Collectors.toSet());
     }
 
-    // TODO: NPE: getProperties().get(VERSION_HASH_KEY).equals(getVersionHash()) (:175-179). Any WorkerMetricStats row
-    // whose properties map exists without versionHash (the field predates the PR as an extensibility map) throws inside
-    // the LAM; 3 failures release the leader, the next leader reads the same row, and nobody assigns expired leases.
     public List<WorkerMetricStats> filterWorkersOnVersionHash(final List<WorkerMetricStats> activeWorkers) {
         return activeWorkers.stream()
+                // versionHash.equals(...) rather than the reverse: a properties map without versionHash (the field
+                // predates segmenting) must not throw inside the assignment manager.
                 .filter(workerMetricStats -> workerMetricStats.getProperties() != null
-                        && workerMetricStats
-                                .getProperties()
-                                .get(VERSION_HASH_KEY)
-                                .equals(getVersionHash())
+                        && versionHash.equals(workerMetricStats.getProperties().get(VERSION_HASH_KEY))
                         && !isWorkerVersionHashStale(workerMetricStats))
                 .collect(Collectors.toList());
     }
@@ -281,10 +292,12 @@ public class FleetSegmentingHandler {
 
     private Map<String, ExpectedAttributeValue> getVersionHashHeartbeatExpectationMap(final String leaderKey) {
         final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
+        // Only refresh a lock item that carries this worker's version. Unlike the previous NOT_NULL check on the lut,
+        // this also repairs an item whose versionHashLut is missing.
         expectations.put(
-                VERSION_HASH_LUT_KEY,
+                VERSION_HASH_KEY,
                 ExpectedAttributeValue.builder()
-                        .comparisonOperator(ComparisonOperator.NOT_NULL)
+                        .value(AttributeValue.fromS(versionHash))
                         .build());
         expectations.put(
                 LEADER_LOCK_OWNER_KEY,
@@ -294,11 +307,29 @@ public class FleetSegmentingHandler {
         return expectations;
     }
 
+    /**
+     * Returns true when the lock item's version hash heartbeat is missing, unparseable, or older than the expiry
+     * threshold, matching {@link #isWorkerVersionHashStale}. A lock item with a versionHash but no usable lut
+     * previously never expired, which could pin workers on another version to DeployingLeader forever.
+     */
     private boolean isVersionHashExpired(final Map<String, AttributeValue> item) {
-        return item.containsKey(VERSION_HASH_KEY)
-                && item.containsKey(VERSION_HASH_LUT_KEY)
-                && isVersionHashExpired(
-                        Long.parseLong(item.get(VERSION_HASH_LUT_KEY).s()));
+        if (!item.containsKey(VERSION_HASH_KEY)) {
+            return false;
+        }
+        final AttributeValue lut = item.get(VERSION_HASH_LUT_KEY);
+        if (lut == null || lut.s() == null) {
+            log.warn(
+                    "Leader lock has {} but no usable {}; treating as expired.",
+                    VERSION_HASH_KEY,
+                    VERSION_HASH_LUT_KEY);
+            return true;
+        }
+        try {
+            return isVersionHashExpired(Long.parseLong(lut.s()));
+        } catch (final NumberFormatException e) {
+            log.warn("Unparseable {} '{}' on leader lock; treating as expired.", VERSION_HASH_LUT_KEY, lut.s());
+            return true;
+        }
     }
 
     private boolean isVersionHashExpired(final long lut) {
