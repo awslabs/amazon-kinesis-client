@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -1362,6 +1363,77 @@ class LeaseAssignmentManagerTest {
         Mockito.verify(scope, Mockito.never()).addData(eq("CurrentLeaderRuns"), Mockito.anyDouble(), any(), any());
     }
 
+    /**
+     * Deploying leader: workers on its own fresh hash are on the deploying version; everyone else, including workers
+     * with no hash, is on the current version. Reassignments are reported under the deploying-version name.
+     */
+    @Test
+    void performAssignment_deployingLeader_reportsWorkersPerVersionAndReassignments() throws Exception {
+        final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        stubVersionFilters(Collections.singleton("newWorker"), Collections.singleton("oldWorker"));
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("newWorker"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("oldWorker"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        Mockito.verify(scope).addData(eq("NumWorkersOnDeployingVersion"), eq(1.0), any(), any());
+        Mockito.verify(scope).addData(eq("NumWorkersOnCurrentVersion"), eq(1.0), any(), any());
+        Mockito.verify(scope).addData(eq("NumOfLeaseReassignmentsDeployingVersion"), Mockito.anyDouble(), any(), any());
+        Mockito.verify(scope, Mockito.never())
+                .addData(eq("NumOfLeaseReassignmentsCurrentVersion"), Mockito.anyDouble(), any(), any());
+    }
+
+    /**
+     * Current leader: workers on its own hash and workers with no or stale hash are on the current version; workers
+     * on another fresh hash are on the deploying version.
+     */
+    @Test
+    void performAssignment_currentLeader_reportsWorkersPerVersionAndReassignments() throws Exception {
+        final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        stubVersionFilters(Collections.singleton("currentWorker"), Collections.singleton("noHashWorker"));
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("currentWorker"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("noHashWorker"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("deployingWorker"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        Mockito.verify(scope).addData(eq("NumWorkersOnDeployingVersion"), eq(1.0), any(), any());
+        Mockito.verify(scope).addData(eq("NumWorkersOnCurrentVersion"), eq(2.0), any(), any());
+        Mockito.verify(scope).addData(eq("NumOfLeaseReassignmentsCurrentVersion"), Mockito.anyDouble(), any(), any());
+        Mockito.verify(scope, Mockito.never())
+                .addData(eq("NumOfLeaseReassignmentsDeployingVersion"), Mockito.anyDouble(), any(), any());
+    }
+
+    /** Stubs the handler's version filters: which worker ids are on this leader's hash, and which have none. */
+    private void stubVersionFilters(final Set<String> onMyHash, final Set<String> noOrStaleHash) {
+        when(mockSegmentingHandler.filterWorkersOnVersionHash(any())).thenAnswer(inv -> {
+            final List<WorkerMetricStats> workers = inv.getArgument(0);
+            return workers.stream()
+                    .filter(w -> onMyHash.contains(w.getWorkerId()))
+                    .collect(Collectors.toList());
+        });
+        when(mockSegmentingHandler.filterWorkersWithNoOrStaleVersionHash(any())).thenAnswer(inv -> {
+            final List<WorkerMetricStats> workers = inv.getArgument(0);
+            return workers.stream()
+                    .filter(w -> noOrStaleHash.contains(w.getWorkerId()))
+                    .collect(Collectors.toList());
+        });
+    }
+
     @Test
     void performAssignment_segmentingDisabled_noRoleMetrics() throws Exception {
         final software.amazon.kinesis.metrics.MetricsScope scope = captureLamMetrics();
@@ -1378,6 +1450,14 @@ class LeaseAssignmentManagerTest {
 
         Mockito.verify(scope, Mockito.never()).addData(eq("CurrentLeaderRuns"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope, Mockito.never()).addData(eq("DeployingLeaderRuns"), Mockito.anyDouble(), any(), any());
+        for (final String name : new String[] {
+            "NumWorkersOnDeployingVersion",
+            "NumWorkersOnCurrentVersion",
+            "NumOfLeaseReassignmentsDeployingVersion",
+            "NumOfLeaseReassignmentsCurrentVersion"
+        }) {
+            Mockito.verify(scope, Mockito.never()).addData(eq(name), Mockito.anyDouble(), any(), any());
+        }
     }
 
     private software.amazon.kinesis.metrics.MetricsScope captureLamMetrics() {

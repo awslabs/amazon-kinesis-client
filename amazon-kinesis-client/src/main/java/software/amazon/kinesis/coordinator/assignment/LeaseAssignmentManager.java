@@ -90,6 +90,11 @@ public final class LeaseAssignmentManager {
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
+    // Fleet segmenting metrics, emitted only while segmenting is active.
+    static final String METRIC_NUM_WORKERS_ON_CURRENT_VERSION = "NumWorkersOnCurrentVersion";
+    static final String METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION = "NumWorkersOnDeployingVersion";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION = "NumOfLeaseReassignmentsCurrentVersion";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION = "NumOfLeaseReassignmentsDeployingVersion";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
 
@@ -202,13 +207,15 @@ public final class LeaseAssignmentManager {
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
-            // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs.
+            // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs, and how
+            // the active fleet splits between the two versions.
             if (segmentingHandler.isEnabled()) {
                 metricsScope.addData(
                         inMemoryStorageView.isOnCurrentVersion() ? "CurrentLeaderRuns" : "DeployingLeaderRuns",
                         1,
                         StandardUnit.COUNT,
                         MetricsLevel.SUMMARY);
+                publishWorkersPerVersionMetrics(metricsScope, inMemoryStorageView);
             }
 
             final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
@@ -276,8 +283,8 @@ public final class LeaseAssignmentManager {
                 if (segmentingHandler.isEnabled()) {
                     metricsScope.addData(
                             inMemoryStorageView.isOnCurrentVersion()
-                                    ? "CurrentLeaderNumOfLeasesReassignment"
-                                    : "DeployingLeaderNumOfLeasesReassignment",
+                                    ? METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION
+                                    : METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION,
                             reassignments,
                             StandardUnit.COUNT,
                             MetricsLevel.SUMMARY);
@@ -422,6 +429,29 @@ public final class LeaseAssignmentManager {
             failedAssignmentCounter.incrementAndGet();
         }
         return response;
+    }
+
+    /**
+     * Publishes how many active workers are on the deploying version and how many are on the current version.
+     * A worker is on the deploying version when it reports a fresh version hash that isn't the current leader's.
+     * Every other active worker, including one with no hash or a stale hash (old or rolled-back code), counts as
+     * current. Both leaders run this, so their values should match.
+     */
+    private void publishWorkersPerVersionMetrics(
+            final MetricsScope metricsScope, final InMemoryStorageView inMemoryStorageView) {
+        final int active = inMemoryStorageView.getActiveWorkerMetrics().size();
+        final int onMyHash = inMemoryStorageView.getWorkersOnVersionHash().size();
+        final int deploying = inMemoryStorageView.isOnCurrentVersion()
+                // Current leader: workers on another fresh hash. The two filters are disjoint.
+                ? active
+                        - onMyHash
+                        - inMemoryStorageView.getWorkersWithNoVersionHash().size()
+                // Deploying leader: workers on its own fresh hash.
+                : onMyHash;
+        metricsScope.addData(
+                METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION, deploying, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+        metricsScope.addData(
+                METRIC_NUM_WORKERS_ON_CURRENT_VERSION, active - deploying, StandardUnit.COUNT, MetricsLevel.SUMMARY);
     }
 
     private void publishLeaseAndWorkerCountMetrics(
