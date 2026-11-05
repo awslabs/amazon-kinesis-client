@@ -82,14 +82,6 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashKeyMissing() throws Exception {
-        mockCoordinatorState(
-                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
-    }
-
-    @Test
     void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());

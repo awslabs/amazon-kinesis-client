@@ -144,11 +144,13 @@ class DynamoDBLockBasedLeaderDeciderTest {
     }
 
     /**
-     * Finding 3: with no successful version read yet, the worker must contend for neither lock instead of defaulting
-     * to Leader.
+     * Finding 3, read-failure path only: a worker whose version-state read fails and that has never read it
+     * successfully sits out one cycle instead of guessing "Leader". It holds nothing and writes nothing, and the same
+     * worker contends normally once a read succeeds. (A successful read of a Leader item with no versionHash, as on
+     * a first rollout, takes the normal path: see isLeader_firstRollout_updatedWorkersContendForLeader.)
      */
     @Test
-    void isLeader_versionStateUnavailable_doesNotAcquireAnyLock() {
+    void isLeader_versionStateReadFails_sitsOutOneCycleThenContends() throws InterruptedException {
         final String workerId = getWorkerId(1);
         final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
         when(mockSegmentingHandler.getHashKeyForLeaderLock())
@@ -156,11 +158,63 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
         assertFalse(decider.isLeader(workerId));
         verify(mockSegmentingHandler).setHeldLeaderKey(null);
+        assertTrue(getItem(LeaderLock.LEADER_HASH_KEY).isEmpty());
+        assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty());
 
-        // Once reads recover, the next eligible check takes the lock; nothing was held or written in between.
+        // Reads recover. After the non-leader backoff (the 10ms heartbeat period here) the same worker contends.
         doReturn(LeaderLock.LEADER_HASH_KEY).when(mockSegmentingHandler).getHashKeyForLeaderLock();
-        final DynamoDBLockBasedLeaderDecider other = workerIdToLeaderDeciderMap.get(getWorkerId(2));
-        assertTrue(other.isLeader(getWorkerId(2)));
+        Thread.sleep(20);
+        assertTrue(decider.isLeader(workerId));
+    }
+
+    /**
+     * First rollout of the segmenting handler into a fleet that doesn't have it. The Leader lock is held by a worker
+     * without segmenting, so its item has no versionHash. Updated workers must contend for Leader exactly as before:
+     * nobody takes DeployingLeader, and an updated worker becomes Leader normally once the old one releases it.
+     */
+    @Test
+    void isLeader_firstRollout_updatedWorkersContendForLeader() throws Exception {
+        // Worker without segmenting (the mocked handler is disabled by default) takes Leader.
+        final String oldWorkerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider oldDecider = workerIdToLeaderDeciderMap.get(oldWorkerId);
+        assertTrue(oldDecider.isLeader(oldWorkerId));
+        assertFalse(getLeaderItem().containsKey(FleetSegmentingHandler.VERSION_HASH_KEY));
+
+        // Updated worker with a real, enabled handler reading the same table.
+        final String newWorkerId = "updatedWorker";
+        final LeaseManagementConfig config = new LeaseManagementConfig(
+                "dummyTableName",
+                "dummyApplicationName",
+                mock(software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient.class),
+                mock(software.amazon.awssdk.services.kinesis.KinesisAsyncClient.class),
+                newWorkerId);
+        config.enableRollingDeploymentSystem(true);
+        final FleetSegmentingHandler realHandler = new FleetSegmentingHandler(
+                config, newDao(), mock(java.util.concurrent.ScheduledExecutorService.class), () -> true);
+        final DynamoDBLockBasedLeaderDecider newDecider = DynamoDBLockBasedLeaderDecider.create(
+                newDao(),
+                newWorkerId,
+                100L,
+                10L,
+                new NullMetricsFactory(),
+                mockTableMigrationStateMachine,
+                realHandler);
+        newDecider.initialize();
+
+        // The updated worker picks Leader, not DeployingLeader, and doesn't get it while the old worker holds it.
+        assertEquals(LeaderLock.LEADER_HASH_KEY, realHandler.getHashKeyForLeaderLock());
+        assertFalse(newDecider.isLeader(newWorkerId));
+        assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty());
+
+        // The old worker shuts down; the updated worker takes Leader and stamps its version on it.
+        oldDecider.shutdown();
+        Thread.sleep(20);
+        assertTrue(newDecider.isLeader(newWorkerId));
+        assertEquals(
+                realHandler.getVersionHash(),
+                getLeaderItem().get(FleetSegmentingHandler.VERSION_HASH_KEY).s());
+        assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty());
+        newDecider.shutdown();
     }
 
     @Test
