@@ -18,8 +18,10 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -228,5 +230,38 @@ class DynamoDBLeaseCoordinatorTest {
         lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
 
         assertNull(DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease).hashKeyRange());
+    }
+
+    /**
+     * Verifies that the lease renewal thread pool can run up to maxLeaseRenewalThreads renewals at once.
+     */
+    @Test
+    void leaseRenewalThreadpoolRunsUpToMaxThreadsConcurrently() throws Exception {
+        final ExecutorService leaseRenewalThreadpool = getLeaseRenewalThreadpool();
+        final CountDownLatch started = new CountDownLatch(MAX_LEASE_RENEWER_THREAD_COUNT);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        try {
+            for (int i = 0; i < MAX_LEASE_RENEWER_THREAD_COUNT; i++) {
+                leaseRenewalThreadpool.submit(() -> {
+                    started.countDown();
+                    release.await();
+                    return null;
+                });
+            }
+
+            assertTrue(
+                    started.await(5, TimeUnit.SECONDS),
+                    "Only " + (MAX_LEASE_RENEWER_THREAD_COUNT - started.getCount()) + " of "
+                            + MAX_LEASE_RENEWER_THREAD_COUNT + " renewal tasks ran concurrently");
+        } finally {
+            release.countDown();
+        }
+    }
+
+    private ExecutorService getLeaseRenewalThreadpool() throws Exception {
+        Field field = DynamoDBLeaseCoordinator.class.getDeclaredField("leaseRenewalThreadpool");
+        field.setAccessible(true);
+        return (ExecutorService) field.get(coordinator);
     }
 }
