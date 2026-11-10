@@ -64,6 +64,7 @@ import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.segmenting.LeaderVersionState;
 
 /**
  * Data Access Object to abstract accessing {@link CoordinatorState} from
@@ -121,6 +122,11 @@ public abstract class CoordinatorStateDAODelegate {
         deserializers.put(
                 EntityType.TABLE_MIGRATION.getDdbValue(),
                 (key, attributes) -> TableMigrationState.deserialize(key, new HashMap<>(attributes)));
+        // Leader lock items share this entity type. deserialize returns null for them, so they fall back to the
+        // generic CoordinatorState below; only the leader version items become LeaderVersionState.
+        deserializers.put(
+                EntityType.LEADER_LOCK.getDdbValue(),
+                (key, attributes) -> LeaderVersionState.deserialize(key, attributes));
     }
 
     /**
