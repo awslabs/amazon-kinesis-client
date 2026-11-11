@@ -276,6 +276,17 @@ public class LeaseManagementConfig {
      * If set to false, then the new assignment algorithm will take effect on all workers when a worker with the updated
      * version becomes the leader of the fleet.
      *
+     * <p>
+     * Single-table migration: the rolling deployment system works for applications on a single lease table, and for
+     * applications on the multi-table setup that are not migrating ({@code
+     * CoordinatorConfig#migrateAllEntitiesToLeaseTable()} false, table migration status INIT or DEPLOYED). It is
+     * turned off on a worker with {@code migrateAllEntitiesToLeaseTable} set to true until the table migration is
+     * COMPLETE, and on any worker while its table migration status is PENDING. While it is off, a worker behaves as if
+     * this flag were false: do not change the {@link LeaseAssignmentStrategy} during the migration. If a migration
+     * rollback (back to {@code migrateAllEntitiesToLeaseTable} false) leaves the migration unable to reach PENDING,
+     * delete the {@code LeaderVersion} and {@code DeployingLeaderVersion} items from the lease table.
+     * </p>
+     *
      * <p>Default value: false</p>
      */
     private boolean enableRollingDeploymentSystem = false;

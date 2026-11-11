@@ -69,6 +69,7 @@ import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachineImpl;
+import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCache;
 import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
@@ -754,7 +755,15 @@ public class Scheduler implements Runnable {
         if (migrationStateMachine.getCurrentClientVersion() != ClientVersion.CLIENT_VERSION_3X) {
             return false;
         }
-        switch (tableMigrationStatusProvider.getTableMigrationStatus()) {
+        final TableMigrationStatus tableMigrationStatus = tableMigrationStatusProvider.getTableMigrationStatus();
+        // A worker configured to migrate to a single table (phase 2) does not segment until the migration is
+        // COMPLETE. The override table already keeps such a worker in PENDING until then; this states the rule
+        // directly. COMPLETE is allowed so segmenting resumes after migration even with the flag left on.
+        if (coordinatorConfig.migrateAllEntitiesToLeaseTable()
+                && tableMigrationStatus != TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE) {
+            return false;
+        }
+        switch (tableMigrationStatus) {
             case TABLE_MIGRATION_STATUS_INIT:
             case TABLE_MIGRATION_STATUS_DEPLOYED:
             case TABLE_MIGRATION_STATUS_COMPLETE:

@@ -1768,6 +1768,32 @@ public class SchedulerTest {
         assertFalse(scheduler.isFleetSegmentingAllowed());
     }
 
+    /** A worker configured to migrate to a single table only segments once the migration is COMPLETE. */
+    @Test
+    public void isFleetSegmentingAllowed_migratingWorker_onlyWhenComplete() throws Exception {
+        final MigrationStateMachine stateMachine = mock(MigrationStateMachine.class);
+        when(stateMachine.getCurrentClientVersion()).thenReturn(ClientVersion.CLIENT_VERSION_3X);
+        final TableMigrationStatusProvider provider = mock(TableMigrationStatusProvider.class);
+        final CoordinatorStateDAO dao = mock(CoordinatorStateDAO.class);
+        when(dao.isWriteRoutingAlignedWithLockClient()).thenReturn(true);
+        setSchedulerFieldToAccessible("migrationStateMachine", stateMachine);
+        setSchedulerFieldToAccessible("tableMigrationStatusProvider", provider);
+        setSchedulerFieldToAccessible("coordinatorStateDAO", dao);
+        // The scheduler holds this config instance.
+        coordinatorConfig.migrateAllEntitiesToLeaseTable(true);
+        try {
+            for (final TableMigrationStatus status : TableMigrationStatus.values()) {
+                when(provider.getTableMigrationStatus()).thenReturn(status);
+                assertEquals(
+                        status.toString(),
+                        status == TableMigrationStatus.TABLE_MIGRATION_STATUS_COMPLETE,
+                        scheduler.isFleetSegmentingAllowed());
+            }
+        } finally {
+            coordinatorConfig.migrateAllEntitiesToLeaseTable(false);
+        }
+    }
+
     private Scheduler setUpLeaderForProcessLoop(final boolean onCurrentVersion) throws Exception {
         final software.amazon.kinesis.coordinator.LeaderDecider leaderDecider =
                 mock(software.amazon.kinesis.coordinator.LeaderDecider.class);
