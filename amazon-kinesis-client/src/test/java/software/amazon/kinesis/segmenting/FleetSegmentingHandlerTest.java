@@ -97,7 +97,8 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashExpired() throws Exception {
+    void getHashKeyForLeaderLock_returnsLeaderKey_whenLeaderVersionExpired() throws Exception {
+        // Two hours since the last heartbeat, past the leader version expiry.
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 7200);
 
@@ -499,6 +500,75 @@ public class FleetSegmentingHandlerTest {
 
         Mockito.verify(disabledExecutor, Mockito.never())
                 .scheduleAtFixedRate(any(Runnable.class), Mockito.anyLong(), Mockito.anyLong(), any());
+    }
+
+    // ---------------- LeaderVersion outlives a stopped Leader holder ----------------
+
+    /**
+     * The Leader holder stopped heartbeating 90s ago (e.g. crashed), well past a worker's 60s staleness: a worker on
+     * another version still stays on DeployingLeader.
+     */
+    @Test
+    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_otherVersion_staysOnDeployingLeader() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_ownVersion_contendsForLeader() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond() - 90);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    /** Once every active worker reports this worker's version (e.g. the last old-version worker died), take Leader. */
+    @Test
+    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_allWorkersOnMyVersion_contendsForLeader() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
+        final WorkerMetricStats w1 = mock(WorkerMetricStats.class);
+        when(w1.getWorkerId()).thenReturn("worker1");
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    /** Past the leader version expiry, the item no longer holds other versions back. */
+    @Test
+    void getHashKeyForLeaderLock_pastLeaderVersionExpiry_contendsForLeader() throws Exception {
+        final long pastExpirySeconds =
+                TimeUnit.MILLISECONDS.toSeconds(FleetSegmentingHandler.LEADER_VERSION_EXPIRY_MILLIS) + 60;
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - pastExpirySeconds);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    @Test
+    void getHashKeyForLeaderLock_justUnderLeaderVersionExpiry_staysOnDeployingLeader() throws Exception {
+        final long underExpirySeconds =
+                TimeUnit.MILLISECONDS.toSeconds(FleetSegmentingHandler.LEADER_VERSION_EXPIRY_MILLIS) - 60;
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - underExpirySeconds);
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    /** A read error after holding back keeps the worker on DeployingLeader (fail closed). */
+    @Test
+    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_thenReadError_keepsDeployingLeader() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+                .thenThrow(new DependencyException(new RuntimeException("throttled")));
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     /** Stubs the version item for a leader lock. {@code lutSeconds} is converted to the item's heartbeat millis. */

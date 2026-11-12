@@ -452,6 +452,91 @@ class DynamoDBLockBasedLeaderDeciderTest {
         decider.shutdown();
     }
 
+    /**
+     * The Leader holder crashed: its LeaderVersion (another version) stopped being heartbeated and nobody holds Leader.
+     * A worker on the deploying version takes or keeps DeployingLeader instead of racing for Leader, and only moves to
+     * Leader once every active worker reports its version.
+     */
+    @Test
+    void leaderStoppedHeartbeating_deployingVersionWorkerStaysOnDeployingLeader_untilFleetIsOnItsVersion()
+            throws Exception {
+        final String workerId = "deployingVersionWorker";
+        final CoordinatorStateDAO sharedDao = newDao();
+        final FleetSegmentingHandler handler =
+                new FleetSegmentingHandler(segmentingConfig(workerId), sharedDao, inlineExecutor(), () -> true);
+        final DynamoDBLockBasedLeaderDecider decider = DynamoDBLockBasedLeaderDecider.create(
+                sharedDao, workerId, 100L, 10L, new NullMetricsFactory(), mockTableMigrationStateMachine, handler);
+        decider.initialize();
+        // The crashed Leader's version: another version, last heartbeat 90s ago (past a worker's 60s staleness, well
+        // within the leader version expiry).
+        putLeaderVersion("crashedLeader", "otherVersion", System.currentTimeMillis() - 90_000L);
+
+        assertTrue(decider.isLeader(workerId));
+        assertEquals(
+                workerId,
+                getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("ownerName").s());
+        assertTrue(getLeaderItem().isEmpty(), "deploying-version worker took the Leader lock");
+        assertEquals(
+                "otherVersion",
+                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                        .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
+                        .s());
+
+        // Its assignment run sees every active worker on its version (the old-version worker is gone).
+        final software.amazon.kinesis.worker.metricstats.WorkerMetricStats self =
+                mock(software.amazon.kinesis.worker.metricstats.WorkerMetricStats.class);
+        when(self.getWorkerId()).thenReturn(workerId);
+        handler.setIsVersionEmittedByAllActiveWorkers(
+                java.util.Collections.singletonList(self), java.util.Collections.singletonList(self));
+        Thread.sleep(20); // past the 10ms heartbeat period, so the key is re-evaluated
+
+        assertTrue(decider.isLeader(workerId));
+        assertEquals(workerId, getLeaderItem().get("ownerName").s());
+        assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader was not released");
+        assertEquals(
+                handler.getVersionHash(),
+                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                        .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
+                        .s());
+        decider.shutdown();
+    }
+
+    /** The crashed Leader was on this worker's version: it contends for Leader and takes over. */
+    @Test
+    void leaderStoppedHeartbeating_currentVersionWorkerTakesLeader() throws Exception {
+        final String workerId = "currentVersionWorker";
+        final CoordinatorStateDAO sharedDao = newDao();
+        final FleetSegmentingHandler handler =
+                new FleetSegmentingHandler(segmentingConfig(workerId), sharedDao, inlineExecutor(), () -> true);
+        final DynamoDBLockBasedLeaderDecider decider = DynamoDBLockBasedLeaderDecider.create(
+                sharedDao, workerId, 100L, 10L, new NullMetricsFactory(), mockTableMigrationStateMachine, handler);
+        decider.initialize();
+        putLeaderVersion("crashedLeader", handler.getVersionHash(), System.currentTimeMillis() - 90_000L);
+
+        assertTrue(decider.isLeader(workerId));
+
+        assertEquals(workerId, getLeaderItem().get("ownerName").s());
+        assertEquals(
+                workerId,
+                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                        .get(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME)
+                        .s());
+        decider.shutdown();
+    }
+
+    private void putLeaderVersion(final String owner, final String versionHash, final long heartbeatMillis) {
+        final Map<String, AttributeValue> item = new HashMap<>(
+                new LeaderVersionState(LeaderVersionState.LEADER_VERSION_HASH_KEY, versionHash, owner, heartbeatMillis)
+                        .serialize());
+        item.put(
+                DynamoDBLeaseSerializer.LEASE_KEY_KEY,
+                AttributeValue.fromS(LeaderVersionState.LEADER_VERSION_HASH_KEY));
+        dynamoDBSyncClient.putItem(PutItemRequest.builder()
+                .tableName(TEST_LOCK_TABLE_NAME)
+                .item(item)
+                .build());
+    }
+
     private static LeaseManagementConfig segmentingConfig(final String workerId) {
         final LeaseManagementConfig config = new LeaseManagementConfig(
                 "dummyTableName",

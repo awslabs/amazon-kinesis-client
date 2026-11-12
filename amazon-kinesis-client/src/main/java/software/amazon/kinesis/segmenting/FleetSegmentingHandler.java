@@ -37,6 +37,21 @@ public class FleetSegmentingHandler {
     /** Worker metrics property holding when the worker last reported its version hash, in epoch seconds. */
     private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
 
+    /**
+     * How long after its last heartbeat {@code LeaderVersion} still counts as the fleet's current version. Until then,
+     * a worker on another version contends for DeployingLeader, even if the Leader holder has stopped heartbeating
+     * (e.g. crashed), unless every active worker reports its version. After that, every worker contends for Leader.
+     *
+     * <p>This is much longer than the Leader lock lease on purpose. When the Leader holder crashes, its lock only
+     * becomes acquirable after the lease (2 minutes by default). If the version expired first, workers on the
+     * deploying version would race current-version workers for the lock, and the winner's version would become
+     * current. Ten minutes lets a current-version worker take the lock, and lets the DeployingLeader see that the old
+     * version is gone (its workers' metrics go stale after {@link #workerVersionExpiryMillis}) and move to Leader
+     * itself, before the version expires. The limit only matters when neither can happen, e.g. a fleet left on two new
+     * versions, or with workers that report no version: it bounds how long the fleet goes without a current leader.</p>
+     */
+    static final long LEADER_VERSION_EXPIRY_MILLIS = Duration.ofMinutes(10).toMillis();
+
     @Getter
     private final String versionHash;
 
@@ -63,7 +78,12 @@ public class FleetSegmentingHandler {
     @Getter
     private final LeaderVersionDAO leaderVersionDAO;
 
-    private final long versionHashExpiryMillis;
+    /**
+     * How long after its last report a worker's version hash (in its worker metrics) is considered stale. Short, so a
+     * worker that stops (e.g. the last worker on the old version crashes) drops out of the per-version worker counts
+     * quickly. Not used for {@code LeaderVersion}; see {@link #LEADER_VERSION_EXPIRY_MILLIS}.
+     */
+    private final long workerVersionExpiryMillis;
 
     /**
      * Last key computed from a successful read of the Leader's version item. When a read fails, the handler
@@ -91,7 +111,7 @@ public class FleetSegmentingHandler {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         this.configEnabled = config.enableRollingDeploymentSystem();
-        this.versionHashExpiryMillis = expiryMillis(config);
+        this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         // The heartbeat is scheduled whenever the flag is on; each tick checks isEnabled(), since segmenting may
         // only become allowed after construction (client version 3X, table migration COMPLETE).
         this.leaderVersionDAO = new LeaderVersionDAO(
@@ -112,15 +132,15 @@ public class FleetSegmentingHandler {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         this.configEnabled = config.enableRollingDeploymentSystem();
-        this.versionHashExpiryMillis = expiryMillis(config);
+        this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         this.leaderVersionDAO = leaderVersionDAO;
     }
 
     /**
-     * The expiry threshold is the max of two leader heartbeats or two cycles of workers emitting metrics, which is
+     * The worker version expiry is the max of two leader heartbeats or two cycles of workers emitting metrics, which is
      * the current expiry threshold for workers.
      */
-    private static long expiryMillis(final LeaseManagementConfig config) {
+    private static long workerVersionExpiryMillis(final LeaseManagementConfig config) {
         return Math.max(
                 2 * config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(),
                 2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
@@ -149,6 +169,10 @@ public class FleetSegmentingHandler {
      * <p>If the Leader's version item can't be read, this returns the key from the last successful read rather than
      * defaulting to "Leader". Defaulting would let a single transient read error make a deploying-version worker take
      * the Leader lock and write its own version to the Leader's version item, flipping the fleet's algorithm.</p>
+     *
+     * <p>{@code LeaderVersion} counts as current for {@link #LEADER_VERSION_EXPIRY_MILLIS} after its last heartbeat, so
+     * a Leader holder that stops heartbeating (e.g. crashes) does not immediately send deploying-version workers to the
+     * Leader lock. A missing item, one without a version, or one older than that, sends every worker to Leader.</p>
      *
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      * @throws VersionStateUnavailableException if the read fails and no previous read has succeeded.
@@ -185,30 +209,22 @@ public class FleetSegmentingHandler {
     }
 
     private String computeHashKeyForLeaderLock(final LeaderVersionState currentVersion) {
-        // If the current leader's version item does not exist, default to obtaining the Leader lock.
-        // If it does exist but is expired, then the versioned workers were rolled back (or the current leader is
-        // gone). For both cases, obtain the normal leader lock.
+        final long nowMillis = System.currentTimeMillis();
+        // No current version (first rollout, segmenting never used, or the last Leader stopped heartbeating more than
+        // LEADER_VERSION_EXPIRY_MILLIS ago): every worker takes the Leader lock.
         if (currentVersion == null
                 || currentVersion.getVersionHash() == null
-                || currentVersion.isExpired(System.currentTimeMillis(), versionHashExpiryMillis)) {
-            if (currentVersion != null) {
-                log.debug(
-                        "Returning {} (not on current version). currentVersion={}, myVersionHash={}, expiryMs={}",
-                        LeaderLock.LEADER_HASH_KEY,
-                        currentVersion,
-                        versionHash,
-                        versionHashExpiryMillis);
-            } else {
-                log.info(
-                        "Returning {} because {} doesn't exist.",
-                        LeaderLock.LEADER_HASH_KEY,
-                        LeaderVersionState.LEADER_VERSION_HASH_KEY);
-            }
+                || currentVersion.isExpired(nowMillis, LEADER_VERSION_EXPIRY_MILLIS)) {
+            log.info(
+                    "Returning {}: {} is missing, has no version, or expired. currentVersion={}",
+                    LeaderLock.LEADER_HASH_KEY,
+                    LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                    currentVersion);
             return LeaderLock.LEADER_HASH_KEY;
         }
 
         // If all workers are emitting the same version, take the Leader lock.
-        // If the current version does exist and is not expired, take the leader lock depending on the version hash.
+        // Otherwise take the leader lock depending on the version hash.
         final boolean versionHashMatches = versionHash.equals(currentVersion.getVersionHash());
         if (isVersionEmittedByAllActiveWorkers || versionHashMatches) {
             log.debug(
@@ -216,6 +232,19 @@ public class FleetSegmentingHandler {
                     isVersionEmittedByAllActiveWorkers,
                     versionHashMatches);
             return LeaderLock.LEADER_HASH_KEY;
+        }
+        // The current Leader has not heartbeated for longer than a worker would take to go stale, so it has probably
+        // stopped. Say why this worker stays away from the Leader lock.
+        if (currentVersion.isExpired(nowMillis, workerVersionExpiryMillis)) {
+            log.info(
+                    "{} (version {}) has not been heartbeated for {}ms; staying on {} until a worker on that version "
+                            + "takes {} or all active workers report version {}.",
+                    LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                    currentVersion.getVersionHash(),
+                    nowMillis - currentVersion.getHeartbeatMillis(),
+                    LeaderLock.DEPLOYING_LEADER_HASH_KEY,
+                    LeaderLock.LEADER_HASH_KEY,
+                    versionHash);
         }
         return LeaderLock.DEPLOYING_LEADER_HASH_KEY;
     }
@@ -321,7 +350,7 @@ public class FleetSegmentingHandler {
     }
 
     private boolean isVersionHashExpired(final long lut) {
-        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > versionHashExpiryMillis;
+        return Duration.between(Instant.ofEpochSecond(lut), Instant.now()).toMillis() > workerVersionExpiryMillis;
     }
 
     private boolean doesWorkerHaveVersionHash(final WorkerMetricStats worker) {
