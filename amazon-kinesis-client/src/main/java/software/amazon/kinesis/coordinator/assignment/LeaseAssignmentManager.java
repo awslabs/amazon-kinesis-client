@@ -59,6 +59,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.NullMetricsScope;
+import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static java.util.Objects.isNull;
@@ -89,6 +90,11 @@ public final class LeaseAssignmentManager {
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
+    // Fleet segmenting metrics, emitted only while segmenting is active.
+    static final String METRIC_NUM_WORKERS_ON_CURRENT_VERSION = "NumWorkersOnCurrentVersion";
+    static final String METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION = "NumWorkersOnDeployingVersion";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION = "NumOfLeaseReassignmentsCurrentVersion";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION = "NumOfLeaseReassignmentsDeployingVersion";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
 
@@ -107,6 +113,7 @@ public final class LeaseAssignmentManager {
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
     private final LAMDataManager lamDataManager;
+    private final FleetSegmentingHandler segmentingHandler;
 
     /**
      * Lease snapshot class to reduce memory usage by only containing attributes
@@ -195,9 +202,21 @@ public final class LeaseAssignmentManager {
 
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
+            segmentingHandler.setIsVersionEmittedByAllActiveWorkers(
+                    inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
+            // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs, and how
+            // the active fleet splits between the two versions.
+            if (segmentingHandler.isEnabled()) {
+                metricsScope.addData(
+                        inMemoryStorageView.isOnCurrentVersion() ? "CurrentLeaderRuns" : "DeployingLeaderRuns",
+                        1,
+                        StandardUnit.COUNT,
+                        MetricsLevel.SUMMARY);
+                publishWorkersPerVersionMetrics(metricsScope, inMemoryStorageView);
+            }
 
             final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
 
@@ -222,35 +241,54 @@ public final class LeaseAssignmentManager {
                     "ExpiredLeases", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
-            leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
-            MetricsUtil.addLatency(
-                    metricsScope,
-                    "AssignExpiredOrUnassignedLeases",
-                    expiredAndUnassignedLeaseAssignmentStartTime,
-                    MetricsLevel.DETAILED);
 
-            if (!expiredOrUnAssignedLeases.isEmpty()) {
-                // When expiredOrUnAssignedLeases is not empty, that means
-                // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
-                // per worker for all workers.
-                log.warn("Not able to assign all expiredOrUnAssignedLeases");
-                metricsScope.addData(
-                        "LeaseSpillover", expiredOrUnAssignedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            if (inMemoryStorageView.isOnCurrentVersion()) {
+                leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
+                MetricsUtil.addLatency(
+                        metricsScope,
+                        "AssignExpiredOrUnassignedLeases",
+                        expiredAndUnassignedLeaseAssignmentStartTime,
+                        MetricsLevel.DETAILED);
+
+                if (!expiredOrUnAssignedLeases.isEmpty()) {
+                    // When expiredOrUnAssignedLeases is not empty, that means
+                    // that we were not able to assign all expired or unassigned leases and hit the maxThroughput
+                    // per worker for all workers.
+                    log.warn("Not able to assign all expiredOrUnAssignedLeases");
+                    metricsScope.addData(
+                            "LeaseSpillover",
+                            expiredOrUnAssignedLeases.size(),
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
+            } else {
+                log.info("Leader {} is on deploying version. Ignoring unassigned/expired leases", currentWorkerId);
             }
 
             if (shouldRunVarianceBalancing()) {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
+                log.info(
+                        "Running balanceWorkerVariance. isOnCurrentVersion=[{}] versionHash=[{}]",
+                        inMemoryStorageView.isOnCurrentVersion(),
+                        segmentingHandler.getVersionHash());
                 leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
+                final int reassignments = inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
+                        - totalNewAssignmentBeforeWorkerVarianceBalancing;
                 metricsScope.addData(
-                        "NumOfLeasesReassignment",
-                        inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
-                                - totalNewAssignmentBeforeWorkerVarianceBalancing,
-                        StandardUnit.COUNT,
-                        MetricsLevel.SUMMARY);
+                        "NumOfLeasesReassignment", reassignments, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                if (segmentingHandler.isEnabled()) {
+                    metricsScope.addData(
+                            inMemoryStorageView.isOnCurrentVersion()
+                                    ? METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION
+                                    : METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION,
+                            reassignments,
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
             }
 
             if (inMemoryStorageView.leaseToNewAssignedWorkerMap.isEmpty()) {
@@ -393,6 +431,26 @@ public final class LeaseAssignmentManager {
         return response;
     }
 
+    /**
+     * Publishes the number of active workers on this leader's version, so each leader reports only its own segment
+     * and nothing is published twice. The current leader publishes NumWorkersOnCurrentVersion: workers on its hash
+     * plus workers with no or a stale hash (old or rolled-back code). The deploying leader publishes
+     * NumWorkersOnDeployingVersion: workers on its own fresh hash.
+     */
+    private void publishWorkersPerVersionMetrics(
+            final MetricsScope metricsScope, final InMemoryStorageView inMemoryStorageView) {
+        final int onMyHash = inMemoryStorageView.getWorkersOnVersionHash().size();
+        if (inMemoryStorageView.isOnCurrentVersion()) {
+            final int onCurrentVersion =
+                    onMyHash + inMemoryStorageView.getWorkersWithNoVersionHash().size();
+            metricsScope.addData(
+                    METRIC_NUM_WORKERS_ON_CURRENT_VERSION, onCurrentVersion, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+        } else {
+            metricsScope.addData(
+                    METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION, onMyHash, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+        }
+    }
+
     private void publishLeaseAndWorkerCountMetrics(
             final MetricsScope metricsScope, final InMemoryStorageView inMemoryStorageView) {
         // Names of the metrics are kept in sync with what is published in LeaseTaker.
@@ -512,6 +570,14 @@ public final class LeaseAssignmentManager {
          */
         private double targetAverageThroughput;
 
+        /** Segment views computed once at the end of {@link #loadInMemoryStorageView}. */
+        private boolean onCurrentVersion = true;
+
+        private List<WorkerMetricStats> workersOnVersionHash = Collections.emptyList();
+        private List<WorkerMetricStats> workersWithNoVersionHash = Collections.emptyList();
+        private List<WorkerMetricStats> assignableWorkers = Collections.emptyList();
+        private long assignableLeaseCount = 0L;
+
         /**
          * Update {@ref inMemoryWorkerToLeasesMapping} with the change in ownership and update newLeaseAssignmentMap
          *
@@ -599,6 +665,33 @@ public final class LeaseAssignmentManager {
                             getTotalAssignedThroughput(workerMetrics.getWorkerId()) / targetAverageThroughput);
                 }
             });
+
+            // Compute the segment views once per run. Every decision in the run then uses the same answer, instead
+            // of calling isOnCurrentVersion() 6-10 times and possibly getting different answers mid-run.
+            // Workers are fixed after load and lease moves stay within the assignable workers, so these
+            // don't change during the run.
+            this.onCurrentVersion = segmentingHandler.isOnCurrentVersion();
+            this.workersOnVersionHash = segmentingHandler.isEnabled()
+                    ? segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics)
+                    : activeWorkerMetrics;
+            this.workersWithNoVersionHash =
+                    segmentingHandler.filterWorkersWithNoOrStaleVersionHash(activeWorkerMetrics);
+            this.assignableWorkers = onCurrentVersion ? activeWorkerMetrics : workersOnVersionHash;
+            this.assignableLeaseCount = computeAssignableLeaseCount();
+        }
+
+        private long computeAssignableLeaseCount() {
+            if (onCurrentVersion) {
+                return leaseList.size();
+            }
+            final Set<String> assignableWorkerIds = assignableWorkers.stream()
+                    .map(WorkerMetricStats::getWorkerId)
+                    .collect(Collectors.toSet());
+            return leaseList.stream()
+                    .map(Lease::actualOwner)
+                    .filter(Objects::nonNull)
+                    .filter(assignableWorkerIds::contains)
+                    .count();
         }
 
         private void updateWorkerThroughput(final String workerId, final double leaseThroughput) {
@@ -644,6 +737,38 @@ public final class LeaseAssignmentManager {
 
         public Double getTotalAssignedThroughput(final String workerId) {
             return workerToTotalAssignedThroughputMap.getOrDefault(workerId, 0D);
+        }
+
+        /**
+         * List of workers that the LeaseAssignmentDecider can assign leases to. This list will be used to calculate
+         * the fleet average for each metric.
+         * @return List of workers to assign leases to. If the version is the deploying version, return the workers
+         * on the same version. Otherwise, return all the workers.
+         */
+        public List<WorkerMetricStats> getAssignableWorkers() {
+            return assignableWorkers;
+        }
+
+        /**
+         * Number of total leases that are assignable by the leader. With respect to the FleetSegmentingHandler,
+         * the current Leader should be able to assign unassigned leases and all owned leases, and the DeployingLeader
+         * can only assign leases whose owner has the same version.
+         */
+        public long getAssignableLeaseCount() {
+            return assignableLeaseCount;
+        }
+
+        /** Whether this leader runs current Leader responsibilities in this run. Fixed at load time. */
+        public boolean isOnCurrentVersion() {
+            return onCurrentVersion;
+        }
+
+        public List<WorkerMetricStats> getWorkersOnVersionHash() {
+            return workersOnVersionHash;
+        }
+
+        public List<WorkerMetricStats> getWorkersWithNoVersionHash() {
+            return workersWithNoVersionHash;
         }
     }
 
