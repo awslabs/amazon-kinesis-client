@@ -49,10 +49,13 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
  *       thread.</li>
  *   <li>Each heartbeat first checks the lock client's local state that this worker still holds an unexpired lock
  *       for that key. For a held lock this needs no DynamoDB call. If the lock isn't held, nothing is written.</li>
- *   <li>The heartbeat write is conditional on the item's {@code ownerName} and {@code versionHash} being this
- *       worker's. A new leader overwrites {@code ownerName} when it acquires the lock, so a previous leader's
- *       heartbeat fails from then on and it stops heartbeating that key.</li>
- *   <li>If the item is missing (e.g. the write after acquiring failed), the heartbeat writes it again.</li>
+ *   <li>Every full write is fenced by the lock: it is one transaction with a condition that the lock item's
+ *       {@code ownerName} is this worker ({@link CoordinatorStateDAO#putCoordinatorStateIfLockOwnedBy}). A write
+ *       from a worker that has lost the lock fails, even one sent before the lock moved (e.g. still in flight when
+ *       the worker shut down), so it can't overwrite the next holder's item.</li>
+ *   <li>The heartbeat refresh is conditional on the item's {@code ownerName} and {@code versionHash} being this
+ *       worker's. If it fails, the item is missing or has another owner or version; the holder writes it again in
+ *       full (fenced), since only the lock holder's version is current for that lock.</li>
  * </ul>
  * <p>When the lock is released the item isn't deleted. Its heartbeat stops, so it expires.</p>
  */
@@ -72,12 +75,6 @@ public class LeaderVersionDAO {
 
     /** True until the held lock's version item has been written in full since the lock was acquired. */
     private volatile boolean fullWritePending = false;
-
-    /**
-     * Lock key whose version item another worker owns. Heartbeats for it stop until the held key changes, so this
-     * worker never fights the item's new owner.
-     */
-    private volatile String supersededLockKey = null;
 
     /**
      * @param coordinatorStateDAO DAO the version items are read from and written to
@@ -162,7 +159,6 @@ public class LeaderVersionDAO {
             return;
         }
         fullWritePending = true;
-        supersededLockKey = null;
         try {
             heartbeatExecutor.execute(this::heartbeat);
         } catch (final RejectedExecutionException e) {
@@ -189,7 +185,7 @@ public class LeaderVersionDAO {
     synchronized void heartbeat() {
         final String lockKey = heldLockKey;
         try {
-            if (lockKey == null || !enabled.getAsBoolean() || lockKey.equals(supersededLockKey)) {
+            if (lockKey == null || !enabled.getAsBoolean()) {
                 return;
             }
             if (!holdsLock(lockKey)) {
@@ -197,8 +193,9 @@ public class LeaderVersionDAO {
                 return;
             }
             if (fullWritePending) {
-                writeVersionState(lockKey);
-                fullWritePending = false;
+                if (writeVersionState(lockKey)) {
+                    fullWritePending = false;
+                }
                 return;
             }
             if (updateHeartbeat(lockKey)) {
@@ -210,11 +207,14 @@ public class LeaderVersionDAO {
                 log.info("Version item for {} is missing; writing it again.", lockKey);
                 writeVersionState(lockKey);
             } else if (!workerId.equals(current.getOwnerName())) {
-                log.info(
-                        "Version item for {} is owned by {}; stopping heartbeat for it.",
+                // e.g. left by an earlier holder. The write below is fenced by the lock, so it only lands while this
+                // worker still owns the lock.
+                log.warn(
+                        "Version item for {} names {} (version {}) but this worker holds the lock; writing it again.",
                         lockKey,
-                        current.getOwnerName());
-                supersededLockKey = lockKey;
+                        current.getOwnerName(),
+                        current.getVersionHash());
+                writeVersionState(lockKey);
             } else {
                 // Owned by this worker with a different version hash, e.g. written before a restart on another
                 // version. This worker holds the lock, so its version is the right one.
@@ -246,21 +246,17 @@ public class LeaderVersionDAO {
                 && workerId.equals(lock.get().getOwnerName());
     }
 
-    /** Writes the whole item: update if it exists, otherwise create it. */
-    private void writeVersionState(final String lockKey)
-            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        final LeaderVersionState state = newState(lockKey);
-        if (coordinatorStateDAO.updateCoordinatorStateWithExpectation(state, null)) {
-            return;
+    /**
+     * Writes the whole item, replacing any existing one, only if the lock item says this worker owns the lock.
+     *
+     * @return true if written, false if the lock is owned by another worker (or doesn't exist)
+     */
+    private boolean writeVersionState(final String lockKey) throws InvalidStateException, DependencyException {
+        if (coordinatorStateDAO.putCoordinatorStateIfLockOwnedBy(newState(lockKey), lockKey, workerId)) {
+            return true;
         }
-        if (coordinatorStateDAO.createCoordinatorStateIfNotExists(state)) {
-            return;
-        }
-        // Created between the two calls; it exists now, so update it.
-        if (!coordinatorStateDAO.updateCoordinatorStateWithExpectation(state, null)) {
-            throw new DependencyException(
-                    "Unable to write leader version item for " + lockKey, new IllegalStateException());
-        }
+        log.info("Not writing {} version: the lock is not owned by worker {}.", lockKey, workerId);
+        return false;
     }
 
     /** Refreshes the heartbeat only if the item's owner and version are this worker's. */

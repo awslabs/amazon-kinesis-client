@@ -94,6 +94,7 @@ public final class LeaseAssignmentManager {
     static final String METRIC_NUM_WORKERS_ON_CURRENT_VERSION = "NumWorkersOnCurrentVersion";
     static final String METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION = "NumWorkersOnDeployingVersion";
     static final String METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION = "NumOfLeaseReassignmentsCurrentVersion";
+    static final String METRIC_DEPLOYING_LEADER_RUNS_SKIPPED = "DeployingLeaderRunsSkipped";
     static final String METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION = "NumOfLeaseReassignmentsDeployingVersion";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
@@ -203,8 +204,25 @@ public final class LeaseAssignmentManager {
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
             segmentingHandler.setIsVersionEmittedByAllActiveWorkers(
-                    inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
+                    inMemoryStorageView.getActiveWorkerMetrics(),
+                    inMemoryStorageView.getWorkersOnVersionHash(),
+                    inMemoryStorageView.getLeaseList());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
+
+            // A DeployingLeader whose segment is the whole active fleet has nothing of its own to balance: the
+            // current Leader balances the same workers. Running anyway has two leaders moving the same leases, e.g.
+            // at the end of a rollforward, when this worker took DeployingLeader before the new Leader's version
+            // write landed. This worker moves to Leader at its next key re-evaluation (within a heartbeat period).
+            if (segmentingHandler.isEnabled()
+                    && !inMemoryStorageView.isOnCurrentVersion()
+                    && segmentingHandler.isVersionEmittedByAllActiveWorkers()) {
+                log.info(
+                        "DeployingLeader {}: every active worker is on its version; skipping assignment this run.",
+                        currentWorkerId);
+                metricsScope.addData(METRIC_DEPLOYING_LEADER_RUNS_SKIPPED, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                success = true;
+                return;
+            }
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
             // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs, and how

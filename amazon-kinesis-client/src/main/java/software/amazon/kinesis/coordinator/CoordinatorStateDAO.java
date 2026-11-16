@@ -17,6 +17,7 @@ package software.amazon.kinesis.coordinator;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -27,7 +28,11 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.CancellationReason;
+import software.amazon.awssdk.services.dynamodb.model.ConditionCheck;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.Put;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
@@ -418,6 +423,78 @@ public class CoordinatorStateDAO {
     }
 
     // ==================== Transactional Operations ====================
+
+    /** Attribute holding the owner of a leader lock item, written by the DynamoDB lock client. */
+    private static final String LOCK_OWNER_NAME_ATTRIBUTE_NAME = "ownerName";
+
+    /**
+     * Writes {@code state} in full only if the leader lock {@code lockKey} is currently owned by {@code ownerName}.
+     * The lock check and the write are one transaction (a ConditionCheck on the lock item and a Put of the state),
+     * so a write from a worker that has since lost the lock can't land, even if it was sent before the lock moved.
+     *
+     * <p>Both items are in the coordinator-state write table. Callers must only use this while that table is the
+     * one the leader lock lives in ({@link #isWriteRoutingAlignedWithLockClient()}).</p>
+     *
+     * <p>Needs {@code dynamodb:ConditionCheckItem} and {@code dynamodb:PutItem} on that table.</p>
+     *
+     * @return true if written, false if the lock isn't owned by {@code ownerName}
+     * @throws DependencyException if DynamoDB fails, or the transaction is cancelled for another reason (e.g. a
+     *     conflicting transaction); the caller retries
+     */
+    public boolean putCoordinatorStateIfLockOwnedBy(
+            @NonNull final CoordinatorState state, @NonNull final String lockKey, @NonNull final String ownerName)
+            throws DependencyException, InvalidStateException {
+        ensureInitialized();
+        final CoordinatorStateDAODelegate delegate = getWriteDelegate();
+        final Map<String, AttributeValue> lockItemKey = new HashMap<>();
+        lockItemKey.put(delegate.getPartitionKeyAttributeName(), AttributeValue.fromS(lockKey));
+        final Map<String, String> names = new HashMap<>();
+        names.put("#owner", LOCK_OWNER_NAME_ATTRIBUTE_NAME);
+        final Map<String, AttributeValue> values = new HashMap<>();
+        values.put(":owner", AttributeValue.fromS(ownerName));
+        final List<TransactWriteItem> items = new ArrayList<>();
+        items.add(TransactWriteItem.builder()
+                .conditionCheck(ConditionCheck.builder()
+                        .tableName(delegate.getTableName())
+                        .key(lockItemKey)
+                        .conditionExpression("#owner = :owner")
+                        .expressionAttributeNames(names)
+                        .expressionAttributeValues(values)
+                        .build())
+                .build());
+        items.add(TransactWriteItem.builder()
+                .put(Put.builder()
+                        .tableName(delegate.getTableName())
+                        .item(delegate.toTransactRecord(state))
+                        .build())
+                .build());
+        try {
+            dynamoDbAsyncClient
+                    .transactWriteItems(TransactWriteItemsRequest.builder()
+                            .transactItems(items)
+                            .build())
+                    .get();
+            return true;
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DependencyException("TransactWriteItems interrupted", e);
+        } catch (final ExecutionException e) {
+            final Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof TransactionCanceledException
+                    && isLockConditionFailure((TransactionCanceledException) cause)) {
+                return false;
+            }
+            throw new DependencyException("Fenced write of " + state.getKey() + " failed", cause);
+        }
+    }
+
+    /** Whether the transaction was cancelled because the lock owner condition (the first item) failed. */
+    private static boolean isLockConditionFailure(final TransactionCanceledException e) {
+        final List<CancellationReason> reasons = e.cancellationReasons();
+        return reasons != null
+                && !reasons.isEmpty()
+                && "ConditionalCheckFailed".equals(reasons.get(0).code());
+    }
 
     /**
      * Execute a DynamoDB TransactWriteItems request with the given list of {@link TransactWriteItem}s.

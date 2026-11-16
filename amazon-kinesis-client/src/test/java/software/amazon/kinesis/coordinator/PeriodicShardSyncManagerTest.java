@@ -1031,6 +1031,46 @@ public class PeriodicShardSyncManagerTest {
         Assert.assertTrue(manager.isRunning());
     }
 
+    /**
+     * F4: the leadership call can move this worker from Leader to DeployingLeader, so the version is checked after
+     * it. Here the worker was current before isLeader() and isn't after: no shard sync runs.
+     */
+    @Test
+    public void periodicShardSync_movedToDeployingLeaderByIsLeader_skips() throws Exception {
+        final ScheduledExecutorService localMockExecutor = mock(ScheduledExecutorService.class);
+        final Runnable[] capturedRunnable = new Runnable[1];
+        when(localMockExecutor.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(invocation -> {
+                    capturedRunnable[0] = invocation.getArgument(0);
+                    return mock(ScheduledFuture.class);
+                });
+        final PeriodicShardSyncManager manager = new PeriodicShardSyncManager(
+                "worker",
+                leaseRefresher,
+                currentStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                new HashMap<>(),
+                localMockExecutor,
+                true,
+                new NullMetricsFactory(),
+                60000L,
+                3,
+                new AtomicBoolean(true),
+                mockSegmentingHandler);
+        final LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(localLeaderDecider.isLeader(any())).thenAnswer(invocation -> {
+            when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+            return true;
+        });
+        manager.start(localLeaderDecider);
+
+        capturedRunnable[0].run();
+
+        Mockito.verify(leaseRefresher, Mockito.never()).listLeases();
+        Mockito.verify(shardSyncTaskManagerProvider, Mockito.never()).apply(any());
+    }
+
     @Test
     public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);

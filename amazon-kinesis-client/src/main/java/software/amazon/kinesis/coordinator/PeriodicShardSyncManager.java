@@ -168,11 +168,7 @@ class PeriodicShardSyncManager {
         if (!isRunning) {
             final Runnable periodicShardSyncer = () -> {
                 try {
-                    if (segmentingHandler.isOnCurrentVersion()) {
-                        runShardSync();
-                    } else {
-                        log.info("{} is not the current Leader, skipping shard sync.", workerId);
-                    }
+                    runShardSync();
                 } catch (Throwable t) {
                     log.error("Error during runShardSync.", t);
                 }
@@ -220,6 +216,12 @@ class PeriodicShardSyncManager {
 
     private void runShardSync() {
         if (leaderDecider.isLeader(workerId) && leaderSynced.get()) {
+            // Checked after isLeader(): that call can move this worker from Leader to DeployingLeader, and only the
+            // current Leader runs shard sync. Checking first used the answer from before the move.
+            if (!segmentingHandler.isOnCurrentVersion()) {
+                log.info("{} is not the current Leader, skipping shard sync.", workerId);
+                return;
+            }
             log.info(String.format("WorkerId %s is leader, running the periodic shard sync task", workerId));
 
             final MetricsScope scope =

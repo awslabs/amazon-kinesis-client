@@ -1562,6 +1562,39 @@ class LeaseAssignmentManagerTest {
         assertFalse(leaseRefresher.listLeases().stream().anyMatch(lease -> "worker2".equals(lease.leaseOwner())));
     }
 
+    /**
+     * F6: a DeployingLeader whose segment is the whole active fleet (e.g. at the end of a rollforward) skips the run
+     * instead of balancing the same workers as the current Leader.
+     */
+    @Test
+    void performAssignment_deployingLeader_skipsRunWhenAllActiveWorkersOnItsVersion() throws Exception {
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.isVersionEmittedByAllActiveWorkers()).thenReturn(true);
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker1"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("worker2"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "worker1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "worker1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease3", "worker1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease4", "worker1"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        // Nothing moved, although worker1 holds every lease.
+        assertEquals(
+                4L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> "worker1".equals(lease.leaseOwner()))
+                        .count());
+        Mockito.verify(mockSegmentingHandler).setIsVersionEmittedByAllActiveWorkers(any(), any(), any());
+    }
+
     @Test
     void performAssignment_deployingLeader_staleWorkerExcludedFromVarianceBalancing() throws Exception {
         when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);

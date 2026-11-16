@@ -2,9 +2,11 @@ package software.amazon.kinesis.segmenting;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BooleanSupplier;
@@ -16,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leader.LeaderLock;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
@@ -74,6 +77,28 @@ public class FleetSegmentingHandler {
      */
     private volatile String lastHeldLeaderKey = null;
 
+    /** Key of the lock this worker holds right now, or null. Cleared when the lock is released or lost. */
+    private volatile String currentlyHeldLeaderKey = null;
+
+    /**
+     * What the leader's assignment run saw when it last found every active worker on this worker's version: when, and
+     * each lease's owner and counter. Null when the last run didn't find that. Used to re-validate the flip.
+     */
+    private volatile AllOnVersionSnapshot allOnVersionSnapshot = null;
+
+    /**
+     * Reads the worker metrics and leases fresh, to re-validate the flip to the Leader lock at the moment it is
+     * decided. Set by the Scheduler once its DAOs exist. Until set, the flip through all-workers-on-version doesn't
+     * happen (fail closed); the expiry path still works.
+     */
+    private volatile FleetViewReader fleetViewReader = null;
+
+    /** Lease duration; a lease whose counter hasn't moved for this long has a dead owner. */
+    private final long leaseDurationMillis;
+
+    /** Age after which a worker's metrics row means the worker is gone. Same rule as the assignment manager. */
+    private final Duration workerMetricsExpiry;
+
     /** Reads and heartbeats the leader version items. */
     @Getter
     private final LeaderVersionDAO leaderVersionDAO;
@@ -112,6 +137,8 @@ public class FleetSegmentingHandler {
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         this.configEnabled = config.enableRollingDeploymentSystem();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
+        this.leaseDurationMillis = config.failoverTimeMillis();
+        this.workerMetricsExpiry = workerMetricsExpiry(config);
         // The heartbeat is scheduled whenever the flag is on; each tick checks isEnabled(), since segmenting may
         // only become allowed after construction (client version 3X, table migration COMPLETE).
         this.leaderVersionDAO = new LeaderVersionDAO(
@@ -133,7 +160,23 @@ public class FleetSegmentingHandler {
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
         this.configEnabled = config.enableRollingDeploymentSystem();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
+        this.leaseDurationMillis = config.failoverTimeMillis();
+        this.workerMetricsExpiry = workerMetricsExpiry(config);
         this.leaderVersionDAO = leaderVersionDAO;
+    }
+
+    /** Matches MigrationAwareLAMDataManager: a worker is gone after 2 missed metrics reports. */
+    private static Duration workerMetricsExpiry(final LeaseManagementConfig config) {
+        return Duration.ofMillis(
+                2 * config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+    }
+
+    /**
+     * Sets how the flip to the Leader lock is re-validated. Called by the Scheduler once the worker metrics DAO and
+     * lease refresher exist.
+     */
+    public void setFleetViewReader(final FleetViewReader fleetViewReader) {
+        this.fleetViewReader = fleetViewReader;
     }
 
     /**
@@ -178,8 +221,17 @@ public class FleetSegmentingHandler {
      * @throws VersionStateUnavailableException if the read fails and no previous read has succeeded.
      */
     public String getHashKeyForLeaderLock() {
+        return getHashKeyForLeaderLock(isEnabled());
+    }
+
+    /**
+     * Same as {@link #getHashKeyForLeaderLock()}, with whether segmenting is enabled supplied by the caller. The leader
+     * decider reads it once per leadership check and passes the same value here and to
+     * {@link #setHeldLeaderKey(String, boolean)}, so the key and the version write can't disagree.
+     */
+    public String getHashKeyForLeaderLock(final boolean segmentingEnabled) {
         // If segmenting handler is disabled, default to returning the Leader key
-        if (!isEnabled()) {
+        if (!segmentingEnabled) {
             log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
@@ -226,12 +278,21 @@ public class FleetSegmentingHandler {
         // If all workers are emitting the same version, take the Leader lock.
         // Otherwise take the leader lock depending on the version hash.
         final boolean versionHashMatches = versionHash.equals(currentVersion.getVersionHash());
-        if (isVersionEmittedByAllActiveWorkers || versionHashMatches) {
-            log.debug(
-                    "isVersionEmittedByAllActiveWorkers : {}, doesVersionHashMatch : {}",
-                    isVersionEmittedByAllActiveWorkers,
-                    versionHashMatches);
+        if (versionHashMatches) {
             return LeaderLock.LEADER_HASH_KEY;
+        }
+        if (isVersionEmittedByAllActiveWorkers) {
+            // This is the flip: this worker's version becomes the fleet's current version. The flag is from the
+            // last assignment run, which may be up to a heartbeat period old, so a worker on the old version that
+            // came back since (e.g. a rollback) would be missed. Re-check against a fresh read first.
+            if (isFlipStillSafe(nowMillis)) {
+                log.info(
+                        "All active workers report version {} and own its leases; taking {}.",
+                        versionHash,
+                        LeaderLock.LEADER_HASH_KEY);
+                return LeaderLock.LEADER_HASH_KEY;
+            }
+            return LeaderLock.DEPLOYING_LEADER_HASH_KEY;
         }
         // The current Leader has not heartbeated for longer than a worker would take to go stale, so it has probably
         // stopped. Say why this worker stays away from the Leader lock.
@@ -268,6 +329,12 @@ public class FleetSegmentingHandler {
      * leader lock, e.g. when a non-lock leader decider is active, is treated as current.</p>
      */
     public boolean isOnCurrentVersion() {
+        // Whoever holds DeployingLeader is never current, even if segmenting is no longer enabled for it (e.g. its
+        // write routing diverged from its lock client when table migration completed). Otherwise it would run the
+        // current Leader's duties, such as stream sync, alongside the real Leader until its key is re-evaluated.
+        if (LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(currentlyHeldLeaderKey)) {
+            return false;
+        }
         if (!isEnabled()) {
             return true;
         }
@@ -289,13 +356,24 @@ public class FleetSegmentingHandler {
      * @param key the held lock key, or null if this worker holds neither lock
      */
     public void setHeldLeaderKey(final String key) {
-        leaderVersionDAO.setHeldLockKey(isEnabled() ? key : null);
+        setHeldLeaderKey(key, isEnabled());
+    }
+
+    /**
+     * Same as {@link #setHeldLeaderKey(String)}, with whether segmenting is enabled supplied by the caller: the same
+     * value the caller used to choose the key (see {@link #getHashKeyForLeaderLock(boolean)}). A key chosen while
+     * disabled is never passed to the {@link LeaderVersionDAO}, so it can't write a version item.
+     */
+    public void setHeldLeaderKey(final String key, final boolean segmentingEnabled) {
+        leaderVersionDAO.setHeldLockKey(segmentingEnabled ? key : null);
+        currentlyHeldLeaderKey = key;
         if (key != null) {
             lastHeldLeaderKey = key;
         } else {
             // The flag is only computed by a leader's assignment run. Once this worker holds no lock it is never
             // refreshed, so clear it rather than keep steering this worker to the Leader key on an old observation.
             isVersionEmittedByAllActiveWorkers = false;
+            allOnVersionSnapshot = null;
         }
     }
 
@@ -325,8 +403,106 @@ public class FleetSegmentingHandler {
      */
     public void setIsVersionEmittedByAllActiveWorkers(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        isVersionEmittedByAllActiveWorkers = !activeWorkerMetrics.isEmpty()
+        setIsVersionEmittedByAllActiveWorkers(activeWorkerMetrics, workersOnVersionHash, Collections.emptyList());
+    }
+
+    /**
+     * Same as {@link #setIsVersionEmittedByAllActiveWorkers(List, List)}, also recording each lease's owner and
+     * counter from the same run. The flip to the Leader lock compares them with a fresh read to tell a live owner on
+     * another version (its lease counter moved) from a dead one.
+     */
+    public void setIsVersionEmittedByAllActiveWorkers(
+            final List<WorkerMetricStats> activeWorkerMetrics,
+            final List<WorkerMetricStats> workersOnVersionHash,
+            final List<Lease> leases) {
+        final boolean allOnVersion = !activeWorkerMetrics.isEmpty()
                 && toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
+        if (allOnVersion) {
+            // Keep the first snapshot of an unbroken run of "all on version", so its age measures how long the
+            // fleet has looked that way.
+            final AllOnVersionSnapshot previous = allOnVersionSnapshot;
+            if (previous == null || !isVersionEmittedByAllActiveWorkers) {
+                allOnVersionSnapshot = AllOnVersionSnapshot.of(System.currentTimeMillis(), leases);
+            }
+        } else {
+            allOnVersionSnapshot = null;
+        }
+        isVersionEmittedByAllActiveWorkers = allOnVersion;
+    }
+
+    /**
+     * Re-validates the flip with a fresh read of the worker metrics and leases:
+     * <ul>
+     *   <li>every active worker (fresh metrics row) reports this worker's version, and there is at least one;</li>
+     *   <li>every lease owned by a worker not on this version is held by a dead owner: same owner and same lease
+     *       counter as when the fleet was first seen all on this version, at least a lease duration ago. A worker
+     *       that came back on the old version renews its lease (the counter moves) before its metrics row is
+     *       fresh again, so this catches it.</li>
+     * </ul>
+     * Fails closed: a read error, a snapshot younger than a lease duration, or no reader set means "not yet".
+     */
+    private boolean isFlipStillSafe(final long nowMillis) {
+        final AllOnVersionSnapshot snapshot = allOnVersionSnapshot;
+        if (snapshot == null) {
+            return false;
+        }
+        if (nowMillis - snapshot.takenAtMillis < leaseDurationMillis) {
+            log.info(
+                    "All active workers report version {}; confirming for {}ms before taking {}.",
+                    versionHash,
+                    leaseDurationMillis - (nowMillis - snapshot.takenAtMillis),
+                    LeaderLock.LEADER_HASH_KEY);
+            return false;
+        }
+        final FleetViewReader reader = fleetViewReader;
+        if (reader == null) {
+            log.warn("No fresh fleet view available; not taking {}.", LeaderLock.LEADER_HASH_KEY);
+            return false;
+        }
+        final FleetView fresh;
+        try {
+            fresh = reader.read();
+        } catch (final Exception e) {
+            log.warn(
+                    "Failed to read the fleet to confirm the flip; not taking {} this time.",
+                    LeaderLock.LEADER_HASH_KEY,
+                    e);
+            return false;
+        }
+        final List<WorkerMetricStats> active = fresh.getWorkerMetrics().stream()
+                .filter(wm -> wm.isValidWorkerMetric() && !wm.isExpired(workerMetricsExpiry))
+                .collect(Collectors.toList());
+        final Set<String> onVersion = toWorkerIds(filterWorkersOnVersionHash(active));
+        final Set<String> activeIds = toWorkerIds(active);
+        if (activeIds.isEmpty() || !onVersion.equals(activeIds)) {
+            log.info(
+                    "Fresh read: active workers {} but on version {} only {}; not taking {}.",
+                    activeIds,
+                    versionHash,
+                    onVersion,
+                    LeaderLock.LEADER_HASH_KEY);
+            return false;
+        }
+        for (final Lease lease : fresh.getLeases()) {
+            final String owner = lease.leaseOwner();
+            if (owner == null || onVersion.contains(owner)) {
+                continue;
+            }
+            final LeaseOwnerAndCounter before = snapshot.leases.get(lease.leaseKey());
+            if (before == null
+                    || !owner.equals(before.owner)
+                    || !Objects.equals(lease.leaseCounter(), before.counter)) {
+                log.info(
+                        "Fresh read: lease {} is owned by {}, not on version {}, and was renewed or moved; not "
+                                + "taking {}.",
+                        lease.leaseKey(),
+                        owner,
+                        versionHash,
+                        LeaderLock.LEADER_HASH_KEY);
+                return false;
+            }
+        }
+        return true;
     }
 
     private static Set<String> toWorkerIds(final List<WorkerMetricStats> workers) {
@@ -355,5 +531,42 @@ public class FleetSegmentingHandler {
 
     private boolean doesWorkerHaveVersionHash(final WorkerMetricStats worker) {
         return worker.getProperties() != null && worker.getProperties().containsKey(VERSION_HASH_KEY);
+    }
+
+    /** Fresh worker metrics and leases, read to re-validate the flip. */
+    @lombok.Value
+    public static class FleetView {
+        List<WorkerMetricStats> workerMetrics;
+        List<Lease> leases;
+    }
+
+    /** Reads a fresh {@link FleetView}. */
+    @FunctionalInterface
+    public interface FleetViewReader {
+        FleetView read() throws Exception;
+    }
+
+    @lombok.Value
+    private static class LeaseOwnerAndCounter {
+        String owner;
+        Long counter;
+    }
+
+    private static final class AllOnVersionSnapshot {
+        private final long takenAtMillis;
+        private final Map<String, LeaseOwnerAndCounter> leases;
+
+        private AllOnVersionSnapshot(final long takenAtMillis, final Map<String, LeaseOwnerAndCounter> leases) {
+            this.takenAtMillis = takenAtMillis;
+            this.leases = leases;
+        }
+
+        static AllOnVersionSnapshot of(final long takenAtMillis, final List<Lease> leases) {
+            final Map<String, LeaseOwnerAndCounter> byKey = new HashMap<>();
+            for (final Lease lease : leases) {
+                byKey.put(lease.leaseKey(), new LeaseOwnerAndCounter(lease.leaseOwner(), lease.leaseCounter()));
+            }
+            return new AllOnVersionSnapshot(takenAtMillis, byKey);
+        }
     }
 }

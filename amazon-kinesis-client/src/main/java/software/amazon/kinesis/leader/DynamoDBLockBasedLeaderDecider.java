@@ -73,6 +73,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
 
     // When heldLeaderKey was last re-evaluated against the coordinator table.
     private long lastKeyEvaluationTimeMillis = 0L;
+    // Whether segmenting was enabled when heldLeaderKey was last evaluated. Guarded by this object's monitor.
+    private boolean keyEvaluatedWithSegmentingEnabled = false;
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     @VisibleForTesting
@@ -151,22 +153,31 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // it once per heartbeat period. getHashKeyForLeaderLock() reads the coordinator table, and isLeader() runs
         // about once a second on the leader, so re-evaluating on every call made the leader's leadership depend on
         // coordinator-table reads.
+        //
+        // Whether segmenting is enabled is read once here and used for both the key and the recorded result, and a
+        // change in it forces the key to be re-evaluated. Segmenting can become enabled while this runs (e.g. table
+        // migration reaching COMPLETE). Reading it twice let a worker choose "Leader" while disabled (no version
+        // read) and then record it as enabled, writing its version to LeaderVersion while the old version still ran.
         final long now = System.currentTimeMillis();
+        final boolean segmentingEnabled = segmentingHandler.isEnabled();
         final String ddbLeaderKey;
-        if (heldLeaderKey != null && lastKeyEvaluationTimeMillis + heartbeatPeriodMillis > now) {
+        if (heldLeaderKey != null
+                && lastKeyEvaluationTimeMillis + heartbeatPeriodMillis > now
+                && keyEvaluatedWithSegmentingEnabled == segmentingEnabled) {
             ddbLeaderKey = heldLeaderKey;
         } else {
             try {
-                ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock();
+                ddbLeaderKey = segmentingHandler.getHashKeyForLeaderLock(segmentingEnabled);
             } catch (final VersionStateUnavailableException e) {
                 // The version state has never been read successfully, so this worker can't know which lock it is
                 // eligible for. Contend for neither lock this cycle rather than guessing "Leader". This worker can't
                 // hold a lock here: acquiring one required a successful read.
                 log.warn("Not contending for leadership this cycle: {}", e.getMessage(), e);
-                recordResult(null, false);
+                recordResult(null, false, segmentingEnabled);
                 return false;
             }
             lastKeyEvaluationTimeMillis = now;
+            keyEvaluatedWithSegmentingEnabled = segmentingEnabled;
         }
 
         // If the key changed while holding a lock (e.g. the deploying leader at the end of a deploy, or a former
@@ -225,13 +236,13 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             response = false;
         }
 
-        recordResult(response ? ddbLeaderKey : null, response);
+        recordResult(response ? ddbLeaderKey : null, response, segmentingEnabled);
         return response;
     }
 
-    private void recordResult(final String heldKey, final boolean response) {
+    private void recordResult(final String heldKey, final boolean response, final boolean segmentingEnabled) {
         heldLeaderKey = heldKey;
-        segmentingHandler.setHeldLeaderKey(heldKey);
+        segmentingHandler.setHeldLeaderKey(heldKey, segmentingEnabled);
         lastCheckTimeInMillis = System.currentTimeMillis();
         lastIsLeaderResult = response;
         publishIsLeaderMetrics(response);
@@ -314,7 +325,8 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
             log.error("Failed to complete releaseLeadershipIfHeld call.", e);
         } finally {
             heldLeaderKey = null;
-            segmentingHandler.setHeldLeaderKey(null);
+            // No key, so enablement doesn't matter: the version DAO is told no lock is held.
+            segmentingHandler.setHeldLeaderKey(null, false);
         }
     }
 }

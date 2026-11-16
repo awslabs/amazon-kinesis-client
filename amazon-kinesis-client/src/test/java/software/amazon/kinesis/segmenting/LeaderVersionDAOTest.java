@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -81,19 +80,23 @@ class LeaderVersionDAOTest {
     /** Acquires {@code lockKey} and runs the full write that follows, so later ticks are plain heartbeats. */
     private void acquire(final String lockKey) throws Exception {
         holdLock(lockKey);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), isNull()))
+        when(coordinatorStateDAO.putCoordinatorStateIfLockOwnedBy(any(), any(), any()))
                 .thenReturn(true);
         dao.setHeldLockKey(lockKey);
         dao.heartbeat();
     }
 
-    /** Returns the expectations of the conditional heartbeat, skipping the unconditional full write. */
+    /** Returns the expectations of the conditional heartbeat. The full write is a separate, fenced call. */
     @SuppressWarnings("unchecked")
     private Map<String, ExpectedAttributeValue> captureConditionalHeartbeatExpectations() throws Exception {
         final ArgumentCaptor<Map<String, ExpectedAttributeValue>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(coordinatorStateDAO, times(2)).updateCoordinatorStateWithExpectation(any(), captor.capture());
-        assertNull(captor.getAllValues().get(0));
-        return captor.getAllValues().get(1);
+        verify(coordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), captor.capture());
+        return captor.getValue();
+    }
+
+    /** Number of fenced full writes so far. */
+    private void verifyFullWrites(final int count) throws Exception {
+        verify(coordinatorStateDAO, times(count)).putCoordinatorStateIfLockOwnedBy(any(), any(), eq(WORKER_ID));
     }
 
     // ---------------- reads ----------------
@@ -154,15 +157,17 @@ class LeaderVersionDAOTest {
     @Test
     void setHeldLockKey_newKey_writesFullItemOnHeartbeatThread() throws Exception {
         holdLock(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), isNull()))
+        when(coordinatorStateDAO.putCoordinatorStateIfLockOwnedBy(any(), any(), any()))
                 .thenReturn(true);
 
         dao.setHeldLockKey(LeaderLock.LEADER_HASH_KEY);
         verify(executor).execute(any(Runnable.class));
         dao.heartbeat();
 
+        // The full write is fenced on this worker owning the Leader lock.
         final ArgumentCaptor<CoordinatorState> state = ArgumentCaptor.forClass(CoordinatorState.class);
-        verify(coordinatorStateDAO).updateCoordinatorStateWithExpectation(state.capture(), isNull());
+        verify(coordinatorStateDAO)
+                .putCoordinatorStateIfLockOwnedBy(state.capture(), eq(LeaderLock.LEADER_HASH_KEY), eq(WORKER_ID));
         final LeaderVersionState written = (LeaderVersionState) state.getValue();
         assertEquals(LeaderVersionState.LEADER_VERSION_HASH_KEY, written.getKey());
         assertEquals(VERSION_HASH, written.getVersionHash());
@@ -175,23 +180,32 @@ class LeaderVersionDAOTest {
         acquire(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
         final ArgumentCaptor<CoordinatorState> state = ArgumentCaptor.forClass(CoordinatorState.class);
-        verify(coordinatorStateDAO).updateCoordinatorStateWithExpectation(state.capture(), isNull());
+        verify(coordinatorStateDAO)
+                .putCoordinatorStateIfLockOwnedBy(
+                        state.capture(), eq(LeaderLock.DEPLOYING_LEADER_HASH_KEY), eq(WORKER_ID));
         assertEquals(
                 LeaderVersionState.DEPLOYING_LEADER_VERSION_HASH_KEY,
                 state.getValue().getKey());
     }
 
+    /**
+     * F1: the lock item says another worker owns the lock (e.g. this worker's write was still in flight when it lost
+     * the lock). The fenced write is rejected, nothing else is written, and it is retried while the lock is held.
+     */
     @Test
-    void fullWrite_createsItemWhenMissing() throws Exception {
+    void fullWrite_rejectedWhenLockItemOwnedByAnotherWorker_isRetried() throws Exception {
         holdLock(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), isNull()))
-                .thenReturn(false);
-        when(coordinatorStateDAO.createCoordinatorStateIfNotExists(any())).thenReturn(true);
+        when(coordinatorStateDAO.putCoordinatorStateIfLockOwnedBy(any(), any(), any()))
+                .thenReturn(false)
+                .thenReturn(true);
 
         dao.setHeldLockKey(LeaderLock.LEADER_HASH_KEY);
         dao.heartbeat();
+        dao.heartbeat();
 
-        verify(coordinatorStateDAO).createCoordinatorStateIfNotExists(any(LeaderVersionState.class));
+        verifyFullWrites(2);
+        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).createCoordinatorStateIfNotExists(any());
     }
 
     @Test
@@ -220,7 +234,7 @@ class LeaderVersionDAOTest {
     @Test
     void fullWrite_retriedOnNextTickAfterFailure() throws Exception {
         holdLock(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), isNull()))
+        when(coordinatorStateDAO.putCoordinatorStateIfLockOwnedBy(any(), any(), any()))
                 .thenThrow(new DependencyException(new RuntimeException("throttled")))
                 .thenReturn(true);
 
@@ -228,7 +242,7 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, times(2)).updateCoordinatorStateWithExpectation(any(), isNull());
+        verifyFullWrites(2);
     }
 
     // ---------------- heartbeat ----------------
@@ -261,7 +275,7 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
 
         verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
-        verify(coordinatorStateDAO, never()).createCoordinatorStateIfNotExists(any());
+        verify(coordinatorStateDAO, never()).putCoordinatorStateIfLockOwnedBy(any(), any(), any());
     }
 
     @Test
@@ -333,12 +347,16 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
 
         // Once for the write after acquiring, once for the rewrite.
-        verify(coordinatorStateDAO, times(2)).updateCoordinatorStateWithExpectation(any(), isNull());
+        verifyFullWrites(2);
     }
 
-    /** A new leader owns the item, so this worker stops heartbeating it instead of fighting the owner. */
+    /**
+     * F1: the item names another worker (e.g. a late write from the previous holder) while this worker holds the
+     * lock. The holder is authoritative, so it rewrites the item (fenced) on every heartbeat that finds it so,
+     * instead of giving it up.
+     */
     @Test
-    void heartbeat_stopsWhenItemOwnedByAnotherWorker() throws Exception {
+    void heartbeat_holderRewritesItemOwnedByAnotherWorker() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
         when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
                 .thenReturn(false);
@@ -349,21 +367,8 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
         dao.heartbeat();
 
-        // One conditional attempt, then nothing more; the full write after acquiring is the only unconditional one.
-        verify(coordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), anyMap());
-        verify(coordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), isNull());
-    }
-
-    /** Re-acquiring after being superseded writes the item again. */
-    @Test
-    void heartbeat_resumesAfterReacquiring() throws Exception {
-        heartbeat_stopsWhenItemOwnedByAnotherWorker();
-
-        dao.setHeldLockKey(null);
-        dao.setHeldLockKey(LeaderLock.LEADER_HASH_KEY);
-        dao.heartbeat();
-
-        verify(coordinatorStateDAO, times(2)).updateCoordinatorStateWithExpectation(any(), isNull());
+        // The write after acquiring, then one rewrite per heartbeat.
+        verifyFullWrites(3);
     }
 
     @Test
@@ -377,7 +382,7 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, times(2)).updateCoordinatorStateWithExpectation(any(), isNull());
+        verifyFullWrites(2);
     }
 
     @Test
