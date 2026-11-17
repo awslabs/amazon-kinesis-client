@@ -529,15 +529,12 @@ public class FleetSegmentingHandlerTest {
     void getHashKeyForLeaderLock_leaderStoppedHeartbeating_allWorkersOnMyVersion_contendsForLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
-        final FleetSegmentingHandler flipping = flippingHandler();
-        final WorkerMetricStats w1 = workerOnMyVersion("worker1");
-        flipping.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        flipping.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
-        flipping.setFleetViewReader(
-                () -> new FleetSegmentingHandler.FleetView(Collections.singletonList(w1), Collections.emptyList()));
-        TimeUnit.MILLISECONDS.sleep(LEASE_DURATION_MILLIS + 5);
+        final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     /** Past the leader version expiry, the item no longer holds other versions back. */
@@ -609,133 +606,85 @@ public class FleetSegmentingHandlerTest {
         assertTrue(gated.isOnCurrentVersion());
     }
 
-    // ---------------- F5: the flip is re-validated with a fresh read ----------------
+    // ---------------- F5: the flip waits for runs more than a worker-version expiry apart ----------------
 
+    /** Worker-version expiry with the default config: max(2 x 30s heartbeat, 2 x 30s reporter). */
+    private static final long WORKER_VERSION_EXPIRY_MILLIS = 60_000L;
+
+    /** One run that sees every worker on this version isn't enough: a returning worker may not have reported yet. */
     @Test
-    void flip_freshReadSeesWorkerOnOtherVersion_staysOnDeployingLeader() throws Exception {
-        final FleetSegmentingHandler flipping = readyToFlip(
-                Arrays.asList(workerOnMyVersion("worker1"), workerOnVersion("returned", "oldHash")),
-                Collections.emptyList());
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
-    }
-
-    /** A worker back on the old version renews its lease before its metrics row is fresh again. */
-    @Test
-    void flip_leaseOfOtherVersionOwnerWasRenewed_staysOnDeployingLeader() throws Exception {
-        final FleetSegmentingHandler flipping = readyToFlip(
-                Collections.singletonList(workerOnMyVersion("worker1")),
-                Collections.singletonList(lease("shard-1", "returned", 8L)));
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
-    }
-
-    /** A lease of a dead old-version owner doesn't hold the flip back: its counter hasn't moved. */
-    @Test
-    void flip_leaseOfDeadOtherVersionOwner_takesLeader() throws Exception {
-        final FleetSegmentingHandler flipping = readyToFlip(
-                Collections.singletonList(workerOnMyVersion("worker1")),
-                Collections.singletonList(lease("shard-1", "returned", 7L)));
-
-        assertEquals(LeaderLock.LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
-    }
-
-    @Test
-    void flip_freshReadFails_staysOnDeployingLeader() throws Exception {
-        final FleetSegmentingHandler flipping =
-                readyToFlip(Collections.singletonList(workerOnMyVersion("worker1")), Collections.emptyList());
-        flipping.setFleetViewReader(() -> {
-            throw new DependencyException(new RuntimeException("throttled"));
-        });
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
-    }
-
-    @Test
-    void flip_beforeALeaseDurationHasPassed_staysOnDeployingLeader() throws Exception {
+    void flip_singleRun_staysOnDeployingLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
-        final FleetSegmentingHandler flipping = flippingHandler();
-        final WorkerMetricStats w1 = workerOnMyVersion("worker1");
-        flipping.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        flipping.setFleetViewReader(
-                () -> new FleetSegmentingHandler.FleetView(Collections.singletonList(w1), Collections.emptyList()));
-        flipping.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
+        final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
     @Test
-    void flip_withoutFleetViewReader_staysOnDeployingLeader() throws Exception {
-        final FleetSegmentingHandler flipping =
-                readyToFlip(Collections.singletonList(workerOnMyVersion("worker1")), Collections.emptyList());
-        flipping.setFleetViewReader(null);
-
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, flipping.getHashKeyForLeaderLock());
-    }
-
-    private static final long LEASE_DURATION_MILLIS = 20L;
-
-    /** A handler with a short lease duration, so the flip's confirmation window passes quickly in tests. */
-    private FleetSegmentingHandler flippingHandler() {
-        final LeaseManagementConfig shortLease = new LeaseManagementConfig(
-                "dummyTableName",
-                "dummyApplicationName",
-                Mockito.mock(DynamoDbAsyncClient.class),
-                Mockito.mock(KinesisAsyncClient.class),
-                "dummyWorkerId");
-        shortLease.enableRollingDeploymentSystem(true);
-        shortLease.leaseAssignmentStrategy(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
-        shortLease.failoverTimeMillis(LEASE_DURATION_MILLIS);
-        return new FleetSegmentingHandler(shortLease, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
-    }
-
-    /**
-     * A DeployingLeader whose last assignment run saw only worker1 (on its version) and lease shard-1 owned by
-     * "returned" at counter 7, a lease duration ago. The fresh read returns {@code freshWorkers} and
-     * {@code freshLeases}.
-     */
-    private FleetSegmentingHandler readyToFlip(
-            final List<WorkerMetricStats> freshWorkers, final List<software.amazon.kinesis.leases.Lease> freshLeases)
-            throws Exception {
+    void flip_runsExactlyAWorkerVersionExpiryApart_staysOnDeployingLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
-        final FleetSegmentingHandler flipping = flippingHandler();
-        final WorkerMetricStats w1 = workerOnMyVersion("worker1");
-        flipping.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        flipping.setIsVersionEmittedByAllActiveWorkers(
-                Collections.singletonList(w1),
-                Collections.singletonList(w1),
-                Collections.singletonList(lease("shard-1", "returned", 7L)));
-        flipping.setFleetViewReader(() -> new FleetSegmentingHandler.FleetView(freshWorkers, freshLeases));
-        TimeUnit.MILLISECONDS.sleep(LEASE_DURATION_MILLIS + 5);
-        return flipping;
+        final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L + WORKER_VERSION_EXPIRY_MILLIS);
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
-    private WorkerMetricStats workerOnMyVersion(final String workerId) {
-        return workerOnVersion(workerId, sampleVersionHash);
+    @Test
+    void flip_runsMoreThanAWorkerVersionExpiryApart_takesLeader() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+        final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
     }
 
-    /** An active worker (fresh, valid metrics row) reporting {@code version}. */
-    private static WorkerMetricStats workerOnVersion(final String workerId, final String version) {
+    /** F5: an old-version worker that comes back in between breaks the streak, so the wait starts over. */
+    @Test
+    void flip_returningWorkerBetweenRuns_restartsTheWait() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+        final List<WorkerMetricStats> onVersion = Collections.singletonList(worker("worker1"));
+        final List<WorkerMetricStats> withReturned = Arrays.asList(worker("worker1"), worker("returned"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 1_000L);
+        handler.setIsVersionEmittedByAllActiveWorkers(withReturned, onVersion, 31_000L);
+        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 62_000L);
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+
+        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 62_001L + WORKER_VERSION_EXPIRY_MILLIS);
+
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    /** Losing the lock ends the streak, so a later DeployingLeader starts its own wait. */
+    @Test
+    void flip_streakClearedWhenLockReleased() throws Exception {
+        mockCoordinatorState(
+                LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
+        final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
+        handler.setHeldLeaderKey(null);
+        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
+
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+    }
+
+    private static WorkerMetricStats worker(final String workerId) {
         final WorkerMetricStats worker = mock(WorkerMetricStats.class);
         when(worker.getWorkerId()).thenReturn(workerId);
-        when(worker.isValidWorkerMetric()).thenReturn(true);
-        when(worker.isExpired(any())).thenReturn(false);
-        final Map<String, String> properties = new HashMap<>();
-        properties.put(FleetSegmentingHandler.VERSION_HASH_KEY, version);
-        properties.put("versionHashLut", String.valueOf(Instant.now().getEpochSecond()));
-        when(worker.getProperties()).thenReturn(properties);
         return worker;
-    }
-
-    private static software.amazon.kinesis.leases.Lease lease(
-            final String key, final String owner, final long counter) {
-        final software.amazon.kinesis.leases.Lease lease = new software.amazon.kinesis.leases.Lease();
-        lease.leaseKey(key);
-        lease.leaseOwner(owner);
-        lease.leaseCounter(counter);
-        return lease;
     }
 
     /** Stubs the version item for a leader lock. {@code lutSeconds} is converted to the item's heartbeat millis. */

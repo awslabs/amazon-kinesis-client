@@ -204,9 +204,7 @@ public final class LeaseAssignmentManager {
             final long loadStartTime = System.currentTimeMillis();
             inMemoryStorageView.loadInMemoryStorageView(metricsScope);
             segmentingHandler.setIsVersionEmittedByAllActiveWorkers(
-                    inMemoryStorageView.getActiveWorkerMetrics(),
-                    inMemoryStorageView.getWorkersOnVersionHash(),
-                    inMemoryStorageView.getLeaseList());
+                    inMemoryStorageView.getActiveWorkerMetrics(), inMemoryStorageView.getWorkersOnVersionHash());
             MetricsUtil.addLatency(metricsScope, "LeaseAndWorkerMetricsLoad", loadStartTime, MetricsLevel.DETAILED);
 
             // A DeployingLeader whose segment is the whole active fleet has nothing of its own to balance: the

@@ -467,9 +467,10 @@ class DynamoDBLockBasedLeaderDeciderTest {
             throws Exception {
         final String workerId = "deployingVersionWorker";
         final CoordinatorStateDAO sharedDao = newDao();
-        // A 10ms lease duration, so the flip's confirmation window passes within the test.
+        // A 10ms worker-version expiry (2 x 5ms), so the flip's two-run wait passes within the test.
         final LeaseManagementConfig config = segmentingConfig(workerId);
-        config.failoverTimeMillis(10L);
+        config.dynamoDbLockBasedLeaderHeartbeatPeriodInMillis(5L);
+        config.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(5L);
         final FleetSegmentingHandler handler =
                 new FleetSegmentingHandler(config, sharedDao, inlineExecutor(), () -> true);
         final DynamoDBLockBasedLeaderDecider decider = DynamoDBLockBasedLeaderDecider.create(
@@ -490,22 +491,17 @@ class DynamoDBLockBasedLeaderDeciderTest {
                         .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
                         .s());
 
-        // Its assignment run sees every active worker on its version (the old-version worker is gone).
+        // Two assignment runs, more than the worker-version expiry apart, see every active worker on its version (the
+        // old-version worker is gone).
         final software.amazon.kinesis.worker.metricstats.WorkerMetricStats self =
                 mock(software.amazon.kinesis.worker.metricstats.WorkerMetricStats.class);
         when(self.getWorkerId()).thenReturn(workerId);
-        when(self.isValidWorkerMetric()).thenReturn(true);
-        when(self.isExpired(any())).thenReturn(false);
-        final Map<String, String> properties = new HashMap<>();
-        properties.put(FleetSegmentingHandler.VERSION_HASH_KEY, handler.getVersionHash());
-        properties.put("versionHashLut", String.valueOf(System.currentTimeMillis() / 1000L));
-        when(self.getProperties()).thenReturn(properties);
         handler.setIsVersionEmittedByAllActiveWorkers(
                 java.util.Collections.singletonList(self), java.util.Collections.singletonList(self));
-        // The fresh read at the flip sees the same fleet: only this worker, no leases.
-        handler.setFleetViewReader(() -> new FleetSegmentingHandler.FleetView(
-                java.util.Collections.singletonList(self), java.util.Collections.emptyList()));
-        Thread.sleep(20); // past the 10ms heartbeat period and lease duration, so the key is re-evaluated
+        Thread.sleep(20);
+        handler.setIsVersionEmittedByAllActiveWorkers(
+                java.util.Collections.singletonList(self), java.util.Collections.singletonList(self));
+        Thread.sleep(20); // past the 10ms decider heartbeat period, so the key is re-evaluated
 
         assertTrue(decider.isLeader(workerId));
         assertEquals(workerId, getLeaderItem().get("ownerName").s());

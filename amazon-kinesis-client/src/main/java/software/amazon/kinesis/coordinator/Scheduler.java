@@ -483,10 +483,6 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.tableName(),
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis(),
                 tableMigrationStatusProvider);
-        // The flip to the Leader lock is re-validated against a fresh read of worker metrics and leases (it reads
-        // only while a DeployingLeader is about to take Leader).
-        segmentingHandler.setFleetViewReader(() -> new FleetSegmentingHandler.FleetView(
-                workerMetricsDAO.getAllWorkerMetricStats(), leaseRefresher.listLeases()));
         final MigrationAwareLAMDataManager lamDataManager = new MigrationAwareLAMDataManager(
                 entityDAO,
                 workerMetricsDAO,

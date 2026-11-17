@@ -1592,7 +1592,7 @@ class LeaseAssignmentManagerTest {
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> "worker1".equals(lease.leaseOwner()))
                         .count());
-        Mockito.verify(mockSegmentingHandler).setIsVersionEmittedByAllActiveWorkers(any(), any(), any());
+        Mockito.verify(mockSegmentingHandler).setIsVersionEmittedByAllActiveWorkers(any(), any());
     }
 
     @Test
