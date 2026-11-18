@@ -277,6 +277,15 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
     }
 
     /**
+     * The value set by {@link #sequenceNumberAtShardEnd(ExtendedSequenceNumber)}, or null if it was never set. The
+     * ShutdownTask sets it just before calling the record processor's shardEnded(), so a non-null value means
+     * shardEnded() has been called for this processor.
+     */
+    public synchronized ExtendedSequenceNumber sequenceNumberAtShardEnd() {
+        return sequenceNumberAtShardEnd;
+    }
+
+    /**
      * Internal API - has package level access only for testing purposes.
      *
      * @param sequenceNumber

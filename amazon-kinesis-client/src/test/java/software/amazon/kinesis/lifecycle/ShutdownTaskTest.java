@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -64,9 +66,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -387,6 +391,269 @@ public class ShutdownTaskTest {
         verify(leaseRefresher, never()).assignLease(any(Lease.class), any(String.class));
         verify(leaseCoordinator, never()).dropLease(any(Lease.class));
         verify(recordsPublisher).shutdown();
+    }
+
+    /**
+     * The leader evicts the lease while the application's shardEnded() is still running, after its SHARD_END
+     * checkpoint (the earliest the leader can evict: it only evicts leases that are at SHARD_END in the lease table).
+     * The task already read the held lease when it started, so it finishes the normal SHARD_END path: the lease is
+     * queued for this worker's cleanup, and it's not dropped and the application doesn't get leaseLost().
+     */
+    @Test
+    public final void testShardEndWhenLeaseEvictedDuringShardEnded_completesWithoutLeaseLost() throws Exception {
+        final AtomicBoolean evicted = new AtomicBoolean(false);
+        when(leaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenAnswer(i -> evicted.get() ? null : lease);
+        doAnswer(invocation -> {
+                    lease.checkpoint(ExtendedSequenceNumber.SHARD_END); // the application's checkpoint
+                    evicted.set(true); // the leader evicts the lease
+                    return null;
+                })
+                .when(shardRecordProcessor)
+                .shardEnded(any(ShardEndedInput.class));
+
+        final TaskResult result = task.call();
+
+        assertNull(result.getException());
+        verify(shardRecordProcessor, times(1)).shardEnded(any(ShardEndedInput.class));
+        verifyShutdownAndNoDrop();
+        verify(leaseCleanupManager).enqueueForDeletion(any(LeasePendingDeletion.class));
+        // the task reads the held lease once, when it starts, so the eviction during shardEnded() doesn't reach it
+        verify(leaseCoordinator, times(1)).getCurrentlyHeldLease(lease.leaseKey());
+    }
+
+    /**
+     * The baseline for the two tests below. The application's shardEnded() checkpoints at SHARD_END and then throws,
+     * so the task fails and is retried, and the lease is still held at the retry, as it always was before leader-side
+     * SHARD_END cleanup was introduced. The retry sees the lease already at SHARD_END in the lease table, so it
+     * doesn't call shardEnded() again; it queues the lease for cleanup, and the application gets no further calls.
+     */
+    @Test
+    public final void testShardEndRetryAfterShardEndedThrowsAndLeaseStillHeld_noFurtherApplicationCalls()
+            throws Exception {
+        doAnswer(invocation -> {
+                    lease.checkpoint(ExtendedSequenceNumber.SHARD_END); // the application's checkpoint
+                    throw new RuntimeException("work after the checkpoint failed");
+                })
+                .when(shardRecordProcessor)
+                .shardEnded(any(ShardEndedInput.class));
+
+        final TaskResult firstAttempt = task.call();
+        assertTrue(firstAttempt.getException() instanceof CustomerApplicationException);
+        // Not queued yet: the finally block in takeShardEndAction only queues the lease if the attempt succeeded
+        // (or the shard has no child shards, which isn't the case here).
+        verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
+
+        final TaskResult retry =
+                createShutdownTask(SHARD_END, constructChildrenFromSplit()).call();
+
+        assertNull(retry.getException());
+        verify(shardRecordProcessor, times(1)).shardEnded(any(ShardEndedInput.class));
+        verifyShutdownAndNoDrop();
+        // Queued by the retry, which succeeds.
+        verify(leaseCleanupManager, times(1)).enqueueForDeletion(any(LeasePendingDeletion.class));
+    }
+
+    /**
+     * The application's shardEnded() checkpoints at SHARD_END and then throws, so the task fails and is retried.
+     * Before the retry, the leader evicts the lease (it's at SHARD_END in the lease table), so this worker no longer
+     * holds it. The retry finishes without calling the application again: it gets no second shardEnded() and no
+     * leaseLost(), the same as when the lease is still held (see the baseline test above).
+     */
+    @Test
+    public final void testShardEndRetryAfterShardEndedThrowsAndLeaseEvicted_noFurtherApplicationCalls()
+            throws Exception {
+        failFirstShardEndedAfterCheckpointThenEvict();
+
+        final TaskResult retry =
+                createShutdownTask(SHARD_END, constructChildrenFromSplit()).call();
+
+        assertNull(retry.getException());
+        verifyRetryMadeNoApplicationCalls();
+    }
+
+    /**
+     * Same as above, but the Scheduler noticed the lost lease before the retry was created, so the retry is a
+     * LEASE_LOST shutdown task (the ShardConsumer creates it with its current shutdown reason; see
+     * ShardConsumerTest#testFailedShardEndShutdown_schedulerSawLeaseLossBeforeRetry_retryIsLeaseLostShutdownTask).
+     * It also finishes without calling the application again.
+     */
+    @Test
+    public final void testLeaseLostRetryAfterShardEndedThrowsAndLeaseEvicted_noFurtherApplicationCalls()
+            throws Exception {
+        failFirstShardEndedAfterCheckpointThenEvict();
+
+        final TaskResult retry =
+                createShutdownTask(LEASE_LOST, constructChildrenFromSplit()).call();
+
+        assertNull(retry.getException());
+        verifyRetryMadeNoApplicationCalls();
+    }
+
+    /**
+     * shardEnded() was called but threw before checkpointing, so the shard isn't done. The lease isn't at SHARD_END,
+     * so the leader doesn't evict it, but it can still be lost for real (for example, it expired and another worker
+     * took it). The retry then calls the record processor's leaseLost(), as it did before leader-side SHARD_END
+     * cleanup was introduced. This test and the next cover both retry reasons: SHARD_END here (row 5 of the table in
+     * ShardConsumerTest: the Scheduler hasn't noticed the lost lease yet), LEASE_LOST in the next (row 6).
+     *
+     * <p>The check for an already-completed shard end at the top of call() doesn't apply, because lastCheckpointValue
+     * isn't SHARD_END: the check requires this processor's own SHARD_END checkpoint, not just a shardEnded() call. It's
+     * based on this processor's checkpointer rather than the lease table, because the table can show the shard at
+     * SHARD_END (or deleted) after another worker finished it, while this processor still needs to be told it lost
+     * the lease.
+     *
+     * <p>How a SHARD_END task gets to leaseLost(): takeShardEndAction() throws InvalidStateException ("Lease not
+     * owned by the current worker") because the lease isn't held, before doing any shard-end work. The SHARD_END
+     * branch catches it, logs a warning with the exception, and finishes as a lease loss: dropLease() only logs
+     * (there's no held lease), and then it calls the record processor's leaseLost(). The task's reason stays
+     * SHARD_END; this is the SHARD_END path's existing fallback when it can't do the shard-end work. The exception
+     * doesn't leave call(), so this test checks that none of the shard-end work ran: the SHARD_END path's other ways
+     * to reach leaseLost() (an InvalidStateException while creating child leases, or a missing lease when
+     * checkpointing) come after it reads the lease or writes child leases.
+     */
+    @Test
+    public final void testLeaseLostAfterShardEndedThrewBeforeCheckpoint_shardEndRetry_callsLeaseLostViaNotOwnedPath()
+            throws Exception {
+        leaseLostAfterShardEndedThrewBeforeCheckpoint();
+
+        final TaskResult result =
+                createShutdownTask(SHARD_END, constructChildrenFromSplit()).call();
+
+        assertNull(result.getException());
+        verify(shardRecordProcessor).leaseLost(any(LeaseLostInput.class));
+        verify(shardRecordProcessor, never()).shardEnded(any(ShardEndedInput.class));
+        // The task stopped at takeShardEndAction()'s lease check: no lease read, no child leases created, and nothing
+        // queued for cleanup.
+        verify(leaseRefresher, never()).getLease(any(String.class));
+        verify(leaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
+        verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
+    }
+
+    /**
+     * The same case as the test above, with a LEASE_LOST retry (row 6 of the table in ShardConsumerTest: the
+     * Scheduler noticed the lost lease before the retry was created). The LEASE_LOST branch calls the record
+     * processor's leaseLost() directly, without going through takeShardEndAction(). The branch only transfers and
+     * drops the lease first if it's still held with a graceful shutdown requested, which doesn't apply here (see the
+     * testLeaseLostWithShutdownRequested... tests for that case).
+     */
+    @Test
+    public final void testLeaseLostAfterShardEndedThrewBeforeCheckpoint_leaseLostRetry_callsLeaseLost()
+            throws Exception {
+        leaseLostAfterShardEndedThrewBeforeCheckpoint();
+
+        final TaskResult result =
+                createShutdownTask(LEASE_LOST, constructChildrenFromSplit()).call();
+
+        assertNull(result.getException());
+        verify(shardRecordProcessor).leaseLost(any(LeaseLostInput.class));
+        verify(shardRecordProcessor, never()).shardEnded(any(ShardEndedInput.class));
+    }
+
+    /**
+     * shardEnded() was called (sequenceNumberAtShardEnd is set) but didn't checkpoint (lastCheckpointValue is an
+     * earlier sequence number), and this worker no longer holds the lease.
+     */
+    private void leaseLostAfterShardEndedThrewBeforeCheckpoint() {
+        when(recordProcessorCheckpointer.sequenceNumberAtShardEnd()).thenReturn(new ExtendedSequenceNumber("1234"));
+        when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("1000"));
+        when(leaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenReturn(null);
+    }
+
+    /**
+     * This worker took a lease with no childShardIds that was already at SHARD_END, then lost it before its
+     * ShutdownTask ran. The record processor still gets leaseLost(), with either shutdown reason, as before
+     * leader-side SHARD_END cleanup was introduced.
+     *
+     * <p>Such a lease comes from a fetch that hit ResourceNotFound (for example, the stream was deleted). The leader
+     * never deletes or evicts it, and it stays assignable, so this worker can get it when an earlier owner's lease
+     * expired. An earlier owner's shardEnded() wrote the SHARD_END checkpoint. This worker's checkpointer starts at
+     * SHARD_END (it's seeded from the lease when the consumer initializes), and the ShardConsumer goes straight to a
+     * SHARD_END shutdown, where shardEnded() isn't called again because the lease is already at SHARD_END. So
+     * sequenceNumberAtShardEnd is never set, and the check for an already-completed shard end doesn't apply.
+     *
+     * <p>Since the leader never removes this lease, this worker can only lose it in ways unrelated to leader-side
+     * SHARD_END cleanup: its own renewals fail until the lease expires, a rebalance moves the lease, or the earlier
+     * owner's LeaseCleanupManager deletes it (its in-memory queue entry outlives its ownership, and for a lease with
+     * no children it deletes once Kinesis returns ResourceNotFound for the shard).
+     *
+     * <p>Either way, this worker really lost the lease, and its record processor got initialize() but never
+     * shardEnded(), so leaseLost() is its one terminal callback. Callbacks are per processor: the earlier owner's
+     * processor got its own.
+     */
+    @Test
+    public final void testLeaseLostWhenCheckpointerStartedAtShardEnd_leaseWithoutChildren_callsLeaseLost()
+            throws Exception {
+        assertLeaseLostWhenCheckpointerStartedAtShardEnd(Collections.emptyList());
+    }
+
+    /**
+     * Same as above, for a lease with childShardIds. The leader never assigns such a lease once it's at SHARD_END,
+     * so this worker can only get it through a race: the leader's assignment is based on a lease table scan from
+     * before the lease reached SHARD_END, and assignLease only checks the lease's owner, not its checkpoint. For
+     * example, the owner was alive but its renewals were failing, so the leader saw the lease as expired; the owner
+     * then wrote the SHARD_END checkpoint before the leader's assignLease call.
+     *
+     * <p>This worker can lose such a lease the same ways as above, and also through leader-side SHARD_END cleanup:
+     * the leader evicts it on its next run (or deletes it, once the children have started), because it's owned and
+     * at SHARD_END with childShardIds. The record processor still gets leaseLost(), for the same reasons.
+     */
+    @Test
+    public final void testLeaseLostWhenCheckpointerStartedAtShardEnd_leaseWithChildren_callsLeaseLost()
+            throws Exception {
+        assertLeaseLostWhenCheckpointerStartedAtShardEnd(constructChildrenFromSplit());
+    }
+
+    /**
+     * Runs a shutdown with each reason (SHARD_END, then LEASE_LOST) for a lease this worker no longer holds, and
+     * checks the record processor gets leaseLost() each time. The record processor's checkpointer is at SHARD_END:
+     * setUp stubs its lastCheckpointValue() to SHARD_END, standing in for the value it was seeded with from the lease
+     * when the consumer initialized. sequenceNumberAtShardEnd is never set, because shardEnded() was never called.
+     *
+     * <p>The lease table's copy of the lease ({@code lease}, which leaseRefresher.getLease() returns) is set to
+     * SHARD_END too, to match the scenario, but neither run reads it: the SHARD_END path stops at its not-held check
+     * before reading the lease, and the LEASE_LOST path never reads it.
+     */
+    private void assertLeaseLostWhenCheckpointerStartedAtShardEnd(final List<ChildShard> childShards) throws Exception {
+        lease.checkpoint(ExtendedSequenceNumber.SHARD_END);
+        lease.childShardIds(childShards.stream().map(ChildShard::shardId).collect(Collectors.toList()));
+        when(leaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenReturn(null);
+
+        for (ShutdownReason reason : Arrays.asList(SHARD_END, LEASE_LOST)) {
+            final TaskResult result = createShutdownTask(reason, childShards).call();
+
+            assertNull(reason.toString(), result.getException());
+            verify(shardRecordProcessor).leaseLost(any(LeaseLostInput.class));
+            verify(shardRecordProcessor, never()).shardEnded(any(ShardEndedInput.class));
+            reset(shardRecordProcessor);
+        }
+        verify(leaseRefresher, never()).getLease(any(String.class));
+    }
+
+    /**
+     * The first attempt: shardEnded() checkpoints at SHARD_END (recorded in the lease and in the mocked
+     * checkpointer, which ShutdownTask marks with sequenceNumberAtShardEnd just before calling shardEnded()), then
+     * throws. Then the leader evicts the lease, so this worker no longer holds it.
+     */
+    private void failFirstShardEndedAfterCheckpointThenEvict() throws Exception {
+        doAnswer(invocation -> {
+                    lease.checkpoint(ExtendedSequenceNumber.SHARD_END); // the application's checkpoint
+                    when(recordProcessorCheckpointer.sequenceNumberAtShardEnd())
+                            .thenReturn(new ExtendedSequenceNumber("1234"));
+                    throw new RuntimeException("work after the checkpoint failed");
+                })
+                .when(shardRecordProcessor)
+                .shardEnded(any(ShardEndedInput.class));
+
+        final TaskResult firstAttempt = task.call();
+        assertTrue(firstAttempt.getException() instanceof CustomerApplicationException);
+
+        when(leaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenReturn(null); // the leader evicts
+    }
+
+    private void verifyRetryMadeNoApplicationCalls() {
+        verify(shardRecordProcessor, times(1)).shardEnded(any(ShardEndedInput.class));
+        verifyShutdownAndNoDrop();
+        verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
     }
 
     /**

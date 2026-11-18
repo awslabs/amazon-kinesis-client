@@ -256,24 +256,34 @@ public class LeaseCleanupManager {
     }
 
     /**
+     * Looks up a lease by lease key, returning null if there's no such lease. {@link LeaseRefresher#getLease} reads
+     * it from DynamoDB; the LeaseAssignmentManager looks it up in its lease table snapshot instead.
+     */
+    @FunctionalInterface
+    public interface LeaseLookup {
+        Lease getLease(String leaseKey)
+                throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    }
+
+    /**
      * Check if the all of the parent shards for a given lease have an ongoing lease. If any one parent still has a
      * lease, return false. Otherwise return true
      *
      * @param lease
      * @param shardInfo
+     * @param leaseLookup
      * @return
      * @throws DependencyException
      * @throws ProvisionedThroughputException
      * @throws InvalidStateException
      */
-    private boolean allParentShardLeasesDeleted(Lease lease, ShardInfo shardInfo)
+    private boolean allParentShardLeasesDeleted(Lease lease, ShardInfo shardInfo, LeaseLookup leaseLookup)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         for (String parentShard : lease.parentShardIds()) {
-            final Lease parentLease =
-                    leaseCoordinator.leaseRefresher().getLease(ShardInfo.getLeaseKey(shardInfo, parentShard));
+            final Lease parentLease = leaseLookup.getLease(ShardInfo.getLeaseKey(shardInfo, parentShard));
 
             if (parentLease != null) {
-                log.warn(
+                log.debug(
                         "Lease {} has a parent lease {} which is still present in the lease table, skipping deletion "
                                 + "for this lease.",
                         lease,
@@ -284,10 +294,16 @@ public class LeaseCleanupManager {
         return true;
     }
 
-    // We should only be deleting the current shard's lease if
-    // 1. All of its children are currently being processed, i.e their checkpoint is not TRIM_HORIZON or AT_TIMESTAMP.
-    // 2. Its parent shard lease(s) have already been deleted.
-    private boolean cleanupLeaseForCompletedShard(Lease lease, ShardInfo shardInfo, Set<String> childShardKeys)
+    /**
+     * Whether a completed shard's lease can be deleted, reading the lease's children and parents through
+     * {@code leaseLookup}. We should only be deleting the current shard's lease if
+     * 1. All of its children are currently being processed, i.e their checkpoint is not TRIM_HORIZON or AT_TIMESTAMP.
+     * 2. Its parent shard lease(s) have already been deleted.
+     *
+     * @throws IllegalStateException if a child lease isn't in the lease table
+     */
+    private boolean isCompletedShardLeaseReadyForDeletion(
+            Lease lease, ShardInfo shardInfo, Set<String> childShardKeys, LeaseLookup leaseLookup)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException, IllegalStateException {
         final Set<String> processedChildShardLeaseKeys = new HashSet<>();
         final Set<String> childShardLeaseKeys = childShardKeys.stream()
@@ -295,8 +311,7 @@ public class LeaseCleanupManager {
                 .collect(Collectors.toSet());
 
         for (String childShardLeaseKey : childShardLeaseKeys) {
-            final Lease childShardLease = Optional.ofNullable(
-                            leaseCoordinator.leaseRefresher().getLease(childShardLeaseKey))
+            final Lease childShardLease = Optional.ofNullable(leaseLookup.getLease(childShardLeaseKey))
                     .orElseThrow(() -> new IllegalStateException("Child lease " + childShardLeaseKey
                             + " for completed shard not found in " + "lease table - not cleaning up lease " + lease));
 
@@ -306,8 +321,35 @@ public class LeaseCleanupManager {
             }
         }
 
-        if (!allParentShardLeasesDeleted(lease, shardInfo)
-                || !Objects.equals(childShardLeaseKeys, processedChildShardLeaseKeys)) {
+        return allParentShardLeasesDeleted(lease, shardInfo, leaseLookup)
+                && Objects.equals(childShardLeaseKeys, processedChildShardLeaseKeys);
+    }
+
+    /**
+     * Deletes a completed shard's lease if cleanupLeasesUponShardCompletion is on and the lease is ready: every
+     * child has checkpointed past its initial position, and its parent leases are already gone. Used by this
+     * class's own cleanup (reading leases from DynamoDB) and by the LeaseAssignmentManager's leader-side cleanup,
+     * which passes a lookup into its lease table snapshot.
+     *
+     * <p>Why the children must have started: a completed shard's lease is the lease table's record that its children
+     * descend from a shard the application was processing. Shard sync uses that record when it creates a lease for
+     * an open shard that has none: if an ancestor still has a lease, the shard starts at TRIM_HORIZON, so nothing is
+     * skipped; otherwise it starts at the application's initial position (often LATEST), which would skip records
+     * already in the shard. So the lease is kept until processing has durably moved into the children.
+     *
+     * <p>Why the parents must be gone: the children check needs each child's lease to still exist, so leases are
+     * deleted parents first; deleting a child first would leave its parent never passing the check. KCL 1.x got the
+     * same order by deleting completed leases sorted by starting sequence number.
+     *
+     * @param leaseLookup where to read the lease's children and parents from
+     * @return true if the lease was deleted
+     * @throws IllegalStateException if a child lease isn't in the lease table
+     */
+    public boolean deleteCompletedShardLeaseIfReady(
+            Lease lease, ShardInfo shardInfo, Set<String> childShardKeys, LeaseLookup leaseLookup)
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException, IllegalStateException {
+        if (!cleanupLeasesUponShardCompletion
+                || !isCompletedShardLeaseReadyForDeletion(lease, shardInfo, childShardKeys, leaseLookup)) {
             return false;
         }
 
@@ -317,6 +359,12 @@ public class LeaseCleanupManager {
         leaseCoordinator.leaseRefresher().deleteLease(lease);
 
         return true;
+    }
+
+    private boolean cleanupLeaseForCompletedShard(Lease lease, ShardInfo shardInfo, Set<String> childShardKeys)
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException, IllegalStateException {
+        return deleteCompletedShardLeaseIfReady(
+                lease, shardInfo, childShardKeys, leaseCoordinator.leaseRefresher()::getLease);
     }
 
     private void updateLeaseWithChildShards(LeasePendingDeletion leasePendingDeletion, Set<String> childShardKeys)

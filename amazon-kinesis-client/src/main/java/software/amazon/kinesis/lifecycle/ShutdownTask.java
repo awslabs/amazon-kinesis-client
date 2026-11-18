@@ -146,6 +146,53 @@ public class ShutdownTask implements ConsumerTask {
                 final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
                 final Runnable leaseLostAction = () -> shardRecordProcessor.leaseLost(LEASE_LOST_INPUT);
 
+                if (currentShardLease == null && isShardEndAlreadyCheckpointed()) {
+                    // This is a retry of a SHARD_END shutdown whose shardEnded() checkpointed SHARD_END and then
+                    // threw, and the worker lost the lease before this retry.
+                    //
+                    // How it happens:
+                    //  1. The first attempt ran with reason SHARD_END. It created the child leases, wrote
+                    //     childShardIds to this lease, and called the record processor's shardEnded().
+                    //  2. shardEnded() checkpointed SHARD_END, then threw (for example, closing a resource failed),
+                    //     so the attempt failed and the ShardConsumer retries it.
+                    //  3. Before the retry, the leader saw the lease at SHARD_END and evicted it (or deleted it, if
+                    //     the children had started). Either way the lease counter no longer matches, so this
+                    //     worker's next lease renewal failed and the worker dropped the lease.
+                    //
+                    // The retry runs with one of two reasons, depending on whether the Scheduler has noticed the
+                    // dropped lease yet:
+                    //  - LEASE_LOST, if the Scheduler noticed first and called ShardConsumer.leaseLost().
+                    //  - SHARD_END, if it hasn't yet.
+                    // (If the worker still holds the lease, this check doesn't apply, and the SHARD_END path below
+                    // handles the retry: it sees the lease already at SHARD_END and skips shardEnded().)
+                    //
+                    // Neither is a real lease loss: this processor finished the shard, so it must not get
+                    // leaseLost() after its shardEnded(). Without this check, it would get leaseLost() with either
+                    // reason: the LEASE_LOST path calls leaseLost(), and the SHARD_END path, finding no held lease,
+                    // treats the lease as owned by another worker and calls leaseLost(). This check runs before
+                    // either path, so the processor gets no further calls with either reason. That's also what a
+                    // retry did before leader-side SHARD_END cleanup was introduced, when the worker always still
+                    // held the lease.
+                    // isShardEndAlreadyCheckpointed() detects the case: shardEnded() was called on this processor,
+                    // and its SHARD_END checkpoint succeeded.
+                    //
+                    // The only shutdown work left is shutting down the records publisher, which the failed attempt
+                    // never reached. Everything else is done or doesn't apply: the child leases and childShardIds
+                    // were written before shardEnded(), the processor wrote the SHARD_END checkpoint, the leader
+                    // deletes the lease once it's ready (so there's nothing to queue for this worker's
+                    // LeaseCleanupManager), and there's no held lease to drop.
+                    //
+                    // Returning a TaskResult with no exception counts the task as successful, so the ShardConsumer
+                    // finishes shutting down instead of retrying again.
+                    log.info(
+                            "Lease {}: shardEnded() already checkpointed at SHARD_END and the lease is no longer held"
+                                    + " (evicted or deleted by the leader); finishing shutdown without calling the"
+                                    + " record processor again.",
+                            leaseKey);
+                    recordsPublisher.shutdown();
+                    return new TaskResult(null);
+                }
+
                 if (reason == ShutdownReason.SHARD_END) {
                     try {
                         takeShardEndAction(currentShardLease, leaseKey, scope, startTime);
@@ -258,6 +305,27 @@ public class ShutdownTask implements ConsumerTask {
                     leaseKey, () -> applicationCheckpointAndVerification(leaseKey), scope, startTime);
         }
         return true;
+    }
+
+    /**
+     * Whether this record processor's shardEnded() was called and its own SHARD_END checkpoint succeeded. It checks
+     * two values in this consumer's checkpointer:
+     * <ul>
+     *   <li>{@code sequenceNumberAtShardEnd} is non-null: this task sets it just before calling shardEnded(), so
+     *       shardEnded() was called on this processor. On its own this doesn't mean the shard is done: shardEnded()
+     *       may have thrown before it checkpointed.</li>
+     *   <li>{@code lastCheckpointValue} is SHARD_END: the lease is at SHARD_END as far as this consumer knows. On its
+     *       own this doesn't mean this processor checkpointed it: the value starts out as the lease's checkpoint
+     *       when the consumer initializes, so it's also SHARD_END if the lease was already at SHARD_END when this
+     *       worker took it (then shardEnded() is never called).</li>
+     * </ul>
+     * Together they mean shardEnded() was called on this processor and its SHARD_END checkpoint succeeded. The
+     * checkpointer belongs to the ShardConsumer, so both values carry over from a failed shutdown attempt to its
+     * retry.
+     */
+    private boolean isShardEndAlreadyCheckpointed() {
+        return recordProcessorCheckpointer.sequenceNumberAtShardEnd() != null
+                && ExtendedSequenceNumber.SHARD_END.equals(recordProcessorCheckpointer.lastCheckpointValue());
     }
 
     private void applicationCheckpointAndVerification(final String leaseKey) {

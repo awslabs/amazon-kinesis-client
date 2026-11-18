@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
@@ -48,9 +49,11 @@ import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.coordinator.streamInfo.StreamInfo;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -63,6 +66,7 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.SHARD_END;
 
 /**
  * Performs the LeaseAssignment for the application. This starts by loading the leases and workerMetrics from the
@@ -89,6 +93,10 @@ public final class LeaseAssignmentManager {
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
+    /** Upper bound on SHARD_END lease deletions per LAM run, so cleanup can't stretch a run past its interval. */
+    @VisibleForTesting
+    static final int MAX_SHARD_END_LEASE_DELETIONS_PER_RUN = 100;
+
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
 
@@ -107,6 +115,8 @@ public final class LeaseAssignmentManager {
     private final long leaseAssignmentIntervalMillis;
     private final StreamIdCacheManager streamIdCacheManager;
     private final LAMDataManager lamDataManager;
+    /** This worker's LeaseCleanupManager, which decides whether a SHARD_END lease can be deleted and deletes it. */
+    private final LeaseCleanupManager leaseCleanupManager;
 
     /**
      * Lease snapshot class to reduce memory usage by only containing attributes
@@ -201,13 +211,15 @@ public final class LeaseAssignmentManager {
 
             final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
 
-            updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
-                    inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
+            // lastCounterIncrementNanos was already set while loading the view (it's a sort key for the shard
+            // tree order); see loadInMemoryStorageView.
 
             // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
             // lastUpdateTime)
             // but the lease is not expired (based on the leaseCounter on lease).
             // If a worker has died, the lease will be expired and assigned in next iteration.
+            // The lease list is in shard tree order (see loadInMemoryStorageView), and the deciders assign in the
+            // order given, so after a reshard the leases that unblock the rest of the tree are assigned first.
             final List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList().stream()
                     .filter(lease -> lease.isExpired(
                                     TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis),
@@ -402,8 +414,17 @@ public final class LeaseAssignmentManager {
                 "NumWorkers", inMemoryStorageView.activeWorkerMetrics.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
     }
 
-    // Method updates all new leases with currentTime if the counter is updated since last run else keeps whatever
-    // was prev and update the prevRunLeasesState
+    /**
+     * Updates all new leases with currentTime if the counter is updated since last run else keeps whatever was prev,
+     * and updates the prevRunLeasesState.
+     *
+     * <p>Called from {@code InMemoryStorageView.loadInMemoryStorageView} on every lease in the snapshot, before
+     * the leases are sorted into shard tree order (which sorts on lastCounterIncrementNanos last). It used to be
+     * called from {@code performAssignment} right after loading; see loadInMemoryStorageView for why it moved and
+     * why the values are the same. One difference: if a run fails after this call but before assignment, the next
+     * run compares against this run's state rather than the run before it. A counter that increased between the two
+     * scans then gets this run's scan time instead of the next run's, which is when the increase was first seen.
+     */
     private void updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(
             final List<Lease> leaseList, final Long scanTime) {
         for (final Lease lease : leaseList) {
@@ -447,6 +468,141 @@ public final class LeaseAssignmentManager {
                             lease.leaseOwner(),
                             lease.checkpointOwner()));
         }
+    }
+
+    /**
+     * Deletes SHARD_END leases whose children have all checkpointed and whose parents are gone, and evicts the rest
+     * so their owners stop renewing them. Either way, they're left out of the returned list, so they're never
+     * assigned or rebalanced and never count toward maxLeasesForWorker. Runs synchronously before assignment, so the
+     * per-worker lease counts the deciders see only include leases that still need processing. Returns the leases
+     * left for assignment.
+     *
+     * <p>A SHARD_END lease is left out even if its delete or eviction fails (the write throws, or the eviction's
+     * conditional write doesn't apply), and even though its owner then still holds and renews it. That's deliberate,
+     * for two reasons:
+     * <ul>
+     *   <li>maxLeasesForWorker limits how many shards a worker processes, and a SHARD_END lease's shard is done: its
+     *       owner's consumer has already finished it, so all the lease costs the owner is renewal writes. Counting it
+     *       would hold a processing slot for a shard that needs no processing.</li>
+     *   <li>Counting it would bring back the stall this method exists to prevent. Writes are most likely to fail
+     *       under lease table throttling during a large reshard, which is exactly when the children need those slots.
+     *       Counting finished leases toward the limit is what kept child leases unassigned before this change.</li>
+     * </ul>
+     * The write is retried on the next run, since the lease is still at SHARD_END in the lease table. Leaving the
+     * lease in the list instead wouldn't only count it: the list is also what the deciders assign from (an expired
+     * lease would be reassigned) and what rebalancing moves leases from (a finished lease could be handed off to
+     * another worker), so counting it correctly would need a separate count-only set that both deciders know to skip.
+     *
+     * <p>Deletion uses the workers' LeaseCleanupManager rule
+     * ({@link LeaseCleanupManager#deleteCompletedShardLeaseIfReady}, which also explains why the rule exists), but
+     * checks it against this run's lease table snapshot instead of re-reading the lease, its children, and its
+     * parents from DynamoDB. A stale snapshot is safe: both conditions only ever move one way (a child never returns
+     * to its initial position, a deleted parent stays deleted), so older data can only say "not ready yet". When
+     * cleanupLeasesUponShardCompletion is false, nothing is deleted and SHARD_END leases are only evicted.
+     *
+     * <p>SHARD_END leases without childShardIds are skipped entirely: they aren't deleted or evicted here, and they
+     * stay in the returned list, so they can be assigned and they count toward maxLeasesForWorker like any other
+     * lease. They only come from a fetch that hit ResourceNotFound (for example, the stream was deleted), which ends
+     * the shard with no child shards; a split or merge always records the child shards first. The deletion rule
+     * needs childShardIds, so this snapshot can't say when such a lease is safe to delete. The way to decide is to
+     * ask Kinesis for the shard's children: if Kinesis returns ResourceNotFound, the shard no longer exists and the
+     * lease can be deleted. The workers' LeaseCleanupManager does that, so these leases rely on a worker's
+     * LeaseCleanupManager queue to be deleted, in one of two ways:
+     * <ol>
+     *   <li>The worker that processed the shard end queued the lease when its ShutdownTask finished. That queue is
+     *       in memory, and the entry stays even if the worker later loses the lease (it expires, or a rebalance moves
+     *       it), so that worker still deletes the lease, whoever owns it by then.</li>
+     *   <li>If the lease is assigned again (for example, because the worker that queued it restarted and lost its
+     *       queue, and the lease expired), the new owner's ShardConsumer goes straight to a SHARD_END shutdown, and
+     *       its ShutdownTask queues the lease in that worker's LeaseCleanupManager.</li>
+     * </ol>
+     * Until one of them deletes the lease, it holds a slot on whichever worker owns it. A possible future change is
+     * for the leader to handle these leases too (for example, by asking Kinesis for the shard's children itself, or
+     * by evicting them like other SHARD_END leases), so they stop depending on a worker's LeaseCleanupManager.
+     */
+    private List<Lease> handleShardEndLeases(
+            final List<Lease> leasesInShardTreeOrder, final MetricsScope metricsScope) {
+        // The deletion check looks up parents and children by lease key, so index the leases by key first.
+        // toMap(key, value, merge): key = leaseKey, value = the lease, and (a, b) -> a keeps the first lease if a
+        // key repeats instead of throwing. The pass below removes each lease it deletes from this map, so by the time
+        // it reaches a child, the child's deleted parents are already missing from the map.
+        final Map<String, Lease> leaseByLeaseKey =
+                leasesInShardTreeOrder.stream().collect(Collectors.toMap(Lease::leaseKey, lease -> lease, (a, b) -> a));
+        final Set<String> shardEndLeaseKeys = new HashSet<>();
+        int deleted = 0;
+        int evicted = 0;
+
+        // Delete top-down, in one pass: a lease can only be deleted once its parents are gone (each parent's
+        // deletion check needs its child leases to still exist), and shard tree order visits every parent before
+        // its children, so a parent deleted earlier in this pass lets its children be deleted too. Leases that
+        // aren't ready are evicted instead, so they stop holding a slot on their worker and stop renewing. (Past the
+        // sorter's depth limit a child can come before its parent; the check then just says not ready, and the
+        // child is deleted on a later run.)
+        for (Lease lease : leasesInShardTreeOrder) {
+            if (!SHARD_END.equals(lease.checkpoint()) || lease.childShardIds().isEmpty()) {
+                // Not at SHARD_END: a normal lease. At SHARD_END without childShardIds: left to a worker's
+                // LeaseCleanupManager (see this method's Javadoc). Either way, it stays in the list for assignment.
+                continue;
+            }
+            // left out of the returned list whether or not the delete or eviction below succeeds (see the Javadoc)
+            shardEndLeaseKeys.add(lease.leaseKey());
+            if (deleted < MAX_SHARD_END_LEASE_DELETIONS_PER_RUN) {
+                try {
+                    if (leaseCleanupManager.deleteCompletedShardLeaseIfReady(
+                            lease, shardInfoFor(lease), lease.childShardIds(), leaseByLeaseKey::get)) {
+                        leaseByLeaseKey.remove(lease.leaseKey());
+                        deleted++;
+                        continue; // deleted, so nothing to evict
+                    }
+                } catch (IllegalStateException e) {
+                    // a child lease is missing from the snapshot; not ready
+                    log.warn("Not deleting SHARD_END lease {}: {}", lease.leaseKey(), e.getMessage());
+                } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                    log.warn("Failed to delete SHARD_END lease {}; will retry next run", lease.leaseKey(), e);
+                }
+            }
+            if (nonNull(lease.leaseOwner())) {
+                try {
+                    if (leaseRefresher.evictLease(lease)) {
+                        evicted++;
+                    }
+                } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                    log.warn("Failed to evict SHARD_END lease {}; will retry next run", lease.leaseKey(), e);
+                }
+            }
+        }
+
+        log.info(
+                "SHARD_END leases: {} handled by the leader, {} deleted, {} evicted",
+                shardEndLeaseKeys.size(),
+                deleted,
+                evicted);
+        metricsScope.addData("ShardEndLeasesDeleted", deleted, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+        metricsScope.addData("ShardEndLeasesEvicted", evicted, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+        return leasesInShardTreeOrder.stream()
+                .filter(lease -> !shardEndLeaseKeys.contains(lease.leaseKey()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * ShardInfo for deriving parent and child lease keys (which add the stream prefix in multi-stream mode); only the
+     * shard ID and stream are needed. Not built with {@code DynamoDBLeaseCoordinator.convertLeaseToAssignment}, which
+     * is for a lease the worker holds: it copies the lease's concurrency token, a random ID the owning worker gives
+     * the lease in memory when it acquires it, and checks on every checkpoint to reject writes from a ShardConsumer
+     * left over from an earlier time it held the lease. The token isn't stored in the lease table, so leases from the
+     * scan don't have one.
+     */
+    private static ShardInfo shardInfoFor(final Lease lease) {
+        if (lease instanceof MultiStreamLease) {
+            final MultiStreamLease multiStreamLease = (MultiStreamLease) lease;
+            return new ShardInfo(
+                    multiStreamLease.shardId(),
+                    null,
+                    lease.parentShardIds(),
+                    lease.checkpoint(),
+                    multiStreamLease.streamIdentifier());
+        }
+        return new ShardInfo(lease.leaseKey(), null, lease.parentShardIds(), lease.checkpoint());
     }
 
     private void prepareAfterLeaderSwitch() {
@@ -537,12 +693,47 @@ public final class LeaseAssignmentManager {
          * <p>The {@link LAMDataSnapshot} returned by the manager contains valid, non-expired worker
          * metrics. This method further filters out workers with failing metrics before using them
          * for assignment decisions.</p>
+         *
+         * <p>Leases are prepared in this order, and each step depends on the one before it:
+         * <ol>
+         *   <li>Record {@code leaseTableScanTime} right after the scan, as before.</li>
+         *   <li>Set each lease's lastCounterIncrementNanos (and graceful shutdown timeout) via
+         *       {@code updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout}. This used to run in
+         *       {@code performAssignment} after this method; it runs here now because the next step sorts on
+         *       lastCounterIncrementNanos. Its input is unchanged: every lease in the snapshot (SHARD_END leases
+         *       included) and the same scan time. Nothing that used to run between its old and new position reads
+         *       the fields it sets, so the values, and when they're used, are the same as before.</li>
+         *   <li>Sort every lease into shard tree order ({@link ShardTreeSorter}): parents before children, ready
+         *       leases (every parent lease at SHARD_END or gone) before ones still waiting on a parent, and
+         *       lastCounterIncrementNanos last. With no shard tree relationships among the leases (every lease at
+         *       depth 0, as when no reshard is in progress), this is exactly the order the lease assignment deciders
+         *       used to sort into themselves: unassigned leases (0) first, then the least recently renewed.</li>
+         *   <li>Delete or evict SHARD_END leases ({@code handleShardEndLeases}). Walking them in shard tree order
+         *       deletes parents before children in a single pass, which the deletion check requires.</li>
+         *   <li>Build the view from the leases left, which keep the shard tree order. That's the order they're
+         *       offered for assignment: {@code performAssignment} filters this list without reordering it, and
+         *       the deciders assign in the order given rather than sorting again. The worker lease counts are
+         *       built after the SHARD_END leases are removed, so those leases never count toward
+         *       maxLeasesForWorker, even when the leader's delete or eviction of them failed.</li>
+         * </ol>
          */
         public void loadInMemoryStorageView(final MetricsScope metricsScope) {
             final LAMDataSnapshot snapshot = lamDataManager.loadData(metricsScope);
-
-            this.leaseList = snapshot.getLeases();
             this.leaseTableScanTime = nanoTimeProvider.get();
+
+            // Set each lease's lastCounterIncrementNanos (and graceful shutdown timeout) first, for every lease in
+            // the snapshot: the shard tree order uses it as its last sort key.
+            updateLeasesLastCounterIncrementNanosAndLeaseShutdownTimeout(snapshot.getLeases(), leaseTableScanTime);
+
+            // Every lease, SHARD_END leases included, in shard tree order: parents before children, ready leases
+            // before ones still waiting on a parent, then unassigned before expired (lastCounterIncrementNanos).
+            final List<Lease> leasesInShardTreeOrder = ShardTreeSorter.sort(snapshot.getLeases());
+
+            // SHARD_END leases are deleted or evicted by the leader and left out of the view, whether or not those
+            // writes succeed, so they're never assigned and never counted toward maxLeasesForWorker by either
+            // decider (see handleShardEndLeases for why). The leases left keep the shard tree order, which is the
+            // order they're offered for assignment.
+            this.leaseList = handleShardEndLeases(leasesInShardTreeOrder, metricsScope);
             log.info("Total Leases available : {}", leaseList.size());
 
             // The snapshot contains valid, non-expired worker metrics from the manager.
