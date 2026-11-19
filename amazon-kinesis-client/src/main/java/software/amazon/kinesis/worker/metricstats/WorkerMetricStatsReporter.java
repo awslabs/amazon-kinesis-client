@@ -59,11 +59,8 @@ public class WorkerMetricStatsReporter implements Runnable {
                     .lastUpdateTime(Instant.now().getEpochSecond())
                     .supportCode(WorkerMetricStats.SUPPORT_CODE)
                     .supportCodeUpdateEpochSeconds(Instant.now().getEpochSecond())
-                    // Leave properties unset when segmenting is disabled, matching behavior before segmenting.
-                    .properties(
-                            segmentingHandler.isEnabled()
-                                    ? segmentingHandler.generateVersionHashWithLastUpdatedTimeMap()
-                                    : null)
+                    // Null when segmenting is not enabled, so properties stay unset as before segmenting.
+                    .properties(segmentingHandler.generateVersionHashWithLastUpdatedTimeMap())
                     .build();
             workerMetricsDAO.updateMetrics(workerMetrics);
             success = true;

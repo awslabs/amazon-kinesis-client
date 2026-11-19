@@ -25,6 +25,7 @@ import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -73,65 +74,65 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashMatches() throws Exception {
+    void getTargetLeaderLockKey_returnsLeaderKey_whenVersionHashMatches() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() throws Exception {
+    void getTargetLeaderLockKey_returnsDeployingLeaderKey_whenVersionHashDoesNotMatch() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenItemNotPresent() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+    void getTargetLeaderLockKey_returnsLeaderKey_whenItemNotPresent() throws Exception {
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
                 .thenReturn(null);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenLeaderVersionExpired() throws Exception {
+    void getTargetLeaderLockKey_returnsLeaderKey_whenLeaderVersionExpired() throws Exception {
         // Two hours since the last heartbeat, past the leader version expiry.
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 7200);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenVersionHashKeyMissing() throws Exception {
+    void getTargetLeaderLockKey_returnsLeaderKey_whenVersionHashKeyMissing() throws Exception {
         Map<String, AttributeValue> attrs = new HashMap<>();
         attrs.put("someOtherKey", AttributeValue.fromS("value"));
         CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.LEADER_VERSION_HASH_KEY)))
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)))
                 .thenReturn(state);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
-    // ---------------- isOnCurrentVersion (decided by the held lock, no reads) ----------------
+    // ---------------- isCurrentVersionLeader (decided by the held lock, no reads) ----------------
 
     @Test
-    void isOnCurrentVersion_trueWhenHoldingLeader() throws Exception {
-        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+    void isCurrentVersionLeader_trueWhenHoldingLeader() throws Exception {
+        handler.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
 
-        assertTrue(handler.isOnCurrentVersion());
+        assertTrue(handler.isCurrentVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     @Test
-    void isOnCurrentVersion_falseWhenHoldingDeployingLeader() throws Exception {
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+    void isCurrentVersionLeader_falseWhenHoldingDeployingLeader() throws Exception {
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
-        assertFalse(handler.isOnCurrentVersion());
+        assertFalse(handler.isCurrentVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
@@ -140,33 +141,42 @@ public class FleetSegmentingHandlerTest {
      * matches its own. It only becomes current once it actually holds the Leader lock.
      */
     @Test
-    void isOnCurrentVersion_deployingLeaderStaysNotCurrent_untilItHoldsLeader() throws Exception {
+    void isCurrentVersionLeader_deployingLeaderStaysNotCurrent_untilItHoldsLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        assertFalse(handler.isOnCurrentVersion());
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertFalse(handler.isCurrentVersionLeader());
 
         // Losing the lock doesn't make a former deploying leader current either.
-        handler.setHeldLeaderKey(null);
-        assertFalse(handler.isOnCurrentVersion());
+        handler.setHeldLeaderLockKey(null);
+        assertFalse(handler.isCurrentVersionLeader());
 
-        handler.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
-        assertTrue(handler.isOnCurrentVersion());
+        handler.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
+        assertTrue(handler.isCurrentVersionLeader());
     }
 
     /** With a non-lock leader decider (2.x-compatible modes) no lock is ever held; shard sync must run. */
     @Test
-    void isOnCurrentVersion_trueWhenNoLockEverHeld() throws Exception {
-        assertTrue(handler.isOnCurrentVersion());
+    void isCurrentVersionLeader_trueWhenNoLockEverHeld() throws Exception {
+        assertTrue(handler.isCurrentVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     @Test
-    void isOnCurrentVersion_returnsTrue_whenDisabled() {
+    void isCurrentVersionLeader_returnsTrue_whenDisabled() {
         config.enableRollingDeploymentSystem(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
-        assertTrue(disabledHandler.isOnCurrentVersion());
+        assertTrue(disabledHandler.isCurrentVersionLeader());
+    }
+
+    /** A disabled worker's metrics carry no properties, as before segmenting. */
+    @Test
+    void generateVersionHashWithLastUpdatedTimeMap_returnsNull_whenDisabled() {
+        config.enableRollingDeploymentSystem(false);
+        final FleetSegmentingHandler disabledHandler =
+                new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
+        assertNull(disabledHandler.generateVersionHashWithLastUpdatedTimeMap());
     }
 
     @Test
@@ -273,50 +283,50 @@ public class FleetSegmentingHandlerTest {
 
     /** A version item with a versionHash but no heartbeat must expire, not look fresh forever. */
     @Test
-    void getHashKeyForLeaderLock_returnsLeader_whenLeaderLutMissing() throws Exception {
+    void getTargetLeaderLockKey_returnsLeader_whenLeaderLutMissing() throws Exception {
         final Map<String, AttributeValue> attrs = new HashMap<>();
         attrs.put("versionHash", AttributeValue.fromS("some-other-version"));
         final CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.LEADER_VERSION_HASH_KEY)))
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)))
                 .thenReturn(state);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeader_whenLeaderLutUnparseable() throws Exception {
+    void getTargetLeaderLockKey_returnsLeader_whenLeaderLutUnparseable() throws Exception {
         final Map<String, AttributeValue> attrs = new HashMap<>();
         attrs.put("versionHash", AttributeValue.fromS("some-other-version"));
         attrs.put(LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME, AttributeValue.fromN("not-a-number"));
         final CoordinatorState state = mock(CoordinatorState.class);
         when(state.getAttributes()).thenReturn(attrs);
-        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.LEADER_VERSION_HASH_KEY)))
+        when(mockCoordinatorStateDAO.getCoordinatorState(eq(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)))
                 .thenReturn(state);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** Seeing zero active workers must not end the rollout. */
     @Test
-    void setIsVersionEmittedByAllActiveWorkers_falseWhenNoActiveWorkers() {
-        handler.setIsVersionEmittedByAllActiveWorkers(Collections.emptyList(), Collections.emptyList());
+    void setAllActiveWorkersOnThisVersion_falseWhenNoActiveWorkers() {
+        handler.setAllActiveWorkersOnThisVersion(Collections.emptyList(), Collections.emptyList());
 
-        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
+        assertFalse(handler.isAllActiveWorkersOnThisVersion());
     }
 
     /** The flag is only refreshed by a leader's run, so losing leadership clears it. */
     @Test
-    void setHeldLeaderKey_null_clearsVersionEmittedFlag() {
+    void setHeldLeaderLockKey_null_clearsVersionEmittedFlag() {
         final WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         when(w1.getWorkerId()).thenReturn("worker1");
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(Collections.singletonList(w1), Collections.singletonList(w1));
-        assertTrue(handler.isVersionEmittedByAllActiveWorkers());
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(Collections.singletonList(w1), Collections.singletonList(w1));
+        assertTrue(handler.isAllActiveWorkersOnThisVersion());
 
-        handler.setHeldLeaderKey(null);
+        handler.setHeldLeaderLockKey(null);
 
-        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
+        assertFalse(handler.isAllActiveWorkersOnThisVersion());
     }
 
     // ---------------- segmenting only in 3X with table migration COMPLETE ----------------
@@ -327,9 +337,9 @@ public class FleetSegmentingHandlerTest {
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, () -> false);
 
         assertFalse(gated.isEnabled());
-        assertEquals(LeaderLock.LEADER_HASH_KEY, gated.getHashKeyForLeaderLock());
-        gated.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
-        assertTrue(gated.isOnCurrentVersion());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, gated.getTargetLeaderLockKey());
+        gated.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
+        assertTrue(gated.isCurrentVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
@@ -368,20 +378,20 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void setIsVersionEmittedByAllActiveWorkers_setsTrue_whenSameWorkerIds() {
+    void setAllActiveWorkersOnThisVersion_setsTrue_whenSameWorkerIds() {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         WorkerMetricStats w2 = mock(WorkerMetricStats.class);
         when(w1.getWorkerId()).thenReturn("worker1");
         when(w2.getWorkerId()).thenReturn("worker2");
         List<WorkerMetricStats> active = Arrays.asList(w1, w2);
         List<WorkerMetricStats> onVersion = Arrays.asList(w1, w2);
-        handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
+        handler.setAllActiveWorkersOnThisVersion(active, onVersion);
 
-        assertTrue(handler.isVersionEmittedByAllActiveWorkers());
+        assertTrue(handler.isAllActiveWorkersOnThisVersion());
     }
 
     @Test
-    void setIsVersionEmittedByAllActiveWorkers_setsFalse_whenDifferentWorkerIds() {
+    void setAllActiveWorkersOnThisVersion_setsFalse_whenDifferentWorkerIds() {
         WorkerMetricStats w1 = mock(WorkerMetricStats.class);
         WorkerMetricStats w2 = mock(WorkerMetricStats.class);
         WorkerMetricStats w3 = mock(WorkerMetricStats.class);
@@ -392,9 +402,9 @@ public class FleetSegmentingHandlerTest {
         when(w4.getWorkerId()).thenReturn("worker4");
         List<WorkerMetricStats> active = Arrays.asList(w1, w2);
         List<WorkerMetricStats> onVersion = Arrays.asList(w3, w4);
-        handler.setIsVersionEmittedByAllActiveWorkers(active, onVersion);
+        handler.setAllActiveWorkersOnThisVersion(active, onVersion);
 
-        assertFalse(handler.isVersionEmittedByAllActiveWorkers());
+        assertFalse(handler.isAllActiveWorkersOnThisVersion());
     }
 
     @Test
@@ -411,7 +421,7 @@ public class FleetSegmentingHandlerTest {
     }
 
     @Test
-    void getHashKeyForLeaderLock_returnsLeaderKey_whenDisabled() throws Exception {
+    void getTargetLeaderLockKey_returnsLeaderKey_whenDisabled() throws Exception {
         config.enableRollingDeploymentSystem(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
@@ -420,60 +430,61 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, disabledHandler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, disabledHandler.getTargetLeaderLockKey());
     }
 
     /** The leader version is read from its own item, never from the Leader lock item. */
     @Test
-    void getHashKeyForLeaderLock_readsLeaderVersionItem_notLockItem() throws Exception {
+    void getTargetLeaderLockKey_readsLeaderVersionItem_notLockItem() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
 
-        handler.getHashKeyForLeaderLock();
+        handler.getTargetLeaderLockKey();
 
-        Mockito.verify(mockCoordinatorStateDAO).getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY);
+        Mockito.verify(mockCoordinatorStateDAO)
+                .getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY);
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(LeaderLock.LEADER_HASH_KEY);
     }
 
     @Test
-    void getHashKeyForLeaderLock_failsClosed_onReadErrorAfterSuccess() throws Exception {
+    void getTargetLeaderLockKey_failsClosed_onReadErrorAfterSuccess() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
 
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
                 .thenThrow(new DependencyException(new RuntimeException("throttled")));
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_throws_onReadErrorWithNoPreviousSuccess() throws Exception {
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+    void getTargetLeaderLockKey_throws_onReadErrorWithNoPreviousSuccess() throws Exception {
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
                 .thenThrow(new DependencyException(new RuntimeException("throttled")));
 
-        assertThrows(VersionStateUnavailableException.class, () -> handler.getHashKeyForLeaderLock());
+        assertThrows(VersionStateUnavailableException.class, () -> handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void setHeldLeaderKey_passesHeldKeyToLeaderVersionDAO_whenEnabled() {
+    void setHeldLeaderLockKey_passesHeldKeyToLeaderVersionDAO_whenEnabled() {
         final LeaderVersionDAO dao = mock(LeaderVersionDAO.class);
         final FleetSegmentingHandler withDao = new FleetSegmentingHandler(config, dao, () -> true);
 
-        withDao.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        withDao.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
         Mockito.verify(dao).setHeldLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
-        withDao.setHeldLeaderKey(null);
+        withDao.setHeldLeaderLockKey(null);
         Mockito.verify(dao).setHeldLockKey(null);
     }
 
     /** While segmenting isn't allowed, the DAO is told no lock is held, so it writes no version item. */
     @Test
-    void setHeldLeaderKey_passesNullToLeaderVersionDAO_whenNotAllowed() {
+    void setHeldLeaderLockKey_passesNullToLeaderVersionDAO_whenNotAllowed() {
         final LeaderVersionDAO dao = mock(LeaderVersionDAO.class);
         final FleetSegmentingHandler withDao = new FleetSegmentingHandler(config, dao, () -> false);
 
-        withDao.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY);
+        withDao.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
 
         Mockito.verify(dao).setHeldLockKey(null);
         Mockito.verify(dao, Mockito.never()).setHeldLockKey(LeaderLock.LEADER_HASH_KEY);
@@ -509,101 +520,101 @@ public class FleetSegmentingHandlerTest {
      * another version still stays on DeployingLeader.
      */
     @Test
-    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_otherVersion_staysOnDeployingLeader() throws Exception {
+    void getTargetLeaderLockKey_leaderStoppedHeartbeating_otherVersion_staysOnDeployingLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_ownVersion_contendsForLeader() throws Exception {
+    void getTargetLeaderLockKey_leaderStoppedHeartbeating_ownVersion_contendsForLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond() - 90);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** Once every active worker reports this worker's version (e.g. the last old-version worker died), take Leader. */
     @Test
-    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_allWorkersOnMyVersion_contendsForLeader() throws Exception {
+    void getTargetLeaderLockKey_leaderStoppedHeartbeating_allWorkersOnMyVersion_contendsForLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
         final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** Past the leader version expiry, the item no longer holds other versions back. */
     @Test
-    void getHashKeyForLeaderLock_pastLeaderVersionExpiry_contendsForLeader() throws Exception {
+    void getTargetLeaderLockKey_pastLeaderVersionExpiry_contendsForLeader() throws Exception {
         final long pastExpirySeconds =
                 TimeUnit.MILLISECONDS.toSeconds(FleetSegmentingHandler.LEADER_VERSION_EXPIRY_MILLIS) + 60;
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - pastExpirySeconds);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
-    void getHashKeyForLeaderLock_justUnderLeaderVersionExpiry_staysOnDeployingLeader() throws Exception {
+    void getTargetLeaderLockKey_justUnderLeaderVersionExpiry_staysOnDeployingLeader() throws Exception {
         final long underExpirySeconds =
                 TimeUnit.MILLISECONDS.toSeconds(FleetSegmentingHandler.LEADER_VERSION_EXPIRY_MILLIS) - 60;
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - underExpirySeconds);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** A read error after holding back keeps the worker on DeployingLeader (fail closed). */
     @Test
-    void getHashKeyForLeaderLock_leaderStoppedHeartbeating_thenReadError_keepsDeployingLeader() throws Exception {
+    void getTargetLeaderLockKey_leaderStoppedHeartbeating_thenReadError_keepsDeployingLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond() - 90);
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
 
-        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+        when(mockCoordinatorStateDAO.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
                 .thenThrow(new DependencyException(new RuntimeException("throttled")));
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     // ---------------- F2: one enablement value per leadership check ----------------
 
     /** A key recorded while disabled never reaches the version DAO, even if segmenting is enabled by now. */
     @Test
-    void setHeldLeaderKey_withDisabledSnapshot_doesNotPassKeyToDao_evenWhenNowEnabled() {
+    void setHeldLeaderLockKey_withDisabledSnapshot_doesNotPassKeyToDao_evenWhenNowEnabled() {
         final LeaderVersionDAO dao = mock(LeaderVersionDAO.class);
         final FleetSegmentingHandler withDao = new FleetSegmentingHandler(config, dao, () -> true);
 
-        withDao.setHeldLeaderKey(LeaderLock.LEADER_HASH_KEY, false);
+        withDao.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY, false);
 
         Mockito.verify(dao).setHeldLockKey(null);
         Mockito.verify(dao, Mockito.never()).setHeldLockKey(LeaderLock.LEADER_HASH_KEY);
     }
 
     @Test
-    void getHashKeyForLeaderLock_withDisabledSnapshot_returnsLeaderWithoutReading() throws Exception {
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock(false));
+    void getTargetLeaderLockKey_withDisabledSnapshot_returnsLeaderWithoutReading() throws Exception {
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey(false));
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     // ---------------- F3: a held DeployingLeader is never current ----------------
 
     @Test
-    void isOnCurrentVersion_falseWhileHoldingDeployingLeader_evenWhenDisabled() {
+    void isCurrentVersionLeader_falseWhileHoldingDeployingLeader_evenWhenDisabled() {
         final FleetSegmentingHandler gated =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, () -> false);
 
-        gated.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        assertFalse(gated.isOnCurrentVersion());
+        gated.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertFalse(gated.isCurrentVersionLeader());
 
         // Once it holds no lock, a disabled worker behaves as before segmenting again.
-        gated.setHeldLeaderKey(null);
-        assertTrue(gated.isOnCurrentVersion());
+        gated.setHeldLeaderLockKey(null);
+        assertTrue(gated.isCurrentVersionLeader());
     }
 
     // ---------------- F5: the flip waits for runs more than a worker-version expiry apart ----------------
@@ -617,10 +628,10 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
@@ -628,11 +639,11 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L + WORKER_VERSION_EXPIRY_MILLIS);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     @Test
@@ -640,11 +651,11 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** F5: an old-version worker that comes back in between breaks the streak, so the wait starts over. */
@@ -654,16 +665,16 @@ public class FleetSegmentingHandlerTest {
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         final List<WorkerMetricStats> onVersion = Collections.singletonList(worker("worker1"));
         final List<WorkerMetricStats> withReturned = Arrays.asList(worker("worker1"), worker("returned"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 1_000L);
-        handler.setIsVersionEmittedByAllActiveWorkers(withReturned, onVersion, 31_000L);
-        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 62_000L);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(onVersion, onVersion, 1_000L);
+        handler.setAllActiveWorkersOnThisVersion(withReturned, onVersion, 31_000L);
+        handler.setAllActiveWorkersOnThisVersion(onVersion, onVersion, 62_000L);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
 
-        handler.setIsVersionEmittedByAllActiveWorkers(onVersion, onVersion, 62_001L + WORKER_VERSION_EXPIRY_MILLIS);
+        handler.setAllActiveWorkersOnThisVersion(onVersion, onVersion, 62_001L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     /** Losing the lock ends the streak, so a later DeployingLeader starts its own wait. */
@@ -672,13 +683,13 @@ public class FleetSegmentingHandlerTest {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, "differentHash", Instant.now().getEpochSecond());
         final List<WorkerMetricStats> fleet = Collections.singletonList(worker("worker1"));
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_000L);
-        handler.setHeldLeaderKey(null);
-        handler.setHeldLeaderKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        handler.setIsVersionEmittedByAllActiveWorkers(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_000L);
+        handler.setHeldLeaderLockKey(null);
+        handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        handler.setAllActiveWorkersOnThisVersion(fleet, fleet, 1_001L + WORKER_VERSION_EXPIRY_MILLIS);
 
-        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.DEPLOYING_LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
     private static WorkerMetricStats worker(final String workerId) {

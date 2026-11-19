@@ -1800,7 +1800,7 @@ public class SchedulerTest {
         when(leaderDecider.isLeader(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         final software.amazon.kinesis.segmenting.FleetSegmentingHandler handler =
                 mock(software.amazon.kinesis.segmenting.FleetSegmentingHandler.class);
-        when(handler.isOnCurrentVersion()).thenReturn(onCurrentVersion);
+        when(handler.isCurrentVersionLeader()).thenReturn(onCurrentVersion);
         setSchedulerFieldToAccessible("leaderDecider", leaderDecider);
         setSchedulerFieldToAccessible("segmentingHandler", handler);
         setSchedulerFieldToAccessible("streamInfoManager", streamInfoManager);

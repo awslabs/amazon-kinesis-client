@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 import software.amazon.kinesis.leader.LeaderLock;
@@ -86,12 +85,26 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
     }
 
-    /** Returns the expectations of the conditional heartbeat. The full write is a separate, fenced call. */
+    /** Returns the expected attribute values of the conditional heartbeat. The full write is a separate, fenced call. */
     @SuppressWarnings("unchecked")
-    private Map<String, ExpectedAttributeValue> captureConditionalHeartbeatExpectations() throws Exception {
-        final ArgumentCaptor<Map<String, ExpectedAttributeValue>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(coordinatorStateDAO, times(1)).updateCoordinatorStateWithExpectation(any(), captor.capture());
+    private Map<String, AttributeValue> captureConditionalHeartbeatExpectations() throws Exception {
+        final ArgumentCaptor<Map<String, AttributeValue>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(coordinatorStateDAO, times(1)).updateAttributesIfMatch(any(), anyMap(), captor.capture());
         return captor.getValue();
+    }
+
+    /** A failed conditional refresh, carrying the item as it was (ReturnValuesOnConditionCheckFailure ALL_OLD). */
+    private void failRefreshWith(final LeaderVersionState found) throws Exception {
+        final Map<String, AttributeValue> item = new HashMap<>();
+        if (found != null) {
+            item.put(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME, AttributeValue.fromS(found.getOwnerName()));
+            item.put(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME, AttributeValue.fromS(found.getVersionHash()));
+            item.put(
+                    LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME,
+                    AttributeValue.fromN(String.valueOf(found.getHeartbeatMillis())));
+        }
+        when(coordinatorStateDAO.updateAttributesIfMatch(any(), anyMap(), anyMap()))
+                .thenReturn(Optional.of(item));
     }
 
     /** Number of fenced full writes so far. */
@@ -104,8 +117,8 @@ class LeaderVersionDAOTest {
     @Test
     void getVersionState_readsVersionItemForLock() throws Exception {
         final LeaderVersionState stored =
-                new LeaderVersionState(LeaderVersionState.DEPLOYING_LEADER_VERSION_HASH_KEY, "9", "w", 5L);
-        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.DEPLOYING_LEADER_VERSION_HASH_KEY))
+                new LeaderVersionState(LeaderVersionState.DEPLOYING_LEADER_VERSION_STATE_KEY, "9", "w", 5L);
+        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.DEPLOYING_LEADER_VERSION_STATE_KEY))
                 .thenReturn(stored);
 
         assertSame(stored, dao.getVersionState(LeaderLock.DEPLOYING_LEADER_HASH_KEY));
@@ -122,9 +135,9 @@ class LeaderVersionDAOTest {
         final Map<String, AttributeValue> attrs = new HashMap<>();
         attrs.put(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME, AttributeValue.fromS("9"));
         attrs.put(LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME, AttributeValue.fromN("5"));
-        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
                 .thenReturn(CoordinatorState.builder()
-                        .key(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                        .key(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)
                         .attributes(attrs)
                         .build());
 
@@ -169,7 +182,7 @@ class LeaderVersionDAOTest {
         verify(coordinatorStateDAO)
                 .putCoordinatorStateIfLockOwnedBy(state.capture(), eq(LeaderLock.LEADER_HASH_KEY), eq(WORKER_ID));
         final LeaderVersionState written = (LeaderVersionState) state.getValue();
-        assertEquals(LeaderVersionState.LEADER_VERSION_HASH_KEY, written.getKey());
+        assertEquals(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, written.getKey());
         assertEquals(VERSION_HASH, written.getVersionHash());
         assertEquals(WORKER_ID, written.getOwnerName());
         assertEquals(NOW_MILLIS, written.getHeartbeatMillis());
@@ -184,7 +197,7 @@ class LeaderVersionDAOTest {
                 .putCoordinatorStateIfLockOwnedBy(
                         state.capture(), eq(LeaderLock.DEPLOYING_LEADER_HASH_KEY), eq(WORKER_ID));
         assertEquals(
-                LeaderVersionState.DEPLOYING_LEADER_VERSION_HASH_KEY,
+                LeaderVersionState.DEPLOYING_LEADER_VERSION_STATE_KEY,
                 state.getValue().getKey());
     }
 
@@ -204,7 +217,7 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
 
         verifyFullWrites(2);
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
         verify(coordinatorStateDAO, never()).createCoordinatorStateIfNotExists(any());
     }
 
@@ -250,31 +263,38 @@ class LeaderVersionDAOTest {
     @Test
     void heartbeat_isConditionalOnOwnerAndVersion() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
-                .thenReturn(true);
+        when(coordinatorStateDAO.updateAttributesIfMatch(any(), anyMap(), anyMap()))
+                .thenReturn(Optional.empty());
 
         dao.heartbeat();
 
-        final Map<String, ExpectedAttributeValue> expectations = captureConditionalHeartbeatExpectations();
+        final Map<String, AttributeValue> expectations = captureConditionalHeartbeatExpectations();
         assertEquals(
                 WORKER_ID,
-                expectations
-                        .get(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME)
-                        .value()
-                        .s());
+                expectations.get(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME).s());
         assertEquals(
                 VERSION_HASH,
-                expectations
-                        .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
-                        .value()
-                        .s());
+                expectations.get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME).s());
+    }
+
+    /** A failed refresh is repaired with the fenced full write, without a second read of the version item. */
+    @Test
+    void heartbeat_failedRefresh_rewritesWithoutReadingTheItem() throws Exception {
+        acquire(LeaderLock.LEADER_HASH_KEY);
+        failRefreshWith(new LeaderVersionState(
+                LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "456", "worker-2", NOW_MILLIS));
+
+        dao.heartbeat();
+
+        verify(coordinatorStateDAO, never()).getCoordinatorState(any());
+        verifyFullWrites(2);
     }
 
     @Test
     void heartbeat_doesNothingWhenNoLockHeld() throws Exception {
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
         verify(coordinatorStateDAO, never()).putCoordinatorStateIfLockOwnedBy(any(), any(), any());
     }
 
@@ -286,7 +306,7 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
     }
 
     /** Only the lock holder writes: if the lock client doesn't hold the lock, nothing is written. */
@@ -296,7 +316,7 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
         verify(coordinatorStateDAO, never()).createCoordinatorStateIfNotExists(any());
     }
 
@@ -310,7 +330,7 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
     }
 
     @Test
@@ -323,7 +343,7 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
     }
 
     @Test
@@ -333,16 +353,13 @@ class LeaderVersionDAOTest {
 
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), any());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), any(), any());
     }
 
     @Test
     void heartbeat_rewritesItemWhenMissing() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
-                .thenReturn(false);
-        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
-                .thenReturn(null);
+        failRefreshWith(null);
 
         dao.heartbeat();
 
@@ -358,11 +375,8 @@ class LeaderVersionDAOTest {
     @Test
     void heartbeat_holderRewritesItemOwnedByAnotherWorker() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
-                .thenReturn(false);
-        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
-                .thenReturn(new LeaderVersionState(
-                        LeaderVersionState.LEADER_VERSION_HASH_KEY, "456", "worker-2", NOW_MILLIS));
+        failRefreshWith(new LeaderVersionState(
+                LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "456", "worker-2", NOW_MILLIS));
 
         dao.heartbeat();
         dao.heartbeat();
@@ -374,11 +388,8 @@ class LeaderVersionDAOTest {
     @Test
     void heartbeat_rewritesWhenOwnedByThisWorkerWithAnotherVersion() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
-                .thenReturn(false);
-        when(coordinatorStateDAO.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
-                .thenReturn(new LeaderVersionState(
-                        LeaderVersionState.LEADER_VERSION_HASH_KEY, "456", WORKER_ID, NOW_MILLIS));
+        failRefreshWith(new LeaderVersionState(
+                LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "456", WORKER_ID, NOW_MILLIS));
 
         dao.heartbeat();
 
@@ -388,7 +399,7 @@ class LeaderVersionDAOTest {
     @Test
     void heartbeat_swallowsExceptions() throws Exception {
         acquire(LeaderLock.LEADER_HASH_KEY);
-        when(coordinatorStateDAO.updateCoordinatorStateWithExpectation(any(), anyMap()))
+        when(coordinatorStateDAO.updateAttributesIfMatch(any(), anyMap(), anyMap()))
                 .thenThrow(new RuntimeException("boom"));
 
         dao.heartbeat();
@@ -402,7 +413,7 @@ class LeaderVersionDAOTest {
         dao.setHeldLockKey(null);
         dao.heartbeat();
 
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), anyMap());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), anyMap(), anyMap());
         verify(coordinatorStateDAO, never()).deleteCoordinatorState(any());
     }
 
@@ -418,6 +429,6 @@ class LeaderVersionDAOTest {
         dao.heartbeat();
 
         verify(executor, times(1)).shutdownNow();
-        verify(coordinatorStateDAO, never()).updateCoordinatorStateWithExpectation(any(), anyMap());
+        verify(coordinatorStateDAO, never()).updateAttributesIfMatch(any(), anyMap(), anyMap());
     }
 }

@@ -29,10 +29,10 @@ import com.amazonaws.services.dynamodbv2.LockItem;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -201,30 +201,11 @@ public class LeaderVersionDAO {
             if (updateHeartbeat(lockKey)) {
                 return;
             }
-            // The conditional update failed: the item is missing, or another worker owns it.
-            final LeaderVersionState current = getVersionState(lockKey);
-            if (current == null) {
-                log.info("Version item for {} is missing; writing it again.", lockKey);
-                writeVersionState(lockKey);
-            } else if (!workerId.equals(current.getOwnerName())) {
-                // e.g. left by an earlier holder. The write below is fenced by the lock, so it only lands while this
-                // worker still owns the lock.
-                log.warn(
-                        "Version item for {} names {} (version {}) but this worker holds the lock; writing it again.",
-                        lockKey,
-                        current.getOwnerName(),
-                        current.getVersionHash());
-                writeVersionState(lockKey);
-            } else {
-                // Owned by this worker with a different version hash, e.g. written before a restart on another
-                // version. This worker holds the lock, so its version is the right one.
-                log.info(
-                        "Version item for {} has version {}; writing {}.",
-                        lockKey,
-                        current.getVersionHash(),
-                        versionHash);
-                writeVersionState(lockKey);
-            }
+            // The conditional refresh failed: the item is missing, or has another owner or version (updateHeartbeat
+            // logged which). A refresh can't fix that, since it only touches an item that is already this worker's.
+            // This worker holds the lock, so its version is the right one for that lock: write the item again in
+            // full. The write is fenced by the lock, so if the lock has moved it is rejected and nothing changes.
+            writeVersionState(lockKey);
         } catch (final Exception e) {
             log.error("Failed to heartbeat leader version item for {}.", lockKey, e);
         }
@@ -259,21 +240,47 @@ public class LeaderVersionDAO {
         return false;
     }
 
-    /** Refreshes the heartbeat only if the item's owner and version are this worker's. */
+    /**
+     * Refreshes the heartbeat only if the item's owner and version are this worker's. On a failed condition, DynamoDB
+     * returns the item as it was, so the log can say why without a second read.
+     */
     private boolean updateHeartbeat(final String lockKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        final Map<String, ExpectedAttributeValue> expectations = new HashMap<>();
-        expectations.put(
-                LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME,
-                ExpectedAttributeValue.builder()
-                        .value(AttributeValue.fromS(workerId))
-                        .build());
-        expectations.put(
-                LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME,
-                ExpectedAttributeValue.builder()
-                        .value(AttributeValue.fromS(versionHash))
-                        .build());
-        return coordinatorStateDAO.updateCoordinatorStateWithExpectation(newState(lockKey), expectations);
+        final String versionKey = LeaderVersionState.versionKeyForLock(lockKey);
+        final Map<String, AttributeValue> updates = new HashMap<>();
+        updates.put(
+                LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME, AttributeValue.fromN(String.valueOf(clock.getAsLong())));
+        // Included so an item created by an older writer gets the entity type too.
+        updates.put(
+                CoordinatorState.ENTITY_TYPE_ATTRIBUTE_NAME,
+                AttributeValue.fromS(EntityType.CoordinatorStateType.LEADER_LOCK.getDdbValue()));
+        final Map<String, AttributeValue> expected = new HashMap<>();
+        expected.put(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME, AttributeValue.fromS(workerId));
+        expected.put(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME, AttributeValue.fromS(versionHash));
+        final Optional<Map<String, AttributeValue>> failed =
+                coordinatorStateDAO.updateAttributesIfMatch(versionKey, updates, expected);
+        if (!failed.isPresent()) {
+            return true;
+        }
+        logFailedHeartbeat(
+                lockKey, failed.get().isEmpty() ? null : LeaderVersionState.deserialize(versionKey, failed.get()));
+        return false;
+    }
+
+    private void logFailedHeartbeat(final String lockKey, final LeaderVersionState found) {
+        if (found == null) {
+            log.info("Version item for {} is missing; writing it again.", lockKey);
+        } else if (!workerId.equals(found.getOwnerName())) {
+            // e.g. left by an earlier holder.
+            log.warn(
+                    "Version item for {} names {} (version {}) but this worker holds the lock; writing it again.",
+                    lockKey,
+                    found.getOwnerName(),
+                    found.getVersionHash());
+        } else {
+            // Owned by this worker with a different version hash, e.g. written before a restart on another version.
+            log.info("Version item for {} has version {}; writing {}.", lockKey, found.getVersionHash(), versionHash);
+        }
     }
 
     private LeaderVersionState newState(final String lockKey) {

@@ -18,15 +18,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LeaderVersionStateTest {
 
-    private static final String KEY = LeaderVersionState.LEADER_VERSION_HASH_KEY;
+    private static final String KEY = LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY;
 
     @Test
     void versionKeyForLock_mapsEachLeaderLock() {
         assertEquals(
-                LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
                 LeaderVersionState.versionKeyForLock(LeaderLock.LEADER_HASH_KEY));
         assertEquals(
-                LeaderVersionState.DEPLOYING_LEADER_VERSION_HASH_KEY,
+                LeaderVersionState.DEPLOYING_LEADER_VERSION_STATE_KEY,
                 LeaderVersionState.versionKeyForLock(LeaderLock.DEPLOYING_LEADER_HASH_KEY));
         assertThrows(IllegalArgumentException.class, () -> LeaderVersionState.versionKeyForLock("SomethingElse"));
     }

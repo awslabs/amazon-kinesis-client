@@ -64,7 +64,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
 
     /**
      * Stubs the workers the decider balances across. The decider reads them from getAssignableWorkers() and
-     * getWorkersOnVersionHash(), which return only the leader's segment when fleet segmenting is active.
+     * getLeaseTakingCandidates(), which return only the leader's segment when fleet segmenting is active.
      */
     private void stubAssignableWorkers(Set<String> workerIds) {
         List<WorkerMetricStats> workerMetrics = workerIds.stream()
@@ -77,6 +77,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
                 .collect(Collectors.toList());
         when(inMemoryStorageView.getAssignableWorkers()).thenReturn(workerMetrics);
         when(inMemoryStorageView.getWorkersOnVersionHash()).thenReturn(workerMetrics);
+        when(inMemoryStorageView.getLeaseTakingCandidates()).thenReturn(workerMetrics);
         when(inMemoryStorageView.isWorkerTotalThroughputLessThanMaxThroughput(anyString()))
                 .thenReturn(true);
         when(inMemoryStorageView.isWorkerAssignedLeasesLessThanMaxLeases(anyString()))

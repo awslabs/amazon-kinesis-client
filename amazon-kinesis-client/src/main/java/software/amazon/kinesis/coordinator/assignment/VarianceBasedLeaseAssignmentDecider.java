@@ -28,7 +28,6 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -396,20 +395,14 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
         return response;
     }
 
+    /**
+     * Workers this leader may take leases from (see {@link LeaseAssignmentManager.InMemoryStorageView}
+     * {@code leaseTakingCandidates}), minus workers that don't have the worker metric {@code workerMetricsName}. This
+     * is possible if the application is adding a new WorkerMetricStats and workers are in a deployment phase.
+     */
     private List<WorkerMetricStats> getLeaseTakingCandidates(final String workerMetricsName) {
-        // Workers on the leader's version hash and workers with no version hash are considered when taking
-        // leases if segmenting is enabled. Each list also filters workers that do not have worker metrics name. This
-        // is possible if the application is adding a new WorkerMetricStats and workers are in a deployment phase.
-        final List<WorkerMetricStats> workersOnVersion = inMemoryStorageView.getWorkersOnVersionHash().stream()
+        return inMemoryStorageView.getLeaseTakingCandidates().stream()
                 .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
-                .collect(Collectors.toList());
-        final List<WorkerMetricStats> workersWithNoVersion = inMemoryStorageView.getWorkersWithNoVersionHash().stream()
-                .filter(workerMetrics -> workerMetrics.containsMetricStat(workerMetricsName))
-                .collect(Collectors.toList());
-
-        final Set<String> seenWorkerIds = new HashSet<>();
-        return Stream.concat(workersOnVersion.stream(), workersWithNoVersion.stream())
-                .filter(w -> seenWorkerIds.add(w.getWorkerId()))
                 .collect(Collectors.toList());
     }
 }

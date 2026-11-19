@@ -30,9 +30,9 @@ import software.amazon.kinesis.leader.LeaderLock;
 import software.amazon.kinesis.leases.EntityType;
 
 /**
- * Data model of a leader's version item. There is one item per leader lock: {@link #LEADER_VERSION_HASH_KEY} holds
+ * Data model of a leader's version item. There is one item per leader lock: {@link #CURRENT_LEADER_VERSION_STATE_KEY} holds
  * the version of the worker holding the {@link LeaderLock#LEADER_HASH_KEY} lock, and
- * {@link #DEPLOYING_LEADER_VERSION_HASH_KEY} holds the version of the worker holding the
+ * {@link #DEPLOYING_LEADER_VERSION_STATE_KEY} holds the version of the worker holding the
  * {@link LeaderLock#DEPLOYING_LEADER_HASH_KEY} lock. Only the holder of the matching lock writes the item, and it
  * refreshes {@link #HEARTBEAT_ATTRIBUTE_NAME} while it holds the lock. Other workers read the item to decide which
  * lock to contend for.
@@ -46,8 +46,8 @@ import software.amazon.kinesis.leases.EntityType;
 @KinesisClientInternalApi
 public class LeaderVersionState extends CoordinatorState {
 
-    public static final String LEADER_VERSION_HASH_KEY = "LeaderVersion";
-    public static final String DEPLOYING_LEADER_VERSION_HASH_KEY = "DeployingLeaderVersion";
+    public static final String CURRENT_LEADER_VERSION_STATE_KEY = "LeaderVersion";
+    public static final String DEPLOYING_LEADER_VERSION_STATE_KEY = "DeployingLeaderVersion";
 
     public static final String VERSION_HASH_ATTRIBUTE_NAME = "versionHash";
     public static final String OWNER_NAME_ATTRIBUTE_NAME = "ownerName";
@@ -83,16 +83,16 @@ public class LeaderVersionState extends CoordinatorState {
      */
     public static String versionKeyForLock(final String lockKey) {
         if (LeaderLock.LEADER_HASH_KEY.equals(lockKey)) {
-            return LEADER_VERSION_HASH_KEY;
+            return CURRENT_LEADER_VERSION_STATE_KEY;
         }
         if (LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(lockKey)) {
-            return DEPLOYING_LEADER_VERSION_HASH_KEY;
+            return DEPLOYING_LEADER_VERSION_STATE_KEY;
         }
         throw new IllegalArgumentException("Not a leader lock key: " + lockKey);
     }
 
     public static boolean isVersionKey(final String key) {
-        return LEADER_VERSION_HASH_KEY.equals(key) || DEPLOYING_LEADER_VERSION_HASH_KEY.equals(key);
+        return CURRENT_LEADER_VERSION_STATE_KEY.equals(key) || DEPLOYING_LEADER_VERSION_STATE_KEY.equals(key);
     }
 
     /** Whether the heartbeat is missing or older than {@code expiryMillis} at {@code nowMillis}. */

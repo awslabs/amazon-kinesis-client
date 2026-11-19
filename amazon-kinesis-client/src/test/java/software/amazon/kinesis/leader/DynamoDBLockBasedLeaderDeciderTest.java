@@ -53,9 +53,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,7 +92,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         leaseRefresher.createLeaseTableIfNotExists();
         mockTableMigrationStateMachine = mock(TableMigrationStateMachine.class);
         mockSegmentingHandler = mock(FleetSegmentingHandler.class);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);
             workerIdToLeaderDeciderMap.put(workerId, newDecider(workerId, 100L, 10L));
@@ -152,16 +154,16 @@ class DynamoDBLockBasedLeaderDeciderTest {
     void isLeader_versionStateReadFails_sitsOutOneCycleThenContends() throws InterruptedException {
         final String workerId = getWorkerId(1);
         final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean()))
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
                 .thenThrow(new VersionStateUnavailableException("read failed", new RuntimeException()));
 
         assertFalse(decider.isLeader(workerId));
-        verify(mockSegmentingHandler).setHeldLeaderKey(isNull(), anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(isNull(), anyBoolean());
         assertTrue(getItem(LeaderLock.LEADER_HASH_KEY).isEmpty());
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty());
 
         // Reads recover. After the non-leader backoff (the 10ms heartbeat period here) the same worker contends.
-        doReturn(LeaderLock.LEADER_HASH_KEY).when(mockSegmentingHandler).getHashKeyForLeaderLock(anyBoolean());
+        doReturn(LeaderLock.LEADER_HASH_KEY).when(mockSegmentingHandler).getTargetLeaderLockKey(anyBoolean());
         Thread.sleep(20);
         assertTrue(decider.isLeader(workerId));
     }
@@ -203,7 +205,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         newDecider.initialize();
 
         // The updated worker picks Leader, not DeployingLeader, and doesn't get it while the old worker holds it.
-        assertEquals(LeaderLock.LEADER_HASH_KEY, realHandler.getHashKeyForLeaderLock());
+        assertEquals(LeaderLock.LEADER_HASH_KEY, realHandler.getTargetLeaderLockKey());
         assertFalse(newDecider.isLeader(newWorkerId));
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty());
 
@@ -213,7 +215,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertTrue(newDecider.isLeader(newWorkerId));
         assertEquals(
                 realHandler.getVersionHash(),
-                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)
                         .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
                         .s());
         assertFalse(getLeaderItem().containsKey(FleetSegmentingHandler.VERSION_HASH_KEY));
@@ -267,7 +269,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final Map<String, AttributeValue> lock = getLeaderItem();
         assertFalse(lock.containsKey(FleetSegmentingHandler.VERSION_HASH_KEY));
         assertFalse(lock.containsKey("versionHashLut"));
-        verify(mockSegmentingHandler).setHeldLeaderKey(eq(LeaderLock.LEADER_HASH_KEY), anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(eq(LeaderLock.LEADER_HASH_KEY), anyBoolean());
     }
 
     /** Release deletes the lock item as it did before segmenting, since no version is kept on it. */
@@ -281,7 +283,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         decider.shutdown();
 
         assertTrue(getLeaderItem().isEmpty());
-        verify(mockSegmentingHandler).setHeldLeaderKey(isNull(), anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(isNull(), anyBoolean());
     }
 
     /** A lock holder answers isLeader from local state and doesn't re-read the key on every call. */
@@ -297,28 +299,68 @@ class DynamoDBLockBasedLeaderDeciderTest {
             assertTrue(decider.isLeader(workerId));
         }
 
-        verify(mockSegmentingHandler, times(1)).getHashKeyForLeaderLock(anyBoolean());
+        verify(mockSegmentingHandler, times(1)).getTargetLeaderLockKey(anyBoolean());
         decider.shutdown();
     }
 
-    /** End of a deploy: the deploying leader releases DeployingLeader before taking Leader. */
+    /** End of a deploy: the deploying leader takes Leader, then releases DeployingLeader. */
     @Test
-    void isLeader_keyChanges_releasesHeldLockThenAcquiresNewKey() throws InterruptedException {
+    void isLeader_keyChanges_acquiresNewKeyThenReleasesHeldLock() throws InterruptedException {
         final String workerId = getWorkerId(1);
         final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean()))
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
                 .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
         assertTrue(decider.isLeader(workerId));
-        verify(mockSegmentingHandler).setHeldLeaderKey(eq(LeaderLock.DEPLOYING_LEADER_HASH_KEY), anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(eq(LeaderLock.DEPLOYING_LEADER_HASH_KEY), anyBoolean());
 
         // Past the 10ms heartbeat period, so the key is re-evaluated.
         Thread.sleep(20);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
         assertTrue(decider.isLeader(workerId));
 
+        assertEquals(
+                workerId, getItem(LeaderLock.LEADER_HASH_KEY).get("ownerName").s());
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader lock was not released");
-        verify(mockSegmentingHandler).setHeldLeaderKey(eq(LeaderLock.LEADER_HASH_KEY), anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(eq(LeaderLock.LEADER_HASH_KEY), anyBoolean());
+    }
+
+    /**
+     * If the new lock is held by another worker, the worker keeps the lock it holds (and its role) instead of ending
+     * up with neither, and moves once the new lock frees up.
+     */
+    @Test
+    void isLeader_keyChanges_newLockUnavailable_keepsHeldLockUntilNewOneIsAcquired() throws InterruptedException {
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        final DynamoDBLockBasedLeaderDecider currentLeader = workerIdToLeaderDeciderMap.get(getWorkerId(0));
+        assertTrue(currentLeader.isLeader(getWorkerId(0)));
+
+        final String workerId = getWorkerId(1);
+        final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
+                .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+        assertTrue(decider.isLeader(workerId));
+        clearInvocations(mockSegmentingHandler);
+
+        Thread.sleep(20);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        assertTrue(decider.isLeader(workerId), "lost its lock because the new one was unavailable");
+        assertEquals(
+                workerId,
+                getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).get("ownerName").s());
+        assertEquals(
+                getWorkerId(0),
+                getItem(LeaderLock.LEADER_HASH_KEY).get("ownerName").s());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(eq(LeaderLock.DEPLOYING_LEADER_HASH_KEY), anyBoolean());
+        verify(mockSegmentingHandler, never()).setHeldLeaderLockKey(eq(null), anyBoolean());
+
+        // The current Leader goes away; at the next key re-evaluation the worker moves to Leader.
+        currentLeader.shutdown();
+        Thread.sleep(20);
+        assertTrue(decider.isLeader(workerId));
+        assertEquals(
+                workerId, getItem(LeaderLock.LEADER_HASH_KEY).get("ownerName").s());
+        assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader lock was not released");
     }
 
     /** The decider reports whether this worker is the DeployingLeader. */
@@ -333,7 +375,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 100L, 10L, factory);
         decider.initialize();
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean()))
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
                 .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
         assertTrue(decider.isLeader(workerId));
@@ -370,7 +412,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
     void isLeader_deployingLeader_reportsNotLeaderToTableMigration() throws Exception {
         final String workerId = getWorkerId(1);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean()))
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
                 .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
         assertTrue(workerIdToLeaderDeciderMap.get(workerId).isLeader(workerId));
@@ -388,16 +430,16 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final String workerId = getWorkerId(1);
         final DynamoDBLockBasedLeaderDecider decider = workerIdToLeaderDeciderMap.get(workerId);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean()))
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
                 .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
         assertTrue(decider.isLeader(workerId));
 
-        when(mockSegmentingHandler.getHashKeyForLeaderLock(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean())).thenReturn(LeaderLock.LEADER_HASH_KEY);
         decider.shutdown();
 
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader lock was not released");
-        verify(mockSegmentingHandler, times(1)).getHashKeyForLeaderLock(anyBoolean());
-        verify(mockSegmentingHandler).setHeldLeaderKey(isNull(), anyBoolean());
+        verify(mockSegmentingHandler, times(1)).getTargetLeaderLockKey(anyBoolean());
+        verify(mockSegmentingHandler).setHeldLeaderLockKey(isNull(), anyBoolean());
     }
 
     /**
@@ -416,7 +458,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
         assertTrue(decider.isLeader(owner));
 
-        final Map<String, AttributeValue> version = getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY);
+        final Map<String, AttributeValue> version = getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY);
         assertEquals(
                 owner, version.get(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME).s());
         assertEquals(
@@ -434,7 +476,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         decider.shutdown();
 
         assertTrue(getLeaderItem().isEmpty());
-        assertFalse(getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY).isEmpty());
+        assertFalse(getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY).isEmpty());
     }
 
     /** A worker that doesn't hold the lock never writes the version item. */
@@ -453,7 +495,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
         assertFalse(decider.isLeader(other));
 
-        assertTrue(getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY).isEmpty());
+        assertTrue(getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY).isEmpty());
         decider.shutdown();
     }
 
@@ -487,7 +529,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertTrue(getLeaderItem().isEmpty(), "deploying-version worker took the Leader lock");
         assertEquals(
                 "otherVersion",
-                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)
                         .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
                         .s());
 
@@ -496,10 +538,10 @@ class DynamoDBLockBasedLeaderDeciderTest {
         final software.amazon.kinesis.worker.metricstats.WorkerMetricStats self =
                 mock(software.amazon.kinesis.worker.metricstats.WorkerMetricStats.class);
         when(self.getWorkerId()).thenReturn(workerId);
-        handler.setIsVersionEmittedByAllActiveWorkers(
+        handler.setAllActiveWorkersOnThisVersion(
                 java.util.Collections.singletonList(self), java.util.Collections.singletonList(self));
         Thread.sleep(20);
-        handler.setIsVersionEmittedByAllActiveWorkers(
+        handler.setAllActiveWorkersOnThisVersion(
                 java.util.Collections.singletonList(self), java.util.Collections.singletonList(self));
         Thread.sleep(20); // past the 10ms decider heartbeat period, so the key is re-evaluated
 
@@ -508,7 +550,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader was not released");
         assertEquals(
                 handler.getVersionHash(),
-                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)
                         .get(LeaderVersionState.VERSION_HASH_ATTRIBUTE_NAME)
                         .s());
         decider.shutdown();
@@ -531,19 +573,19 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertEquals(workerId, getLeaderItem().get("ownerName").s());
         assertEquals(
                 workerId,
-                getItem(LeaderVersionState.LEADER_VERSION_HASH_KEY)
+                getItem(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY)
                         .get(LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME)
                         .s());
         decider.shutdown();
     }
 
     private void putLeaderVersion(final String owner, final String versionHash, final long heartbeatMillis) {
-        final Map<String, AttributeValue> item = new HashMap<>(
-                new LeaderVersionState(LeaderVersionState.LEADER_VERSION_HASH_KEY, versionHash, owner, heartbeatMillis)
-                        .serialize());
+        final Map<String, AttributeValue> item = new HashMap<>(new LeaderVersionState(
+                        LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, versionHash, owner, heartbeatMillis)
+                .serialize());
         item.put(
                 DynamoDBLeaseSerializer.LEASE_KEY_KEY,
-                AttributeValue.fromS(LeaderVersionState.LEADER_VERSION_HASH_KEY));
+                AttributeValue.fromS(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY));
         dynamoDBSyncClient.putItem(PutItemRequest.builder()
                 .tableName(TEST_LOCK_TABLE_NAME)
                 .item(item)

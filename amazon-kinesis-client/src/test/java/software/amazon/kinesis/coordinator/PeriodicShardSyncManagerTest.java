@@ -94,7 +94,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
-        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
@@ -1058,9 +1058,9 @@ public class PeriodicShardSyncManagerTest {
                 new AtomicBoolean(true),
                 mockSegmentingHandler);
         final LeaderDecider localLeaderDecider = mock(LeaderDecider.class);
-        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
         when(localLeaderDecider.isLeader(any())).thenAnswer(invocation -> {
-            when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+            when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
             return true;
         });
         manager.start(localLeaderDecider);
@@ -1073,7 +1073,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onDeployingVersion_skips() throws Exception {
-        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(false);
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
 
         periodicShardSyncManager.syncShardsOnce();
 
@@ -1083,7 +1083,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Test
     public void syncShardsOnce_onCurrentVersion_syncsAllStreams() throws Exception {
-        when(mockSegmentingHandler.isOnCurrentVersion()).thenReturn(true);
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
 
         StreamConfig mockStreamConfig = mock(StreamConfig.class);
         when(currentStreamConfigMap.values()).thenReturn(Collections.singletonList(mockStreamConfig));

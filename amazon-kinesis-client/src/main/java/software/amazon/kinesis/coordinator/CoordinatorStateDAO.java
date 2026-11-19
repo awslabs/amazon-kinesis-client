@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.ThreadSafe;
@@ -486,6 +487,26 @@ public class CoordinatorStateDAO {
             }
             throw new DependencyException("Fenced write of " + state.getKey() + " failed", cause);
         }
+    }
+
+    /**
+     * Sets {@code updates} on the item {@code key} only if the item exists and each attribute in {@code expected} has
+     * the given value. If the condition fails, DynamoDB returns the item as it was
+     * ({@code ReturnValuesOnConditionCheckFailure} {@code ALL_OLD}), so the caller can see why without a second read.
+     *
+     * @return empty if the item was updated; otherwise the item's attributes when the condition failed, or an empty
+     *     map if the item doesn't exist
+     * @throws ProvisionedThroughputException if DynamoDB lacks capacity
+     * @throws InvalidStateException if not initialized or the table does not exist
+     * @throws DependencyException if DynamoDB fails unexpectedly
+     */
+    public Optional<Map<String, AttributeValue>> updateAttributesIfMatch(
+            @NonNull final String key,
+            @NonNull final Map<String, AttributeValue> updates,
+            @NonNull final Map<String, AttributeValue> expected)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        ensureInitialized();
+        return getWriteDelegate().updateAttributesIfMatch(key, updates, expected);
     }
 
     /** Whether the transaction was cancelled because the lock owner condition (the first item) failed. */

@@ -56,7 +56,7 @@ public class FleetSegmentingHandler {
     private final String versionHash;
 
     @Getter
-    private volatile boolean isVersionEmittedByAllActiveWorkers = false;
+    private volatile boolean allActiveWorkersOnThisVersion = false;
 
     /** Value of {@code enableRollingDeploymentSystem}. */
     private final boolean configEnabled;
@@ -70,12 +70,12 @@ public class FleetSegmentingHandler {
 
     /**
      * Most recent key this worker held. Not cleared when the lock is lost, so a worker that was the DeployingLeader
-     * keeps reporting "not current" until it actually holds the Leader lock.
+     * is not treated as the current version Leader until it actually holds the Leader lock.
      */
-    private volatile String lastHeldLeaderKey = null;
+    private volatile String lastHeldLeaderLockKey = null;
 
     /** Key of the lock this worker holds right now, or null. Cleared when the lock is released or lost. */
-    private volatile String currentlyHeldLeaderKey = null;
+    private volatile String currentlyHeldLeaderLockKey = null;
 
     /**
      * When the current unbroken streak of assignment runs that found every active worker on this worker's version
@@ -102,7 +102,7 @@ public class FleetSegmentingHandler {
      * returns these instead of guessing (fail closed), so a transient read error can't change which lock this worker
      * contends for or which leader responsibilities it runs. Null until the first successful read.
      */
-    private volatile String lastKnownHashKeyForLeaderLock = null;
+    private volatile String lastKnownTargetLeaderLockKey = null;
 
     public FleetSegmentingHandler(
             final LeaseManagementConfig config,
@@ -189,16 +189,16 @@ public class FleetSegmentingHandler {
      * @return Key of the leader lock (either "Leader" or "DeployingLeader").
      * @throws VersionStateUnavailableException if the read fails and no previous read has succeeded.
      */
-    public String getHashKeyForLeaderLock() {
-        return getHashKeyForLeaderLock(isEnabled());
+    public String getTargetLeaderLockKey() {
+        return getTargetLeaderLockKey(isEnabled());
     }
 
     /**
-     * Same as {@link #getHashKeyForLeaderLock()}, with whether segmenting is enabled supplied by the caller. The leader
+     * Same as {@link #getTargetLeaderLockKey()}, with whether segmenting is enabled supplied by the caller. The leader
      * decider reads it once per leadership check and passes the same value here and to
-     * {@link #setHeldLeaderKey(String, boolean)}, so the key and the version write can't disagree.
+     * {@link #setHeldLeaderLockKey(String, boolean)}, so the key and the version write can't disagree.
      */
-    public String getHashKeyForLeaderLock(final boolean segmentingEnabled) {
+    public String getTargetLeaderLockKey(final boolean segmentingEnabled) {
         // If segmenting handler is disabled, default to returning the Leader key
         if (!segmentingEnabled) {
             log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
@@ -209,27 +209,27 @@ public class FleetSegmentingHandler {
             currentVersion = leaderVersionDAO.getVersionState(LeaderLock.LEADER_HASH_KEY);
         } catch (final Exception e) {
             // if any transient failures occur when trying to use DDB, fallback to using the last known value
-            final String lastKnownKey = lastKnownHashKeyForLeaderLock;
+            final String lastKnownKey = lastKnownTargetLeaderLockKey;
             if (lastKnownKey == null) {
                 // if there has never been a successful call, throw an Exception
                 throw new VersionStateUnavailableException(
-                        "Failed to read " + LeaderVersionState.LEADER_VERSION_HASH_KEY
+                        "Failed to read " + LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY
                                 + " and no previous value is known; not choosing a leader lock.",
                         e);
             }
             log.warn(
                     "Failed to read {}; keeping last known leader lock key {}.",
-                    LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                    LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
                     lastKnownKey,
                     e);
             return lastKnownKey;
         }
-        final String key = computeHashKeyForLeaderLock(currentVersion);
-        lastKnownHashKeyForLeaderLock = key;
+        final String key = computeTargetLeaderLockKey(currentVersion);
+        lastKnownTargetLeaderLockKey = key;
         return key;
     }
 
-    private String computeHashKeyForLeaderLock(final LeaderVersionState currentVersion) {
+    private String computeTargetLeaderLockKey(final LeaderVersionState currentVersion) {
         final long nowMillis = System.currentTimeMillis();
         // No current version (first rollout, segmenting never used, or the last Leader stopped heartbeating more than
         // LEADER_VERSION_EXPIRY_MILLIS ago): every worker takes the Leader lock.
@@ -239,7 +239,7 @@ public class FleetSegmentingHandler {
             log.info(
                     "Returning {}: {} is missing, has no version, or expired. currentVersion={}",
                     LeaderLock.LEADER_HASH_KEY,
-                    LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                    LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
                     currentVersion);
             return LeaderLock.LEADER_HASH_KEY;
         }
@@ -250,7 +250,7 @@ public class FleetSegmentingHandler {
         if (versionHashMatches) {
             return LeaderLock.LEADER_HASH_KEY;
         }
-        if (isVersionEmittedByAllActiveWorkers) {
+        if (allActiveWorkersOnThisVersion) {
             // This is the flip: this worker's version becomes the fleet's current version. One assignment run that
             // sees every active worker on this version can miss an old-version worker that is coming back (e.g. a
             // rollback) and hasn't reported yet, so the flip waits until runs more than a worker-version expiry
@@ -277,7 +277,7 @@ public class FleetSegmentingHandler {
             log.info(
                     "{} (version {}) has not been heartbeated for {}ms; staying on {} until a worker on that version "
                             + "takes {} or all active workers report version {}.",
-                    LeaderVersionState.LEADER_VERSION_HASH_KEY,
+                    LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
                     currentVersion.getVersionHash(),
                     nowMillis - currentVersion.getHeartbeatMillis(),
                     LeaderLock.DEPLOYING_LEADER_HASH_KEY,
@@ -287,7 +287,16 @@ public class FleetSegmentingHandler {
         return LeaderLock.DEPLOYING_LEADER_HASH_KEY;
     }
 
+    /**
+     * The properties a worker adds to its worker metrics: its version hash and when it was reported.
+     *
+     * @return the properties, or null when segmenting is not enabled, so the worker's metrics carry no properties,
+     *     as before segmenting
+     */
     public Map<String, String> generateVersionHashWithLastUpdatedTimeMap() {
+        if (!isEnabled()) {
+            return null;
+        }
         final Map<String, String> workerProperties = new HashMap<>();
         workerProperties.put(VERSION_HASH_KEY, versionHash);
         workerProperties.put(VERSION_HASH_LUT_KEY, String.valueOf(Instant.now().getEpochSecond()));
@@ -295,27 +304,29 @@ public class FleetSegmentingHandler {
     }
 
     /**
-     * Whether this leader should handle the current Leader responsibilities (expired/unassigned lease assignment,
-     * shard sync) as opposed to the DeployingLeader responsibilities. If the segmenting handler is disabled, the
-     * leader behaves as it normally would without segmenting.
+     * Whether this worker is the current version Leader, which handles the Leader responsibilities
+     * (expired/unassigned lease assignment, shard sync), as opposed to the DeployingLeader, which only balances the
+     * deploying version's workers. If the segmenting handler is disabled, the leader behaves as it normally would
+     * without segmenting.
      *
      * <p>Decided by which lock this worker holds, not by re-reading the Leader item: only the holder of the Leader
-     * lock is current. This needs no DynamoDB read, so a throttled coordinator table can't make the real current
-     * leader skip its duties, and a DeployingLeader holder is never "current" just because the Leader item's version
-     * hash happens to match its own (the end-of-rollforward double-current case). A worker that has never held a
-     * leader lock, e.g. when a non-lock leader decider is active, is treated as current.</p>
+     * lock is the current version Leader. This needs no DynamoDB read, so a throttled coordinator table can't make the
+     * real current leader skip its duties, and a DeployingLeader holder is never the current version Leader just
+     * because the Leader item's version hash happens to match its own (the end-of-rollforward double-current case). A
+     * worker that has never held a leader lock, e.g. when a non-lock leader decider is active, is treated as the
+     * current version Leader.</p>
      */
-    public boolean isOnCurrentVersion() {
+    public boolean isCurrentVersionLeader() {
         // Whoever holds DeployingLeader is never current, even if segmenting is no longer enabled for it (e.g. its
         // write routing diverged from its lock client when table migration completed). Otherwise it would run the
         // current Leader's duties, such as stream sync, alongside the real Leader until its key is re-evaluated.
-        if (LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(currentlyHeldLeaderKey)) {
+        if (LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(currentlyHeldLeaderLockKey)) {
             return false;
         }
         if (!isEnabled()) {
             return true;
         }
-        return !LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(lastHeldLeaderKey);
+        return !LeaderLock.DEPLOYING_LEADER_HASH_KEY.equals(lastHeldLeaderLockKey);
     }
 
     /**
@@ -332,25 +343,25 @@ public class FleetSegmentingHandler {
      *
      * @param key the held lock key, or null if this worker holds neither lock
      */
-    public void setHeldLeaderKey(final String key) {
-        setHeldLeaderKey(key, isEnabled());
+    public void setHeldLeaderLockKey(final String key) {
+        setHeldLeaderLockKey(key, isEnabled());
     }
 
     /**
-     * Same as {@link #setHeldLeaderKey(String)}, with whether segmenting is enabled supplied by the caller: the same
-     * value the caller used to choose the key (see {@link #getHashKeyForLeaderLock(boolean)}). A key chosen while
+     * Same as {@link #setHeldLeaderLockKey(String)}, with whether segmenting is enabled supplied by the caller: the same
+     * value the caller used to choose the key (see {@link #getTargetLeaderLockKey(boolean)}). A key chosen while
      * disabled is never passed to the {@link LeaderVersionDAO}, so it can't write a version item.
      */
-    public void setHeldLeaderKey(final String key, final boolean segmentingEnabled) {
+    public void setHeldLeaderLockKey(final String key, final boolean segmentingEnabled) {
         leaderVersionDAO.setHeldLockKey(segmentingEnabled ? key : null);
-        currentlyHeldLeaderKey = key;
+        currentlyHeldLeaderLockKey = key;
         if (key != null) {
-            lastHeldLeaderKey = key;
+            lastHeldLeaderLockKey = key;
         } else {
             // The flag is only computed by a leader's assignment run. Once this worker holds no lock it is never
             // refreshed, so clear it rather than keep steering this worker to the Leader key on an old observation.
             synchronized (this) {
-                isVersionEmittedByAllActiveWorkers = false;
+                allActiveWorkersOnThisVersion = false;
                 allOnVersionSinceMillis = -1L;
                 allOnVersionLatestMillis = -1L;
             }
@@ -381,21 +392,21 @@ public class FleetSegmentingHandler {
      * Records whether every active worker reports this worker's version hash. An empty active fleet (e.g. every
      * WorkerMetricStats entry transiently expired) says nothing about the rollout, so it counts as "not all".
      */
-    public void setIsVersionEmittedByAllActiveWorkers(
+    public void setAllActiveWorkersOnThisVersion(
             final List<WorkerMetricStats> activeWorkerMetrics, final List<WorkerMetricStats> workersOnVersionHash) {
-        setIsVersionEmittedByAllActiveWorkers(activeWorkerMetrics, workersOnVersionHash, System.currentTimeMillis());
+        setAllActiveWorkersOnThisVersion(activeWorkerMetrics, workersOnVersionHash, System.currentTimeMillis());
     }
 
-    /** Same as {@link #setIsVersionEmittedByAllActiveWorkers(List, List)}, for a run at {@code nowMillis}. */
+    /** Same as {@link #setAllActiveWorkersOnThisVersion(List, List)}, for a run at {@code nowMillis}. */
     @VisibleForTesting
-    synchronized void setIsVersionEmittedByAllActiveWorkers(
+    synchronized void setAllActiveWorkersOnThisVersion(
             final List<WorkerMetricStats> activeWorkerMetrics,
             final List<WorkerMetricStats> workersOnVersionHash,
             final long nowMillis) {
         final boolean allOnVersion = !activeWorkerMetrics.isEmpty()
                 && toWorkerIds(activeWorkerMetrics).equals(toWorkerIds(workersOnVersionHash));
         if (allOnVersion) {
-            if (!isVersionEmittedByAllActiveWorkers || allOnVersionSinceMillis < 0) {
+            if (!allActiveWorkersOnThisVersion || allOnVersionSinceMillis < 0) {
                 allOnVersionSinceMillis = nowMillis;
             }
             allOnVersionLatestMillis = nowMillis;
@@ -403,7 +414,7 @@ public class FleetSegmentingHandler {
             allOnVersionSinceMillis = -1L;
             allOnVersionLatestMillis = -1L;
         }
-        isVersionEmittedByAllActiveWorkers = allOnVersion;
+        allActiveWorkersOnThisVersion = allOnVersion;
     }
 
     /**

@@ -12,7 +12,6 @@ import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,18 +38,17 @@ class WorkerMetricStatsReporterTest {
     /** With segmenting off, the reporter writes the same entry as before segmenting. */
     @Test
     void run_segmentingDisabled_leavesPropertiesUnset() throws Exception {
-        when(segmentingHandler.isEnabled()).thenReturn(false);
+        // The handler returns no properties when segmenting is not enabled.
+        when(segmentingHandler.generateVersionHashWithLastUpdatedTimeMap()).thenReturn(null);
 
         reporter.run();
 
         assertNull(captureReported().getProperties());
-        verify(segmentingHandler, never()).generateVersionHashWithLastUpdatedTimeMap();
     }
 
     @Test
     void run_segmentingEnabled_reportsVersionHash() throws Exception {
         final Map<String, String> props = Collections.singletonMap(FleetSegmentingHandler.VERSION_HASH_KEY, "v1");
-        when(segmentingHandler.isEnabled()).thenReturn(true);
         when(segmentingHandler.generateVersionHashWithLastUpdatedTimeMap()).thenReturn(props);
 
         reporter.run();
