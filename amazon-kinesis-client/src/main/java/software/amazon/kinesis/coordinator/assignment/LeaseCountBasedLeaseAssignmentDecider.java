@@ -88,6 +88,12 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
             }
 
             final String workerToAssign = workerQueue.get(workerIndex);
+            // Target is capped by maxLeasesForWorker, so a worker at the max is never assigned another lease.
+            // Workers are sorted ascending by lease count and filled in order, so if this not-yet-assigned
+            // worker is already at or above target, all remaining workers are too.
+            if (leaseCountPerActiveWorker.get(workerToAssign) >= target) {
+                break;
+            }
             assignLease(lease, workerToAssign);
             assignedLeases.add(lease);
 
