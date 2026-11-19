@@ -300,8 +300,13 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
             checkpointToRecord = ExtendedSequenceNumber.SHARD_END;
         }
 
-        // Don't checkpoint a value we already successfully checkpointed
-        if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
+        // Don't checkpoint a value we already successfully checkpointed. Compare against
+        // checkpointToRecord (which may have been rewritten to SHARD_END above) rather than the
+        // caller-supplied extendedSequenceNumber; otherwise the transition to SHARD_END is skipped
+        // when the last record's sequence number was already checkpointed, causing the shard-end
+        // shutdown to throw "Application didn't checkpoint at end of shard" in a loop. See
+        // upstream issue https://github.com/awslabs/amazon-kinesis-client/issues/211.
+        if (checkpointToRecord != null && !checkpointToRecord.equals(lastCheckpointValue)) {
             try {
                 if (log.isDebugEnabled()) {
                     log.debug(
