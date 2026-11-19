@@ -55,7 +55,7 @@ public enum RetrievalMode {
     private static RetrievalConfigBuilder decideForDefault(MultiLangDaemonConfiguration configuration) {
         if (configuration.getPollingConfig().anyPropertiesSet()) {
             log.warn("Some polling properties have been set, defaulting to polling. "
-                    + "To switch to Fanout either add `RetrievalMode=FANOUT` to your "
+                    + "To switch to Fanout either add `retrievalMode=FANOUT` to your "
                     + "properties or remove the any configuration for polling.");
             return configuration.getPollingConfig();
         }
