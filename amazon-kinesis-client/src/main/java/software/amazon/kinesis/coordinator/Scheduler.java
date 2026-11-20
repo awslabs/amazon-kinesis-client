@@ -886,7 +886,7 @@ public class Scheduler implements Runnable {
                         metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
 
                 // Sizes of the Scheduler's per-stream and per-shard maps, to catch entries that are never removed.
-                log.info(
+                log.debug(
                         "Scheduler map sizes: currentStreamConfigMap={}, staleStreamDeletionMap={}, "
                                 + "streamToShardSyncTaskManagerMap={}, shardInfoShardConsumerMap={}",
                         currentStreamConfigMap.size(),
