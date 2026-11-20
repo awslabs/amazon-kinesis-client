@@ -502,7 +502,8 @@ public class Scheduler implements Runnable {
                             leaseManagementConfig.leaseAssignmentStrategy(),
                             leaseManagementConfig.leaseAssignmentIntervalMillis(),
                             streamIdCacheManager,
-                            lamDataManager);
+                            lamDataManager,
+                            leaseCleanupManager);
                 })
                 .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(

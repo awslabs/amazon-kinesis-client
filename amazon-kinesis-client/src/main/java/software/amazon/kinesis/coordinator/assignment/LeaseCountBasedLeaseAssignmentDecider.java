@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.coordinator.assignment;
 
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,8 +50,8 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
     private final Supplier<Long> nanoTimeProvider;
 
     /**
-     * Assigns expired or unassigned leases to workers with the fewest current leases.
-     * Leases are sorted by lastCounterIncrementNanos to ensure consistent assignment order.
+     * Assigns expired or unassigned leases to workers with the fewest current leases, in the order given (the
+     * LeaseAssignmentManager orders them: shard tree order, then lastCounterIncrementNanos).
      *
      * @param expiredOrUnAssignedLeases list of leases that need to be assigned to workers
      */
@@ -62,8 +61,6 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
                 || inMemoryStorageView.getActiveWorkerIdSet().isEmpty()) {
             return;
         }
-
-        expiredOrUnAssignedLeases.sort(Comparator.comparingLong(Lease::lastCounterIncrementNanos));
 
         final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
         final int target = calculateTargetLeaseCount();

@@ -24,7 +24,8 @@ import software.amazon.kinesis.leases.Lease;
 public interface LeaseAssignmentDecider {
 
     /**
-     * Assigns expiredOrUnAssignedLeases to the available workers.
+     * Assigns expiredOrUnAssignedLeases to the available workers, in the order given: the LeaseAssignmentManager
+     * puts them in shard tree order, then by lastCounterIncrementNanos.
      */
     void assignExpiredOrUnassignedLeases(final List<Lease> expiredOrUnAssignedLeases);
 

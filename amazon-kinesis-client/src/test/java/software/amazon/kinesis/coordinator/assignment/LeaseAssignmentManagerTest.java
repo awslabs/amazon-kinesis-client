@@ -3,13 +3,17 @@ package software.amazon.kinesis.coordinator.assignment;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -23,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
@@ -44,18 +49,23 @@ import software.amazon.kinesis.coordinator.streamInfo.StreamIdCacheManager;
 import software.amazon.kinesis.leases.EntityDAO;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseAssignmentStrategy;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseTableDao;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
@@ -65,16 +75,20 @@ import static java.util.Objects.nonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.SHARD_END;
 import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.TRIM_HORIZON;
 
 class LeaseAssignmentManagerTest {
@@ -120,10 +134,16 @@ class LeaseAssignmentManagerTest {
             Runtime.getRuntime().availableProcessors());
     private WorkerMetricStatsDAO workerMetricsDAO;
     private TableMigrationStatusProvider mockProvider;
+    /**
+     * The LeaseCleanupManager given to every LeaseAssignmentManager the helpers create. A real one backed by this
+     * test's lease table by default; tests that need a different one reassign it before creating the LAM.
+     */
+    private LeaseCleanupManager leaseCleanupManager;
 
     @BeforeEach
     void setup() throws ProvisionedThroughputException, DependencyException {
         leaseRefresher.createLeaseTableIfNotExists();
+        leaseCleanupManager = createLeaseCleanupManager(true);
 
         final WorkerMetricsTableConfig config = new WorkerMetricsTableConfig("applicationName");
         config.tableName(WORKER_METRICS_TABLE_NAME);
@@ -262,6 +282,444 @@ class LeaseAssignmentManagerTest {
                         .filter(lease -> nonNull(lease.leaseOwner()))
                         .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
                         .count());
+    }
+
+    /**
+     * Shard tree: "parent" splits into "left" and "right", which merge back into "merged". The SHARD_END leases
+     * must be deleted parents first (each deletion check needs the lease's children to still exist), and the
+     * lease table scan order is arbitrary, so this checks the whole chain still clears in a single LAM run.
+     */
+    @Test
+    void performAssignment_shardEndChainReadyForDeletion_assertWholeChainDeletedInOneRun() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20), 100L, System::nanoTime, 2);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        populateLeasesInLeaseTable(
+                createShardTreeLease("parent", SHARD_END, Collections.emptyList(), Arrays.asList("left", "right")),
+                createShardTreeLease(
+                        "left", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                createShardTreeLease(
+                        "right", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                // the merge child has started processing, so every SHARD_END lease above it is ready
+                createShardTreeLease(
+                        "merged",
+                        new ExtendedSequenceNumber("123"),
+                        Arrays.asList("left", "right"),
+                        Collections.emptyList()));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(
+                Collections.singletonList("merged"),
+                leaseRefresher.listLeases().stream().map(Lease::leaseKey).collect(Collectors.toList()));
+    }
+
+    /**
+     * Same shard tree, but the merge child hasn't been picked up yet. "parent" is deleted (both its children have
+     * reached SHARD_END); "left" and "right" can't be deleted yet, so they're evicted: they stop holding a slot on
+     * their worker and aren't reassigned, which leaves room under maxLeasesForWorker for "merged".
+     */
+    @Test
+    void performAssignment_shardEndLeasesNotReadyForDeletion_assertEvictedAndNotCountedOrAssigned() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20), 100L, System::nanoTime, 1);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        final Lease merged = createDummyUnAssignedLease("merged");
+        merged.parentShardIds(Arrays.asList("left", "right"));
+        populateLeasesInLeaseTable(
+                createShardTreeLease("parent", SHARD_END, Collections.emptyList(), Arrays.asList("left", "right")),
+                createShardTreeLease(
+                        "left", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                createShardTreeLease(
+                        "right", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                merged);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertNull(leaseRefresher.getLease("parent"));
+        assertNull(leaseRefresher.getLease("left").leaseOwner());
+        assertNull(leaseRefresher.getLease("right").leaseOwner());
+        // maxLeasesForWorker is 1, and the SHARD_END leases the worker held don't count toward it
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("merged").leaseOwner());
+    }
+
+    /**
+     * Evicted SHARD_END leases are never offered for assignment again, even with capacity to spare: they stay
+     * unowned across runs until they're ready to delete.
+     */
+    @Test
+    void performAssignment_evictedShardEndLeases_assertNotReassigned() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        // "child" hasn't started, so "ended" isn't ready to delete
+        final Lease child = createDummyUnAssignedLease("child");
+        child.parentShardIds(Collections.singletonList("ended"));
+        populateLeasesInLeaseTable(
+                createShardTreeLease("ended", SHARD_END, Collections.emptyList(), Collections.singletonList("child")),
+                child);
+
+        leaseAssignmentManagerRunnable.run();
+        leaseAssignmentManagerRunnable.run();
+
+        assertNull(leaseRefresher.getLease("ended").leaseOwner());
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("child").leaseOwner());
+    }
+
+    /**
+     * A SHARD_END lease without childShardIds (e.g. the stream was deleted, so the shard ended with
+     * ResourceNotFound and no children were recorded) is left to the owning worker's LeaseCleanupManager: it stays
+     * owned and still counts toward maxLeasesForWorker, so the worker has no room for another lease.
+     */
+    @Test
+    void performAssignment_shardEndLeaseWithoutChildShardIds_assertLeftOwnedAndCounted() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20), 100L, System::nanoTime, 1);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        populateLeasesInLeaseTable(
+                createShardTreeLease("ended", SHARD_END, Collections.emptyList(), Collections.emptyList()),
+                createDummyUnAssignedLease("waiting"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("ended").leaseOwner());
+        assertNull(leaseRefresher.getLease("waiting").leaseOwner());
+    }
+
+    /**
+     * With cleanupLeasesUponShardCompletion off, SHARD_END leases are never deleted, even when ready, but they're
+     * still evicted and not counted toward maxLeasesForWorker.
+     */
+    @Test
+    void performAssignment_cleanupLeasesUponShardCompletionOff_assertShardEndLeasesEvictedNotDeleted()
+            throws Exception {
+        leaseCleanupManager = createLeaseCleanupManager(false);
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20), 100L, System::nanoTime, 2);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        populateLeasesInLeaseTable(
+                createShardTreeLease("parent", SHARD_END, Collections.emptyList(), Arrays.asList("left", "right")),
+                createShardTreeLease(
+                        "left", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                createShardTreeLease(
+                        "right", SHARD_END, Collections.singletonList("parent"), Collections.singletonList("merged")),
+                createShardTreeLease(
+                        "merged",
+                        new ExtendedSequenceNumber("123"),
+                        Arrays.asList("left", "right"),
+                        Collections.emptyList()),
+                createDummyUnAssignedLease("waiting"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        for (String shardEndLeaseKey : Arrays.asList("parent", "left", "right")) {
+            assertNull(leaseRefresher.getLease(shardEndLeaseKey).leaseOwner(), shardEndLeaseKey + " evicted");
+        }
+        // maxLeasesForWorker is 2: "merged" and "waiting", with the SHARD_END leases not counted
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("waiting").leaseOwner());
+    }
+
+    /**
+     * At most MAX_SHARD_END_LEASE_DELETIONS_PER_RUN leases are deleted per run; a ready lease past the limit is
+     * evicted and deleted on a later run.
+     */
+    @Test
+    void performAssignment_moreReadyShardEndLeasesThanPerRunLimit_assertLimitDeletedAndRestOnNextRun()
+            throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        final int readyLeases = LeaseAssignmentManager.MAX_SHARD_END_LEASE_DELETIONS_PER_RUN + 1;
+        for (int i = 0; i < readyLeases; i++) {
+            populateLeasesInLeaseTable(
+                    createShardTreeLease(
+                            "ended" + i, SHARD_END, Collections.emptyList(), Collections.singletonList("child" + i)),
+                    createShardTreeLease(
+                            "child" + i,
+                            new ExtendedSequenceNumber("123"),
+                            Collections.singletonList("ended" + i),
+                            Collections.emptyList()));
+        }
+
+        leaseAssignmentManagerRunnable.run();
+
+        final List<Lease> shardEndLeasesLeft = listShardEndLeases();
+        assertEquals(1, shardEndLeasesLeft.size());
+        assertNull(shardEndLeasesLeft.get(0).leaseOwner(), "the lease past the limit is evicted");
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(listShardEndLeases().isEmpty());
+    }
+
+    /**
+     * SHARD_END leases past the per-run deletion limit are never assigned, whether they're unassigned or expired:
+     * they're handled (here, deleted) on the next run straight from the lease table, without a worker having to take
+     * them first.
+     *
+     * <p>Every SHARD_END lease here is ready to delete. The unassigned ones sort first (lastCounterIncrementNanos 0),
+     * so the limit is used up on them, and two unassigned leases plus "expiredEnded" are left over. "expiredEnded" is
+     * owned by a worker with no worker metrics, and its first eviction fails, so it's still owned after run 1 and
+     * expired by run 2 (its lease counter doesn't change while the clock moves past the lease duration). "waiting" is
+     * an ordinary unassigned lease, there to show the take worker is accepting assignments in both runs.
+     */
+    @Test
+    void performAssignment_shardEndLeasesPastPerRunLimit_assertUnassignedAndExpiredNotAssigned() throws Exception {
+        final AtomicLong nanoTime = new AtomicLong(Duration.ofSeconds(1).toNanos());
+        final LeaseRefresher evictionFailingOnceLeaseRefresher = Mockito.spy(leaseRefresher);
+        doThrow(new DependencyException(new RuntimeException("test")))
+                .doCallRealMethod()
+                .when(evictionFailingOnceLeaseRefresher)
+                .evictLease(any());
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                nanoTime::get,
+                Integer.MAX_VALUE,
+                evictionFailingOnceLeaseRefresher,
+                workerMetricsDAO);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        final int unassignedReadyLeases = LeaseAssignmentManager.MAX_SHARD_END_LEASE_DELETIONS_PER_RUN + 2;
+        for (int i = 0; i < unassignedReadyLeases; i++) {
+            final Lease ended = createShardTreeLease(
+                    "unassignedEnded" + i, SHARD_END, Collections.emptyList(), Collections.singletonList("child" + i));
+            ended.leaseOwner(null);
+            populateLeasesInLeaseTable(ended, startedChild("child" + i, "unassignedEnded" + i));
+        }
+        final Lease expiredEnded = createShardTreeLease(
+                "expiredEnded", SHARD_END, Collections.emptyList(), Collections.singletonList("expiredChild"));
+        expiredEnded.leaseOwner("deadWorker");
+        populateLeasesInLeaseTable(
+                expiredEnded, startedChild("expiredChild", "expiredEnded"), createDummyUnAssignedLease("waiting"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        final List<Lease> shardEndLeasesLeft = listShardEndLeases();
+        assertEquals(3, shardEndLeasesLeft.size(), "two unassigned leases and expiredEnded are past the limit");
+        assertEquals("deadWorker", leaseRefresher.getLease("expiredEnded").leaseOwner(), "eviction failed");
+        assertEquals(
+                2,
+                shardEndLeasesLeft.stream()
+                        .filter(lease -> lease.leaseOwner() == null)
+                        .count(),
+                "the unassigned leases past the limit are still unassigned");
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("waiting").leaseOwner());
+
+        nanoTime.addAndGet(Duration.ofSeconds(1).toNanos());
+        leaseAssignmentManagerRunnable.run();
+
+        assertTrue(listShardEndLeases().isEmpty(), "deleted on the next run without being assigned first");
+    }
+
+    /** A child lease owned by the take worker that has started processing, so its parent is ready to delete. */
+    private Lease startedChild(final String leaseKey, final String parentLeaseKey) {
+        return createShardTreeLease(
+                leaseKey,
+                new ExtendedSequenceNumber("123"),
+                Collections.singletonList(parentLeaseKey),
+                Collections.emptyList());
+    }
+    /**
+     * A SHARD_END lease whose child lease is missing from the lease table isn't deleted (the deletion check needs
+     * the child lease), but it's still evicted.
+     */
+    @Test
+    void performAssignment_shardEndLeaseWithMissingChildLease_assertNotDeletedButEvicted() throws Exception {
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE);
+
+        populateLeasesInLeaseTable(createShardTreeLease(
+                "ended", SHARD_END, Collections.emptyList(), Collections.singletonList("missingChild")));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertNull(leaseRefresher.getLease("ended").leaseOwner());
+    }
+
+    /** If deleting a SHARD_END lease fails, it's evicted instead, and the rest of the run (assignment) still happens. */
+    @Test
+    void performAssignment_shardEndLeaseDeletionFails_assertEvictedAndOtherLeasesAssigned() throws Exception {
+        leaseCleanupManager = mock(LeaseCleanupManager.class);
+        when(leaseCleanupManager.deleteCompletedShardLeaseIfReady(any(), any(), any(), any()))
+                .thenThrow(new DependencyException(new RuntimeException("test")));
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20), 100L, System::nanoTime, 2);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        populateLeasesInLeaseTable(
+                createShardTreeLease("ended", SHARD_END, Collections.emptyList(), Collections.singletonList("child")),
+                createShardTreeLease(
+                        "child",
+                        new ExtendedSequenceNumber("123"),
+                        Collections.singletonList("ended"),
+                        Collections.emptyList()),
+                createDummyUnAssignedLease("waiting"));
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertNull(leaseRefresher.getLease("ended").leaseOwner());
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("waiting").leaseOwner());
+    }
+
+    /**
+     * If evicting a SHARD_END lease fails (throws, or returns false because the lease changed since the scan), the
+     * run continues, and the lease still doesn't count toward maxLeasesForWorker.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void performAssignment_shardEndLeaseEvictionFails_assertNotCountedAndChildAssigned(final boolean evictionThrows)
+            throws Exception {
+        final LeaseRefresher evictionFailingLeaseRefresher = Mockito.spy(leaseRefresher);
+        if (evictionThrows) {
+            doThrow(new DependencyException(new RuntimeException("test")))
+                    .when(evictionFailingLeaseRefresher)
+                    .evictLease(any());
+        } else {
+            doReturn(false).when(evictionFailingLeaseRefresher).evictLease(any());
+        }
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                1,
+                evictionFailingLeaseRefresher,
+                workerMetricsDAO);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+
+        // "child" hasn't started, so "ended" isn't ready to delete and the leader tries to evict it
+        final Lease child = createDummyUnAssignedLease("child");
+        child.parentShardIds(Collections.singletonList("ended"));
+        populateLeasesInLeaseTable(
+                createShardTreeLease("ended", SHARD_END, Collections.emptyList(), Collections.singletonList("child")),
+                child);
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("ended").leaseOwner(), "eviction failed");
+        // maxLeasesForWorker is 1, and the worker still owns "ended", which doesn't count
+        assertEquals(TEST_TAKE_WORKER_ID, leaseRefresher.getLease("child").leaseOwner());
+    }
+
+    /**
+     * In multi-stream mode, a SHARD_END lease whose child has started is deleted by the leader, through the same
+     * code path a multi-stream application uses.
+     *
+     * <p>In multi-stream mode, a lease key is {@code <streamIdentifier>:<shardId>}, but a lease's
+     * {@code childShardIds} and {@code parentShardIds} hold bare shard IDs with no stream. To find a child's lease,
+     * the deletion check builds the key with {@code ShardInfo.getLeaseKey(shardInfo, childShardId)}, which adds the
+     * stream prefix only if the ShardInfo carries a stream identifier. So the leader has to pass the deletion check
+     * a ShardInfo that carries the lease's stream, and a lease lookup keyed by the full multi-stream lease key.
+     *
+     * <p>Two streams with the same shard IDs, so the test catches either mistake:
+     * <ul>
+     *   <li>If only one side drops the stream (the ShardInfo, or the lookup's keys), the bare and qualified keys
+     *       never match, the check finds no child lease, and the SHARD_END lease is evicted instead of deleted.
+     *       Stream A's parent would then still be in the table.</li>
+     *   <li>If both sides drop the stream, the keys match again, but the two streams' leases share the same bare
+     *       keys, so one stream's parent is checked against the other stream's child. Stream A's child has started
+     *       and stream B's hasn't, so either A's parent isn't deleted or B's parent is deleted too early.</li>
+     * </ul>
+     *
+     * <p>The rest of this class reads and writes the lease table with {@link DynamoDBLeaseSerializer}, which
+     * doesn't store a lease's stream identifier. This test uses a second lease refresher and DAO on the same table
+     * with {@link DynamoDBMultiStreamLeaseSerializer}, which is what the Scheduler picks in multi-stream mode. So the
+     * LAM's lease table scan returns MultiStreamLease objects, and the real LeaseCleanupManager deletes through the
+     * same refresher.
+     *
+     * <p>Setup: in each of streams A and B, "shardId-000000000000" is at SHARD_END and its child is
+     * "shardId-000000000001". In stream A the child has started processing (checkpoint "123"), so A's parent is ready
+     * to delete. In stream B the child is still at TRIM_HORIZON, so B's parent isn't. After one LAM run, A's parent
+     * lease is gone, and B's parent lease and both child leases are still there.
+     */
+    @Test
+    void performAssignment_multiStreamShardEndLease_assertDeletedUsingStreamQualifiedLeaseKeys() throws Exception {
+        final LeaseSerializer multiStreamLeaseSerializer = new DynamoDBMultiStreamLeaseSerializer();
+        final LeaseRefresher multiStreamLeaseRefresher = new DynamoDBLeaseRefresher(
+                LEASE_TABLE_NAME,
+                dynamoDbAsyncClient,
+                multiStreamLeaseSerializer,
+                true,
+                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                new DdbTableConfig(),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
+        final EntityDAO multiStreamEntityDAO = new DynamoDBLeaseTableDao(
+                dynamoDbAsyncClient,
+                LEASE_TABLE_NAME,
+                multiStreamLeaseSerializer,
+                new LeaseTableCoordinatorStateDAODelegate(
+                        dynamoDbAsyncClient, LEASE_TABLE_NAME, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT),
+                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()),
+                Runtime.getRuntime().availableProcessors());
+        leaseCleanupManager = createLeaseCleanupManager(multiStreamLeaseRefresher, true);
+        createLeaseAssignmentManagerWithStrategy(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                multiStreamLeaseRefresher,
+                multiStreamEntityDAO,
+                workerMetricsDAO,
+                LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
+
+        final String streamA = "123456789012:multiStreamTestA:1";
+        final String streamB = "123456789012:multiStreamTestB:1";
+        final MultiStreamLease parentA = multiStreamParent(streamA);
+        final MultiStreamLease childA = multiStreamChild(streamA, new ExtendedSequenceNumber("123"));
+        final MultiStreamLease parentB = multiStreamParent(streamB);
+        final MultiStreamLease childB = multiStreamChild(streamB, TRIM_HORIZON);
+        for (MultiStreamLease lease : Arrays.asList(parentA, childA, parentB, childB)) {
+            multiStreamLeaseRefresher.createLeaseIfNotExists(lease);
+        }
+
+        leaseAssignmentManagerRunnable.run();
+
+        assertNull(multiStreamLeaseRefresher.getLease(parentA.leaseKey()), "stream A's parent is deleted");
+        for (MultiStreamLease lease : Arrays.asList(childA, parentB, childB)) {
+            assertEquals(
+                    lease.leaseKey(),
+                    Optional.ofNullable(multiStreamLeaseRefresher.getLease(lease.leaseKey()))
+                            .map(Lease::leaseKey)
+                            .orElse(null),
+                    lease.leaseKey() + " is still in the lease table");
+        }
+    }
+
+    /** "shardId-000000000000" at SHARD_END in the given stream, with child "shardId-000000000001". */
+    private static MultiStreamLease multiStreamParent(final String streamIdentifier) {
+        return createMultiStreamShardTreeLease(
+                streamIdentifier,
+                "shardId-000000000000",
+                SHARD_END,
+                Collections.emptyList(),
+                Collections.singletonList("shardId-000000000001"));
+    }
+
+    /** "shardId-000000000001" in the given stream, with parent "shardId-000000000000". */
+    private static MultiStreamLease multiStreamChild(
+            final String streamIdentifier, final ExtendedSequenceNumber checkpoint) {
+        return createMultiStreamShardTreeLease(
+                streamIdentifier,
+                "shardId-000000000001",
+                checkpoint,
+                Collections.singletonList("shardId-000000000000"),
+                Collections.emptyList());
     }
 
     @Test
@@ -1224,7 +1682,8 @@ class LeaseAssignmentManagerTest {
                 LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 2 * failoverTimeMillis,
                 streamIdCacheManager,
-                Mockito.mock(LAMDataManager.class));
+                Mockito.mock(LAMDataManager.class),
+                leaseCleanupManager);
 
         leaseAssignmentManager.start();
 
@@ -1256,7 +1715,8 @@ class LeaseAssignmentManagerTest {
                 LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE,
                 leaseAssignmentIntervalMillis,
                 streamIdCacheManager,
-                Mockito.mock(LAMDataManager.class));
+                Mockito.mock(LAMDataManager.class),
+                leaseCleanupManager);
 
         leaseAssignmentManager.start();
 
@@ -1345,7 +1805,8 @@ class LeaseAssignmentManagerTest {
                 strategy,
                 2 * leaseDurationMillis,
                 streamIdCacheManager,
-                lamDataManager);
+                lamDataManager,
+                leaseCleanupManager);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }
@@ -1364,6 +1825,26 @@ class LeaseAssignmentManagerTest {
         return config;
     }
 
+    /** A LeaseCleanupManager that reads and deletes through this test's lease table. */
+    private LeaseCleanupManager createLeaseCleanupManager(final boolean cleanupLeasesUponShardCompletion) {
+        return createLeaseCleanupManager(leaseRefresher, cleanupLeasesUponShardCompletion);
+    }
+
+    /** A LeaseCleanupManager that reads and deletes through the given lease refresher. */
+    private LeaseCleanupManager createLeaseCleanupManager(
+            final LeaseRefresher leaseRefresher, final boolean cleanupLeasesUponShardCompletion) {
+        final LeaseCoordinator leaseCoordinator = mock(LeaseCoordinator.class);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        return new LeaseCleanupManager(
+                leaseCoordinator,
+                new NullMetricsFactory(),
+                mock(ScheduledExecutorService.class),
+                cleanupLeasesUponShardCompletion,
+                Duration.ofMinutes(1).toMillis(),
+                Duration.ofMinutes(5).toMillis(),
+                Duration.ofMinutes(30).toMillis());
+    }
+
     private Lease createDummyUnAssignedLease(final String leaseKey) {
         final Lease lease = new Lease();
         lease.leaseKey(leaseKey);
@@ -1377,6 +1858,44 @@ class LeaseAssignmentManagerTest {
         lease.leaseCounter(123L);
         lease.throughputKBps(10D);
         return lease;
+    }
+
+    /** A lease owned by the take worker, with the given checkpoint and shard tree links. */
+    private Lease createShardTreeLease(
+            final String leaseKey,
+            final ExtendedSequenceNumber checkpoint,
+            final List<String> parentShardIds,
+            final List<String> childShardIds) {
+        final Lease lease = createDummyLease(leaseKey, TEST_TAKE_WORKER_ID);
+        lease.checkpoint(checkpoint);
+        lease.parentShardIds(parentShardIds);
+        lease.childShardIds(childShardIds);
+        return lease;
+    }
+
+    /** A multi-stream lease owned by another worker, with the given checkpoint and shard tree links. */
+    private static MultiStreamLease createMultiStreamShardTreeLease(
+            final String streamIdentifier,
+            final String shardId,
+            final ExtendedSequenceNumber checkpoint,
+            final List<String> parentShardIds,
+            final List<String> childShardIds) {
+        final MultiStreamLease lease = new MultiStreamLease();
+        lease.streamIdentifier(streamIdentifier);
+        lease.shardId(shardId);
+        lease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier, shardId));
+        lease.leaseOwner(TEST_YIELD_WORKER_ID);
+        lease.leaseCounter(1L);
+        lease.checkpoint(checkpoint);
+        lease.parentShardIds(parentShardIds);
+        lease.childShardIds(childShardIds);
+        return lease;
+    }
+
+    private List<Lease> listShardEndLeases() throws Exception {
+        return leaseRefresher.listLeases().stream()
+                .filter(lease -> SHARD_END.equals(lease.checkpoint()))
+                .collect(Collectors.toList());
     }
 
     private LeaseTableWorkerMetricStats createDummyDefaultWorkerMetrics(final String workerId) {

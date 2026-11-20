@@ -109,10 +109,9 @@ public final class VarianceBasedLeaseAssignmentDecider implements LeaseAssignmen
 
     @Override
     public void assignExpiredOrUnassignedLeases(final List<Lease> expiredOrUnAssignedLeases) {
-        // Sort the expiredOrUnAssignedLeases using lastCounterIncrementNanos such that leases expired first are
-        // picked first.
-        // Unassigned leases have lastCounterIncrementNanos as zero and thus assigned first.
-        Collections.sort(expiredOrUnAssignedLeases, Comparator.comparing(Lease::lastCounterIncrementNanos));
+        // Leases are assigned in the order given. The LeaseAssignmentManager orders them: shard tree order first,
+        // then lastCounterIncrementNanos, so unassigned leases (0) come before expired ones, least recently renewed
+        // first.
         final Set<Lease> assignedLeases = new HashSet<>();
         for (final Lease lease : expiredOrUnAssignedLeases) {
             final WorkerMetricStats workerToAssignLease = assignableWorkerSortedByAvailableCapacity.poll();
