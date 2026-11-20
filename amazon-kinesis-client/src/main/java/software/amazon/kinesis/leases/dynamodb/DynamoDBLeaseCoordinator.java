@@ -450,10 +450,12 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      * @return Executor service
      */
     private static ExecutorService createExecutorService(final int maximumPoolSize, final ThreadFactory threadFactory) {
-        int coreLeaseCount = Math.max(maximumPoolSize / 4, 2);
-
-        return new ThreadPoolExecutor(
-                coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS, new LinkedTransferQueue<>(), threadFactory);
+        // ThreadPoolExecutor only adds threads beyond the core size when its queue is full, and this queue is
+        // unbounded, so the core size must be the maximum. Idle threads still time out.
+        final ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                maximumPoolSize, maximumPoolSize, 60, TimeUnit.SECONDS, new LinkedTransferQueue<>(), threadFactory);
+        executor.allowCoreThreadTimeOut(true);
+        return executor;
     }
 
     @Override
