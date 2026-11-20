@@ -70,7 +70,7 @@ public class KinesisConsumerTaskFactory implements ConsumerTaskFactory {
         return new InitializeTask(
                 argument.shardInfo(),
                 argument.shardRecordProcessor(),
-                argument.checkpoint(),
+                argument.leaseCoordinator(),
                 argument.recordProcessorCheckpointer(),
                 argument.initialPositionInStream(),
                 argument.recordsPublisher(),

@@ -21,13 +21,16 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.exceptions.KinesisClientLibException;
+import software.amazon.kinesis.exceptions.ShutdownException;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -49,7 +52,7 @@ public class InitializeTask implements ConsumerTask {
     private final ShardRecordProcessor shardRecordProcessor;
 
     @NonNull
-    private final Checkpointer checkpoint;
+    private final LeaseCoordinator leaseCoordinator;
 
     @NonNull
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
@@ -82,7 +85,7 @@ public class InitializeTask implements ConsumerTask {
         try {
             log.debug("Initializing ShardId {}", shardInfo);
             final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
-            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(leaseKey);
+            Checkpoint initialCheckpointObject = getInitialCheckpointObject(leaseKey);
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.checkpoint();
             log.debug(
                     "[{}]: Checkpoint: {} -- Initial Position: {}",
@@ -135,6 +138,22 @@ public class InitializeTask implements ConsumerTask {
         }
 
         return new TaskResult(exception);
+    }
+
+    /**
+     * Uses the checkpoint from the locally held lease instead of reading it from DynamoDB. The remote read is
+     * eventually consistent and can return a stale checkpoint, while lease renewal keeps going on the local copy's
+     * leaseCounter, so the consumer would process from an old checkpoint without detecting it. It also costs a
+     * DynamoDB read on every initialize attempt, including each retry after a failure.
+     */
+    private Checkpoint getInitialCheckpointObject(final String leaseKey) throws KinesisClientLibException {
+        final Lease lease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
+        if (lease != null) {
+            log.debug("[{}] Using checkpoint from currently held lease => {}", leaseKey, lease);
+            return new Checkpoint(lease.checkpoint(), lease.pendingCheckpoint(), lease.pendingCheckpointState());
+        }
+        // The lease was lost; the ShardConsumer shuts this consumer down.
+        throw new ShutdownException("Lease is not currently held, shutting down " + leaseKey);
     }
 
     /*

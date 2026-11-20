@@ -41,10 +41,17 @@ public interface Checkpointer {
      * Get the current checkpoint stored for the specified shard. Useful for checking that the parent shard
      * has been completely processed before we start processing the child shard.
      *
+     * @deprecated This reads the checkpoint from the backing store (e.g. a {@code GetItem} against the DynamoDB lease
+     *     table) and is eventually consistent. On lease handoff it can return a stale checkpoint that is not validated
+     *     against the lease owner or leaseCounter, which can lead to reprocessing from an older position without
+     *     detection. Prefer reading the checkpoint from the locally held lease (e.g. via
+     *     {@code LeaseCoordinator.getCurrentlyHeldLease(leaseKey)}). Kept for backward compatibility.
+     *
      * @param leaseKey Current checkpoint for this shard is fetched
      * @return Current checkpoint for this shard, null if there is no record for this shard.
      * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
      */
+    @Deprecated
     ExtendedSequenceNumber getCheckpoint(String leaseKey) throws KinesisClientLibException;
 
     /**
@@ -52,10 +59,17 @@ public interface Checkpointer {
      * and pending checkpoint. Useful for checking that the parent shard has been completely processed before we start
      * processing the child shard.
      *
+     * @deprecated This reads the checkpoint from the backing store (e.g. a {@code GetItem} against the DynamoDB lease
+     *     table) and is eventually consistent. On lease handoff it can return a stale checkpoint that is not validated
+     *     against the lease owner or leaseCounter, which can lead to reprocessing from an older position without
+     *     detection. Prefer reading the checkpoint from the locally held lease (e.g. via
+     *     {@code LeaseCoordinator.getCurrentlyHeldLease(leaseKey)}). Kept for backward compatibility.
+     *
      * @param leaseKey Current checkpoint for this shard is fetched
      * @return Current checkpoint object for this shard, null if there is no record for this shard.
      * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
      */
+    @Deprecated
     Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException;
 
     /**
