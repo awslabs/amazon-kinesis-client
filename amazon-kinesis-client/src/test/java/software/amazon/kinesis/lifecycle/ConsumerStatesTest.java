@@ -227,7 +227,7 @@ public class ConsumerStatesTest {
 
         assertThat(task, initTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task, initTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
-        assertThat(task, initTask(Checkpointer.class, "checkpoint", equalTo(checkpointer)));
+        assertThat(task, initTask(LeaseCoordinator.class, "leaseCoordinator", equalTo(leaseCoordinator)));
         assertThat(
                 task,
                 initTask(

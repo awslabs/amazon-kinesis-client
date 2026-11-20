@@ -73,6 +73,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         }
     }
 
+    @Deprecated
     @Override
     public ExtendedSequenceNumber getCheckpoint(final String leaseKey) throws KinesisClientLibException {
         try {
@@ -84,6 +85,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         }
     }
 
+    @Deprecated
     @Override
     public Checkpoint getCheckpointObject(final String leaseKey) throws KinesisClientLibException {
         try {
