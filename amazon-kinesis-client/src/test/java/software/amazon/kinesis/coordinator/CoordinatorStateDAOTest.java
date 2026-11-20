@@ -51,6 +51,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
+import software.amazon.kinesis.segmenting.LeaderVersionState;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -430,6 +431,50 @@ public class CoordinatorStateDAOTest {
 
         Assertions.assertTrue(foundKey1, "key1 should still exist");
         Assertions.assertTrue(foundKey3, "key3 should still exist");
+    }
+
+    /** F1: the version item is written only while the lock item names the writer as owner. */
+    @Test
+    public void testPutCoordinatorStateIfLockOwnedBy() throws Exception {
+        final CoordinatorStateDAO dao = createDAO(getCoordinatorStateConfig("testPutCoordinatorStateIfLockOwnedBy"));
+        dao.initialize();
+        final AmazonDynamoDBLockClient lockClient = new AmazonDynamoDBLockClient(dao.getLeaseTableDaoDelegate()
+                .getDDBLockClientOptionsBuilder()
+                .withOwnerName("worker-2")
+                .withCreateHeartbeatBackgroundThread(false)
+                .build());
+        Assertions.assertTrue(lockClient
+                .tryAcquireLock(AcquireLockOptions.builder(LEADER_HASH_KEY).build())
+                .isPresent());
+
+        // worker-1 lost the lock (e.g. its write was still in flight when worker-2 took it): rejected, not written.
+        Assertions.assertFalse(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.LEADER_VERSION_HASH_KEY, "old", "worker-1", 1L),
+                LEADER_HASH_KEY,
+                "worker-1"));
+        Assertions.assertNull(dao.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY));
+
+        // worker-2 owns the lock: written in full.
+        Assertions.assertTrue(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.LEADER_VERSION_HASH_KEY, "new", "worker-2", 2L),
+                LEADER_HASH_KEY,
+                "worker-2"));
+        final LeaderVersionState written =
+                (LeaderVersionState) dao.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY);
+        Assertions.assertEquals("new", written.getVersionHash());
+        Assertions.assertEquals("worker-2", written.getOwnerName());
+
+        // The lock is released (deleted): nobody owns it, so nothing is written.
+        lockClient.releaseLock(
+                lockClient.getLock(LEADER_HASH_KEY, Optional.empty()).get());
+        Assertions.assertFalse(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.LEADER_VERSION_HASH_KEY, "late", "worker-2", 3L),
+                LEADER_HASH_KEY,
+                "worker-2"));
+        Assertions.assertEquals(
+                "new",
+                ((LeaderVersionState) dao.getCoordinatorState(LeaderVersionState.LEADER_VERSION_HASH_KEY))
+                        .getVersionHash());
     }
 
     private CoordinatorStateTableConfig getCoordinatorStateConfig(final String applicationName) {
