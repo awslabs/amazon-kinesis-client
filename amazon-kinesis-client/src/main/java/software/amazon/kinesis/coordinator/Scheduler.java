@@ -148,6 +148,16 @@ public class Scheduler implements Runnable {
     private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
     private static final String DELETED_STREAMS_COUNT = "DeletedStreams.Count";
     private static final String NON_EXISTING_STREAM_DELETE_COUNT = "NonExistingStreamDelete.Count";
+    // Sizes of the Scheduler's per-stream and per-shard maps, to catch entries that are never removed.
+    private static final String METRIC_PREFIX_CLASS_LEVEL_MAPS = "ClassLevelMaps.";
+    private static final String METRIC_CURRENT_STREAM_CONFIG_MAP_SIZE =
+            METRIC_PREFIX_CLASS_LEVEL_MAPS + "currentStreamConfigMap.Count";
+    private static final String METRIC_STALE_STREAM_DELETION_MAP_SIZE =
+            METRIC_PREFIX_CLASS_LEVEL_MAPS + "staleStreamDeletionMap.Count";
+    private static final String METRIC_STREAM_TO_SHARD_SYNC_TASK_MANAGER_MAP_SIZE =
+            METRIC_PREFIX_CLASS_LEVEL_MAPS + "streamToShardSyncTaskManagerMap.Count";
+    private static final String METRIC_SHARD_INFO_SHARD_CONSUMER_MAP_SIZE =
+            METRIC_PREFIX_CLASS_LEVEL_MAPS + "shardInfoShardConsumerMap.Count";
 
     private final SchedulerLog slog = new SchedulerLog();
 
@@ -884,6 +894,27 @@ public class Scheduler implements Runnable {
                         metricsScope, NON_EXISTING_STREAM_DELETE_COUNT, deletedStreamSet.size(), MetricsLevel.SUMMARY);
                 MetricsUtil.addCount(
                         metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
+
+                MetricsUtil.addCount(
+                        metricsScope,
+                        METRIC_CURRENT_STREAM_CONFIG_MAP_SIZE,
+                        currentStreamConfigMap.size(),
+                        MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope,
+                        METRIC_STALE_STREAM_DELETION_MAP_SIZE,
+                        staleStreamDeletionMap.size(),
+                        MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope,
+                        METRIC_STREAM_TO_SHARD_SYNC_TASK_MANAGER_MAP_SIZE,
+                        streamToShardSyncTaskManagerMap.size(),
+                        MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope,
+                        METRIC_SHARD_INFO_SHARD_CONSUMER_MAP_SIZE,
+                        shardInfoShardConsumerMap.size(),
+                        MetricsLevel.SUMMARY);
             } finally {
                 MetricsUtil.endScope(metricsScope);
             }

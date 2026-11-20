@@ -55,6 +55,7 @@ import org.mockito.stubbing.OngoingStubbing;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisServiceClientConfiguration;
@@ -101,6 +102,8 @@ import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.AutoDetectionAndDeferredDeletionStrategy;
@@ -123,6 +126,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyDouble;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
@@ -660,6 +664,61 @@ public class SchedulerTest {
         assertEquals(
                 new HashSet<>(streamConfigList1),
                 new HashSet<>(scheduler.currentStreamConfigMap().values()));
+    }
+
+    /** The stream sync run reports the sizes of the Scheduler's per-stream and per-shard maps. */
+    @Test
+    public final void testMultiStreamSyncPublishesClassLevelMapSizes()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        final List<StreamConfig> streamConfigList = IntStream.range(1, 5)
+                .mapToObj(streamId -> new StreamConfig(
+                        StreamIdentifier.multiStreamInstance(Joiner.on(":")
+                                .join(streamId * TEST_ACCOUNT, "multiStreamTest-" + streamId, streamId * 12345)),
+                        InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        final MetricsFactory mockMetricsFactory = mock(MetricsFactory.class);
+        final MetricsScope mockMetricsScope = mock(MetricsScope.class);
+        when(mockMetricsFactory.createMetrics()).thenReturn(mockMetricsScope);
+        metricsConfig.metricsFactory(mockMetricsFactory);
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        scheduler = spy(new Scheduler(
+                checkpointConfig,
+                coordinatorConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig));
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+
+        scheduler.checkAndSyncStreamShardsAndLeases();
+
+        verify(mockMetricsScope)
+                .addData(
+                        eq("ClassLevelMaps.currentStreamConfigMap.Count"),
+                        eq(4.0),
+                        eq(StandardUnit.COUNT),
+                        eq(MetricsLevel.SUMMARY));
+        verify(mockMetricsScope)
+                .addData(
+                        eq("ClassLevelMaps.staleStreamDeletionMap.Count"),
+                        eq(0.0),
+                        eq(StandardUnit.COUNT),
+                        eq(MetricsLevel.SUMMARY));
+        verify(mockMetricsScope)
+                .addData(
+                        eq("ClassLevelMaps.streamToShardSyncTaskManagerMap.Count"),
+                        anyDouble(),
+                        eq(StandardUnit.COUNT),
+                        eq(MetricsLevel.SUMMARY));
+        verify(mockMetricsScope)
+                .addData(
+                        eq("ClassLevelMaps.shardInfoShardConsumerMap.Count"),
+                        eq(0.0),
+                        eq(StandardUnit.COUNT),
+                        eq(MetricsLevel.SUMMARY));
     }
 
     @Test
