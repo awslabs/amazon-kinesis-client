@@ -546,6 +546,27 @@ class LeaseAssignmentManagerTest {
         populateLeasesInLeaseTable(lease1, lease2, lease3, lease4, lease5);
     }
 
+    /** The leader state is released as soon as this worker loses leadership, not when it is next elected. */
+    @Test
+    void performAssignment_leaderToNonLeader_clearsLeaderState() throws Exception {
+        when(mockLeaderDecider.isLeader(anyString())).thenReturn(true).thenReturn(false);
+        final LeaseAssignmentManager leaseAssignmentManager = createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease-1", TEST_TAKE_WORKER_ID));
+
+        // Leader: the run records the leases it saw.
+        leaseAssignmentManagerRunnable.run();
+        assertEquals(1, leaseAssignmentManager.getPrevRunLeasesStateSize());
+
+        // Not leader any more: the recorded leases are dropped right away.
+        leaseAssignmentManagerRunnable.run();
+        assertEquals(0, leaseAssignmentManager.getPrevRunLeasesStateSize());
+    }
+
     @Test
     void performAssignment_withLeaderSwitchOver_assertAssignmentOnlyAfterBeingLeader() throws Exception {
         when(mockLeaderDecider.isLeader(anyString())).thenReturn(false).thenReturn(true);
