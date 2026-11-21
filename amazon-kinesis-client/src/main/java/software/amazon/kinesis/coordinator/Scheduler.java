@@ -652,6 +652,49 @@ public class Scheduler implements Runnable {
         return shouldInitiateLeaseSync;
     }
 
+    /**
+     * Gives up on a consumer whose task has been running for longer than
+     * {@link LifecycleConfig#abandonTaskAfterMillis()}.
+     *
+     * <p>A record processor that never returns leaves its consumer wedged. The subscription restart timer is
+     * disarmed while a task is in flight, so it does not fire; no exception is raised, so no failure is
+     * reported; and the consumer can never reach a shutdown state, so {@link #cleanupShardConsumers} never
+     * replaces it. The shard stops for the lifetime of the process while its lease keeps being renewed, which
+     * makes the worker look healthy.
+     *
+     * <p>Releasing the lease is what makes this safe to repeat: the shard is picked up again with a new
+     * concurrency token, so a checkpoint attempted later by the abandoned consumer no longer applies.
+     *
+     * @return true when the consumer was abandoned and should not be driven this round
+     */
+    private boolean abandonIfTaskStuck(final ShardInfo shardInfo, final ShardConsumer consumer) {
+        final Optional<Long> limitMillis = lifecycleConfig.abandonTaskAfterMillis();
+        if (!limitMillis.isPresent()) {
+            return false;
+        }
+        final Duration limit = Duration.ofMillis(limitMillis.get());
+        if (!consumer.isTaskStuckFor(limit)) {
+            return false;
+        }
+
+        final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
+        log.error(
+                "{}: task has been running for at least {} and is not expected to return. Abandoning the "
+                        + "consumer and releasing the lease so the shard resumes from its last checkpoint. The "
+                        + "thread inside the record processor is left behind.",
+                leaseKey,
+                limit);
+
+        consumer.abandon();
+        shardInfoShardConsumerMap.remove(shardInfo, consumer);
+
+        final Lease heldLease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
+        if (heldLease != null) {
+            leaseCoordinator.dropLease(heldLease);
+        }
+        return true;
+    }
+
     @VisibleForTesting
     void runProcessLoop() {
         try {
@@ -659,6 +702,9 @@ public class Scheduler implements Runnable {
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                 ShardConsumer shardConsumer = createOrGetShardConsumer(
                         shardInfo, processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
+                if (abandonIfTaskStuck(shardInfo, shardConsumer)) {
+                    continue;
+                }
                 if (shardConsumer.isShutdown() && !ShutdownReason.SHARD_END.equals(shardConsumer.shutdownReason())) {
                     final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
                     if (currentLease != null

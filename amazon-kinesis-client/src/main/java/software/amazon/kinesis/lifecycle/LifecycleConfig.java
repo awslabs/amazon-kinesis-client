@@ -36,6 +36,22 @@ public class LifecycleConfig {
     private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
 
     /**
+     * Gives up on a {@link ShardConsumer} whose task has been running for longer than the set time.
+     *
+     * <p>A record processor that never returns leaves its shard consumer wedged: the subscription restart
+     * timer is disarmed while a task is in flight, no exception is raised, and the consumer can never reach a
+     * shutdown state, so it is never replaced. The shard stops making progress for the lifetime of the
+     * process while its lease keeps being renewed.
+     *
+     * <p>When set, the scheduler cancels the subscription of such a consumer, drops it, and releases the
+     * lease so that a fresh consumer picks the shard up and resumes from the last checkpoint. The thread
+     * that is stuck inside the record processor is left behind and is not interrupted.
+     *
+     * <p>Default value: {@link Optional#empty()}, meaning a wedged consumer is never given up on.
+     */
+    private Optional<Long> abandonTaskAfterMillis = Optional.empty();
+
+    /**
      * Backoff time in milliseconds for Amazon Kinesis Client Library tasks (in the event of failures).
      *
      * <p>Default value: 500L</p>
