@@ -35,6 +35,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
@@ -186,7 +187,14 @@ public final class LeaseAssignmentManager {
 
             // If the current worker is not leader, then do nothing as assignment is executed on leader.
             if (!leaderDecider.isLeader(currentWorkerId)) {
-                log.info("Current worker {} is not a leader, ignore", currentWorkerId);
+                if (this.tookOverLeadershipInThisRun) {
+                    // A worker that loses leadership usually takes on more leases and needs the heap. The leader
+                    // state is never read again until it is rebuilt on re-election, so release it now.
+                    log.info("Worker {} lost leadership, clearing in-memory leader state.", currentWorkerId);
+                    clearLeaderState();
+                } else {
+                    log.info("Current worker {} is not a leader, ignore", currentWorkerId);
+                }
                 this.tookOverLeadershipInThisRun = false;
                 success = true;
                 return;
@@ -196,7 +204,7 @@ public final class LeaseAssignmentManager {
                 // This means that there was leader change, perform cleanup of state as this is leader switch.
                 this.tookOverLeadershipInThisRun = true;
                 this.lamRunCounter = 0;
-                prepareAfterLeaderSwitch();
+                clearLeaderState();
             }
             log.info("Current worker {} is a leader, performing assignment", currentWorkerId);
 
@@ -526,9 +534,18 @@ public final class LeaseAssignmentManager {
         }
     }
 
-    private void prepareAfterLeaderSwitch() {
+    /**
+     * Clears the state kept between assignment runs. Called when this worker becomes leader, so a new leadership
+     * term starts fresh, and when it loses leadership, so the memory can be reclaimed.
+     */
+    private void clearLeaderState() {
         prevRunLeasesState.clear();
         noOfContinuousFailedAttempts = 0;
+    }
+
+    @VisibleForTesting
+    int getPrevRunLeasesStateSize() {
+        return prevRunLeasesState.size();
     }
 
     // Resolves and caches the stream ID for a given lease during lease acquisition.

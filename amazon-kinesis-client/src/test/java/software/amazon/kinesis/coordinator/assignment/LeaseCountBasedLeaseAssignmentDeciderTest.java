@@ -480,6 +480,51 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         verify(inMemoryStorageView, never()).performLeaseAssignment(any(), any());
     }
 
+    @Test
+    void assignExpiredOrUnassignedLeases_allWorkersAtMaxWithSpillover_noAssignments() {
+        // 2 workers already at max (10 each) and 5 unassigned leases. target = min(ceil(25 / 2), 10) = 10.
+        // No worker has room, so none of the spillover leases may be assigned.
+        Map<String, Set<Lease>> workerToLeasesMap = workersWithLeaseCounts("worker1", 10, "worker2", 10);
+        List<Lease> unassignedLeases = createUnassignedLeases(5);
+        stubStorageView(workerToLeasesMap, unassignedLeases);
+
+        decider.assignExpiredOrUnassignedLeases(unassignedLeases);
+
+        verify(inMemoryStorageView, never()).performLeaseAssignment(any(), any());
+        assertEquals(5, unassignedLeases.size());
+    }
+
+    @Test
+    void assignExpiredOrUnassignedLeases_oneWorkerAtMax_assignsOnlyToWorkerBelowMax() {
+        // worker1 at max (10), worker2 at 7, 5 unassigned. target = min(ceil(22 / 2), 10) = 10.
+        // Only worker2 has room, for 3 leases.
+        Map<String, Set<Lease>> workerToLeasesMap = workersWithLeaseCounts("worker1", 10, "worker2", 7);
+        List<Lease> unassignedLeases = createUnassignedLeases(5);
+        stubStorageView(workerToLeasesMap, unassignedLeases);
+
+        decider.assignExpiredOrUnassignedLeases(unassignedLeases);
+
+        verify(inMemoryStorageView, never()).performLeaseAssignment(any(), eq("worker1"));
+        verify(inMemoryStorageView, times(3)).performLeaseAssignment(any(), eq("worker2"));
+        assertEquals(2, unassignedLeases.size());
+    }
+
+    private List<Lease> createUnassignedLeases(int count) {
+        List<Lease> leases = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            leases.add(createLease("unassigned-lease" + i, null, i * 100L));
+        }
+        return leases;
+    }
+
+    private void stubStorageView(Map<String, Set<Lease>> workerToLeasesMap, List<Lease> unassignedLeases) {
+        List<Lease> allLeases = new ArrayList<>(unassignedLeases);
+        workerToLeasesMap.values().forEach(allLeases::addAll);
+        when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
+        when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>(workerToLeasesMap.keySet()));
+        when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
+    }
+
     private Map<String, Set<Lease>> workersWithLeaseCounts(Object... workerAndCount) {
         Map<String, Set<Lease>> workerToLeasesMap = new HashMap<>();
         for (int i = 0; i < workerAndCount.length; i += 2) {

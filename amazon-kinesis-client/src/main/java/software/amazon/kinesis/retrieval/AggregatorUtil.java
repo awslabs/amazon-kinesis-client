@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -189,7 +190,7 @@ public class AggregatorUtil {
                                     .append(r.sequenceNumber())
                                     .append("\n")
                                     .append("Raw data: ")
-                                    .append(javax.xml.bind.DatatypeConverter.printBase64Binary(messageData))
+                                    .append(Base64.getEncoder().encodeToString(messageData))
                                     .append("\n");
                             log.error(sb.toString(), e);
                         }

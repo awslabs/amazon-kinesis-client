@@ -59,7 +59,6 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisServiceClientConfiguration;
 import software.amazon.awssdk.utils.StringUtils;
-import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
 import software.amazon.kinesis.common.InitialPositionInStream;
@@ -346,10 +345,12 @@ public class SchedulerTest {
         final List<ShardInfo> secondShardInfo =
                 Collections.singletonList(new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber));
 
-        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
+        final Lease heldLease = new Lease();
+        heldLease.leaseKey(shardId);
+        heldLease.checkpoint(firstSequenceNumber);
 
         when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
-        when(checkpoint.getCheckpointObject(eq(shardId))).thenReturn(firstCheckpoint);
+        when(leaseCoordinator.getCurrentlyHeldLease(eq(shardId))).thenReturn(heldLease);
 
         Scheduler schedulerSpy = spy(scheduler);
         schedulerSpy.runProcessLoop();
@@ -362,7 +363,8 @@ public class SchedulerTest {
                 .buildConsumer(same(firstShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
         verify(schedulerSpy, never())
                 .buildConsumer(same(secondShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
-        verify(checkpoint).getCheckpointObject(eq(shardId));
+        verify(leaseCoordinator, atLeast(1)).getCurrentlyHeldLease(eq(shardId));
+        verify(checkpoint, never()).getCheckpointObject(anyString());
     }
 
     @Test
@@ -604,10 +606,11 @@ public class SchedulerTest {
                         sc.streamIdentifier().serialize()))
                 .collect(Collectors.toList());
 
-        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
+        final Lease heldLease = new Lease();
+        heldLease.checkpoint(firstSequenceNumber);
 
         when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
-        when(checkpoint.getCheckpointObject(anyString())).thenReturn(firstCheckpoint);
+        when(leaseCoordinator.getCurrentlyHeldLease(anyString())).thenReturn(heldLease);
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         scheduler = new Scheduler(

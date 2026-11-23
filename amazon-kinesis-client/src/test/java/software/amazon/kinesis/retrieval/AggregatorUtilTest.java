@@ -71,6 +71,27 @@ public class AggregatorUtilTest {
         assertEquals(0, records.get(1).data().position());
     }
 
+    @Test
+    public void testMalformedAggregatedRecordDoesNotFailWhileLogging() {
+        final Messages.AggregatedRecord aggregated = Messages.AggregatedRecord.newBuilder()
+                .addPartitionKeyTable("pk")
+                .addRecords(
+                        Messages.Record.newBuilder().setPartitionKeyIndex(1).setData(ByteString.copyFromUtf8("data")))
+                .build();
+        final byte[] payload = aggregated.toByteArray();
+        final ByteBuffer data = ByteBuffer.allocate(AGGREGATED_RECORD_MAGIC.length + payload.length + 16);
+        data.put(AGGREGATED_RECORD_MAGIC).put(payload).put(AGGREGATOR_UTIL.calculateTailCheck(payload));
+        data.flip();
+
+        final KinesisClientRecord record = KinesisClientRecord.builder()
+                .data(data)
+                .partitionKey("pk")
+                .sequenceNumber("1")
+                .build();
+
+        assertEquals(Collections.emptyList(), AGGREGATOR_UTIL.deaggregate(Collections.singletonList(record)));
+    }
+
     private List<KinesisClientRecord> getKinesisClientRecords() {
         return Collections.singletonList(KinesisClientRecord.builder()
                 .data(constructKplAggregatedRecord())
