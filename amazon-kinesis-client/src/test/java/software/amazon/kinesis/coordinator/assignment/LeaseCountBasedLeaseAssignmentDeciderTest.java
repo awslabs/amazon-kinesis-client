@@ -523,6 +523,7 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>(workerToLeasesMap.keySet()));
         when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
+        stubAssignableWorkers(workerToLeasesMap.keySet());
     }
 
     private Map<String, Set<Lease>> workersWithLeaseCounts(Object... workerAndCount) {
