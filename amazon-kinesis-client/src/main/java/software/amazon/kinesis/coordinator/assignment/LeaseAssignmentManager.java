@@ -211,7 +211,9 @@ public final class LeaseAssignmentManager {
             // A DeployingLeader whose segment is the whole active fleet has nothing of its own to balance: the
             // current Leader balances the same workers. Running anyway has two leaders moving the same leases, e.g.
             // at the end of a rollforward, when this worker took DeployingLeader before the new Leader's version
-            // write landed. This worker moves to Leader at its next key re-evaluation (within a heartbeat period).
+            // write landed. This worker doesn't move to Leader right away: FleetSegmentingHandler waits until two
+            // assignment runs more than the worker version expiry apart (60 s by default) both find every active
+            // worker on this version (isAllOnVersionConfirmed()), then moves at the next key re-evaluation.
             if (segmentingHandler.isEnabled()
                     && !inMemoryStorageView.isCurrentVersionLeader()
                     && segmentingHandler.isAllActiveWorkersOnThisVersion()) {
@@ -456,19 +458,16 @@ public final class LeaseAssignmentManager {
      */
     private void publishWorkersPerVersionMetrics(
             final MetricsScope metricsScope, final InMemoryStorageView inMemoryStorageView) {
-        final int onMyHash = inMemoryStorageView.getWorkersOnVersionHash().size();
-        if (inMemoryStorageView.isCurrentVersionLeader()) {
-            final int numWorkersOnCurrentVersion =
-                    onMyHash + inMemoryStorageView.getWorkersWithNoVersionHash().size();
-            metricsScope.addData(
-                    METRIC_NUM_WORKERS_ON_CURRENT_VERSION,
-                    numWorkersOnCurrentVersion,
-                    StandardUnit.COUNT,
-                    MetricsLevel.SUMMARY);
-        } else {
-            metricsScope.addData(
-                    METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION, onMyHash, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-        }
+        // The leader's segment: the same set of workers the deciders balance (leaseTakingCandidates).
+        final int workersInSegment =
+                inMemoryStorageView.getLeaseTakingCandidates().size();
+        metricsScope.addData(
+                inMemoryStorageView.isCurrentVersionLeader()
+                        ? METRIC_NUM_WORKERS_ON_CURRENT_VERSION
+                        : METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION,
+                workersInSegment,
+                StandardUnit.COUNT,
+                MetricsLevel.SUMMARY);
     }
 
     private void publishLeaseAndWorkerCountMetrics(
@@ -586,7 +585,10 @@ public final class LeaseAssignmentManager {
          */
         private long leaseTableScanTime = 0L;
         /**
-         * Average throughput for all workers.
+         * Average throughput per worker that this leader balances towards. For the current version Leader (and with
+         * segmenting off) it is all leases' throughput over all active workers. For the DeployingLeader it is the
+         * throughput of the leases its own workers hold over the number of its own workers, so it describes the same
+         * set of workers as {@link #assignableLeaseCount}.
          */
         private double targetAverageThroughput;
 
@@ -687,8 +689,6 @@ public final class LeaseAssignmentManager {
                     // startup time and thus assigns 0 in that case to start with.
                     .orElse(0D);
 
-            targetAverageThroughput =
-                    averageLeaseThroughput * leaseList.size() / Math.max(1, activeWorkerMetrics.size());
             leaseList.forEach(lease -> {
                 if (isNull(lease.throughputKBps())) {
                     // If the lease is unassigned, it will not have any throughput value, use average throughput
@@ -699,18 +699,6 @@ public final class LeaseAssignmentManager {
                         .computeIfAbsent(lease.actualOwner(), workerId -> new HashSet<>())
                         .add(lease);
                 updateWorkerThroughput(lease.actualOwner(), lease.throughputKBps());
-            });
-
-            this.activeWorkerIdSet = new HashSet<>();
-            // Calculate initial ratio
-            this.activeWorkerMetrics.forEach(workerMetrics -> {
-                activeWorkerIdSet.add(workerMetrics.getWorkerId());
-                workerMetrics.setEmaAlpha(config.workerMetricsEMAAlpha());
-                if (workerMetrics.isUsingDefaultWorkerMetric()) {
-                    setOperatingRangeAndWorkerMetricsDataForDefaultWorker(
-                            workerMetrics,
-                            getTotalAssignedThroughput(workerMetrics.getWorkerId()) / targetAverageThroughput);
-                }
             });
 
             // Compute the segment views once per run. Every decision in the run then uses the same answer, instead
@@ -726,6 +714,29 @@ public final class LeaseAssignmentManager {
             this.assignableWorkers = isCurrentVersionLeader ? activeWorkerMetrics : workersOnVersionHash;
             this.assignableLeaseCount = computeAssignableLeaseCount();
             this.leaseTakingCandidates = computeLeaseTakingCandidates();
+            this.targetAverageThroughput = computeTargetAverageThroughput(averageLeaseThroughput);
+
+            this.activeWorkerIdSet = new HashSet<>();
+            // Calculate initial ratio
+            this.activeWorkerMetrics.forEach(workerMetrics -> {
+                activeWorkerIdSet.add(workerMetrics.getWorkerId());
+                workerMetrics.setEmaAlpha(config.workerMetricsEMAAlpha());
+                if (workerMetrics.isUsingDefaultWorkerMetric()) {
+                    setOperatingRangeAndWorkerMetricsDataForDefaultWorker(
+                            workerMetrics,
+                            getTotalAssignedThroughput(workerMetrics.getWorkerId()) / targetAverageThroughput);
+                }
+            });
+        }
+
+        private double computeTargetAverageThroughput(final double averageLeaseThroughput) {
+            if (isCurrentVersionLeader) {
+                return averageLeaseThroughput * leaseList.size() / Math.max(1, activeWorkerMetrics.size());
+            }
+            final double segmentThroughput = assignableWorkers.stream()
+                    .mapToDouble(worker -> getTotalAssignedThroughput(worker.getWorkerId()))
+                    .sum();
+            return segmentThroughput / Math.max(1, assignableWorkers.size());
         }
 
         private List<WorkerMetricStats> computeLeaseTakingCandidates() {

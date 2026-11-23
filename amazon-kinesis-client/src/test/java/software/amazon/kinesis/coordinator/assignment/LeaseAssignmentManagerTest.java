@@ -59,6 +59,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsScope;
 import software.amazon.kinesis.segmenting.FleetSegmentingHandler;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats.LeaseTableWorkerMetricStats;
@@ -1418,6 +1419,43 @@ class LeaseAssignmentManagerTest {
         Mockito.verify(scope).addData(eq("NumOfLeaseReassignmentsCurrentVersion"), Mockito.anyDouble(), any(), any());
         Mockito.verify(scope, Mockito.never())
                 .addData(eq("NumOfLeaseReassignmentsDeployingVersion"), Mockito.anyDouble(), any(), any());
+    }
+
+    /**
+     * The DeployingLeader's throughput target comes from its own workers: the throughput of the leases they hold over
+     * their number. The current Leader's target is still all leases' throughput over all active workers.
+     */
+    @Test
+    void loadInMemoryStorageView_targetAverageThroughput_isScopedToTheLeadersSegment() throws Exception {
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        stubVersionFilters(Collections.singleton("newWorker"), Collections.emptySet());
+        final LeaseAssignmentManager leaseAssignmentManager = createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                Duration.ofHours(1).toMillis(),
+                System::nanoTime,
+                Integer.MAX_VALUE);
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("newWorker"));
+        workerMetricsDAO.updateMetrics(createDummyTakeWorkerMetrics("oldWorker"));
+        final Lease old1 = createDummyLease("old1", "oldWorker");
+        old1.throughputKBps(1000D);
+        final Lease old2 = createDummyLease("old2", "oldWorker");
+        old2.throughputKBps(1000D);
+        final Lease new1 = createDummyLease("new1", "newWorker");
+        new1.throughputKBps(100D);
+        populateLeasesInLeaseTable(old1, old2, new1);
+
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        final LeaseAssignmentManager.InMemoryStorageView deployingView =
+                leaseAssignmentManager.new InMemoryStorageView();
+        deployingView.loadInMemoryStorageView(new NullMetricsScope());
+        // Only newWorker's lease: 100 KB/s over 1 worker.
+        assertEquals(100D, deployingView.getTargetAverageThroughput(), 0.001);
+
+        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        final LeaseAssignmentManager.InMemoryStorageView currentView = leaseAssignmentManager.new InMemoryStorageView();
+        currentView.loadInMemoryStorageView(new NullMetricsScope());
+        // All leases: 2100 KB/s over 2 workers.
+        assertEquals(1050D, currentView.getTargetAverageThroughput(), 0.001);
     }
 
     /** Stubs the handler's version filters: which worker ids are on this leader's hash, and which have none. */

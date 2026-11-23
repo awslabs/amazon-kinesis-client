@@ -438,6 +438,22 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         assertTrue(expiredLeases.isEmpty());
     }
 
+    /**
+     * The target counts every lease the leader is responsible for, including unassigned leases, as before segmenting.
+     * worker1 holds 8 and worker2 holds 4, with 12 more leases unassigned: target = 24 / 2 = 12, so neither worker is
+     * over target and nothing moves; the unassigned leases are handled by assignExpiredOrUnassignedLeases. Counting
+     * only held leases would give a target of 6 and move 2 leases off worker1.
+     */
+    @Test
+    void balanceWorkerVariance_targetIncludesUnassignedLeases() {
+        stubStorageView(workersWithLeaseCounts("worker1", 8, "worker2", 4));
+        when(inMemoryStorageView.getAssignableLeaseCount()).thenReturn(24L);
+
+        decider.balanceWorkerVariance();
+
+        verify(inMemoryStorageView, never()).performLeaseAssignment(any(), any());
+    }
+
     @Test
     void balanceWorkerVariance_allLoadedWorkersAtTarget_emptyWorkerStealsUpToTargetMinusOne() {
         // 3 workers at target (3 leases each) and 1 new worker with 0 leases. target = ceil(9 / 4) = 3.
@@ -484,6 +500,8 @@ class LeaseCountBasedLeaseAssignmentDeciderTest {
         when(inMemoryStorageView.getWorkerToLeasesMap()).thenReturn(workerToLeasesMap);
         when(inMemoryStorageView.getActiveWorkerIdSet()).thenReturn(new HashSet<>(workerToLeasesMap.keySet()));
         when(inMemoryStorageView.getLeaseList()).thenReturn(allLeases);
+        // As for the current Leader: every lease in the table.
+        when(inMemoryStorageView.getAssignableLeaseCount()).thenReturn((long) allLeases.size());
         stubAssignableWorkers(workerToLeasesMap.keySet());
     }
 

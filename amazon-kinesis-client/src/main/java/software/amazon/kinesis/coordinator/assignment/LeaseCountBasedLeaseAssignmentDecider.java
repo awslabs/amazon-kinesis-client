@@ -118,14 +118,12 @@ public final class LeaseCountBasedLeaseAssignmentDecider implements LeaseAssignm
         }
         final Map<String, Integer> leaseCountPerActiveWorker = getActiveWorkerLeaseCounts();
 
-        // When balancing leases between workers, the target lease count should be calculated from the sum of leases for
-        // assignable workers. For example, if the leader is the DeployingLeader and there are:
-        //    - 3 workers on the current version with 150 leases
-        //    - 2 workers on deploying version with 50 leases
-        // we would expect the workers on the deploying version to have 25 leases each.
-        final int totalLeases = leaseCountPerActiveWorker.values().stream()
-                .mapToInt(Integer::intValue)
-                .sum();
+        // The target comes from the leases this leader is responsible for (getAssignableLeaseCount). For the current
+        // Leader, and with segmenting off, that is every lease in the table, including unassigned leases and leases on
+        // expired workers, as before segmenting. For the DeployingLeader it is only the leases its own workers hold.
+        // For example, with 3 workers on the current version holding 150 leases and 2 workers on the deploying
+        // version holding 50, the DeployingLeader balances its 2 workers towards 25 leases each.
+        final int totalLeases = (int) inMemoryStorageView.getAssignableLeaseCount();
         final Map<String, List<Lease>> availableLeasesByWorker = computeAvailableLeases();
         final int target = calculateTargetLeaseCount(totalLeases);
 
