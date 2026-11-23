@@ -67,6 +67,8 @@ import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -91,6 +93,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -464,6 +467,24 @@ public class PrefetchRecordsPublisherTest {
 
         verify(getRecordsRetrievalStrategy, times(MAX_SIZE)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
         assertEquals(spyQueue.size(), MAX_SIZE);
+    }
+
+    @Test
+    public void testNoMetricsScopeLeakWhileWaitingForConsumer() {
+        final long idleMillisBetweenCalls = 10L;
+        final MetricsFactory metricsFactory = mock(MetricsFactory.class);
+        final MetricsScope metricsScope = mock(MetricsScope.class);
+        when(metricsFactory.createMetrics()).thenReturn(metricsScope);
+        getRecordsCache = createPrefetchRecordsPublisher(MAX_SIZE, idleMillisBetweenCalls, metricsFactory);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        // Nothing consumes the queue, so after MAX_SIZE fetches the prefetch thread keeps waiting for the consumer.
+        verify(metricsScope, timeout(DEFAULT_TIMEOUT_MILLIS).times(MAX_SIZE)).end();
+        // Waiting for the consumer must not create metrics scopes.
+        verify(metricsFactory, after(10 * idleMillisBetweenCalls).times(MAX_SIZE))
+                .createMetrics();
+        verify(metricsScope, times(MAX_SIZE)).end();
     }
 
     // TODO: Broken tests
@@ -1021,6 +1042,12 @@ public class PrefetchRecordsPublisherTest {
 
     private PrefetchRecordsPublisher createPrefetchRecordsPublisher(
             int maxPendingProcessRecordsInput, final long idleMillisBetweenCalls) {
+        return createPrefetchRecordsPublisher(
+                maxPendingProcessRecordsInput, idleMillisBetweenCalls, new NullMetricsFactory());
+    }
+
+    private PrefetchRecordsPublisher createPrefetchRecordsPublisher(
+            int maxPendingProcessRecordsInput, final long idleMillisBetweenCalls, final MetricsFactory metricsFactory) {
         return new PrefetchRecordsPublisher(
                 maxPendingProcessRecordsInput,
                 3 * SIZE_1_MB,
@@ -1030,7 +1057,7 @@ public class PrefetchRecordsPublisherTest {
                 executorService,
                 idleMillisBetweenCalls,
                 DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
-                new NullMetricsFactory(),
+                metricsFactory,
                 PrefetchRecordsPublisherTest.class.getSimpleName(),
                 "shardId",
                 throttlingReporter,

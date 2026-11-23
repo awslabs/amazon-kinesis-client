@@ -557,8 +557,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
 
         private void makeRetrievalAttempt() {
-            MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
             if (publisherSession.prefetchCounters().shouldGetNewRecords()) {
+                MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
                 try {
                     sleepBeforeNextCall();
                     GetRecordsResponseAdapter getRecordsResult =
