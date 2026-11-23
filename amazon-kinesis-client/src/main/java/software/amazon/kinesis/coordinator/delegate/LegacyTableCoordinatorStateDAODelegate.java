@@ -27,7 +27,6 @@ import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorState;
 import software.amazon.kinesis.leases.EntityType;
@@ -87,7 +86,7 @@ public class LegacyTableCoordinatorStateDAODelegate extends CoordinatorStateDAOD
         final DescribeTableRequest request =
                 DescribeTableRequest.builder().tableName(tableName).build();
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.describeTable(request));
+            getWithTimeout(dynamoDbAsyncClient.describeTable(request), "describing table " + tableName);
             log.info("Legacy coordinator state table {} exists, delegate enabled", tableName);
             enabled = true;
         } catch (final ResourceNotFoundException e) {
