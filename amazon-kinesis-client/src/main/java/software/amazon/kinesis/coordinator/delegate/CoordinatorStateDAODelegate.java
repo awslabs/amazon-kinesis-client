@@ -88,7 +88,7 @@ public abstract class CoordinatorStateDAODelegate {
     private final Map<String, BiFunction<String, Map<String, AttributeValue>, CoordinatorState>> deserializers =
             new HashMap<>();
 
-    /** Upper bound on how long a single coordinator-state read waits for DynamoDB. */
+    /** Upper bound on how long a single coordinator-state call waits for DynamoDB. */
     private final Duration dynamoDbRequestTimeout;
 
     public CoordinatorStateDAODelegate(
@@ -170,7 +170,7 @@ public abstract class CoordinatorStateDAODelegate {
                 ScanRequest.builder().tableName(tableName).consistentRead(true).build();
 
         try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(request));
+            ScanResponse response = getWithTimeout(dynamoDbAsyncClient.scan(request), "scanning coordinatorState");
             final List<CoordinatorState> stateList = new ArrayList<>();
             while (Objects.nonNull(response)) {
                 log.debug("Scan response {}", response);
@@ -181,7 +181,8 @@ public abstract class CoordinatorStateDAODelegate {
                             .exclusiveStartKey(response.lastEvaluatedKey())
                             .build();
                     log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
+                    response =
+                            getWithTimeout(dynamoDbAsyncClient.scan(continuationRequest), "scanning coordinatorState");
                 } else {
                     log.debug("Scan finished");
                     response = null;
@@ -226,7 +227,8 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(scanRequest));
+            ScanResponse response = getWithTimeout(
+                    dynamoDbAsyncClient.scan(scanRequest), "scanning coordinatorState of type " + entityType);
             final List<CoordinatorState> stateList = new ArrayList<>();
 
             while (Objects.nonNull(response)) {
@@ -238,7 +240,8 @@ public abstract class CoordinatorStateDAODelegate {
                             .exclusiveStartKey(response.lastEvaluatedKey())
                             .build();
                     log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
+                    response =
+                            getWithTimeout(dynamoDbAsyncClient.scan(continuationRequest), "scanning coordinatorState");
                 } else {
                     log.debug("Scan finished");
                     response = null;
@@ -278,7 +281,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.putItem(request));
+            getWithTimeout(dynamoDbAsyncClient.putItem(request), "creating coordinatorState " + state.getKey());
         } catch (final ConditionalCheckFailedException e) {
             log.info("Not creating coordinator state because the key already exists");
             return false;
@@ -319,9 +322,8 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            // Bounded: this read runs inside the leader decider's synchronized isLeader(), so an unbounded wait
-            // would stall every leadership check behind one slow call.
-            final GetItemResponse result = getWithTimeout(dynamoDbAsyncClient.getItem(request), key);
+            final GetItemResponse result =
+                    getWithTimeout(dynamoDbAsyncClient.getItem(request), "getting coordinatorState " + key);
 
             final Map<String, AttributeValue> dynamoRecord = result.item();
             if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
@@ -360,7 +362,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .key(getCoordinatorStateKey(key))
                 .build();
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.deleteItem(request));
+            getWithTimeout(dynamoDbAsyncClient.deleteItem(request), "deleting coordinatorState " + key);
         } catch (final ProvisionedThroughputExceededException e) {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
@@ -402,7 +404,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
+            getWithTimeout(dynamoDbAsyncClient.updateItem(request), "updating coordinatorState " + state.getKey());
         } catch (final ConditionalCheckFailedException e) {
             log.debug("CoordinatorState update {} failed because conditions were not met", state);
             return false;
@@ -458,7 +460,22 @@ public abstract class CoordinatorStateDAODelegate {
         return c;
     }
 
-    private <T> T getWithTimeout(final CompletableFuture<T> future, final String key) throws DependencyException {
+    /**
+     * Waits for a DynamoDB call for at most the configured DynamoDB request timeout, cancelling the call if it
+     * doesn't finish in time. Coordinator-state calls run on the leader decider, the migration monitors and the
+     * worker heartbeat, so an unbounded wait would stall them all behind one slow call.
+     *
+     * <p>Like {@link FutureUtils#unwrappingFuture}, an SDK exception from the call is rethrown as-is, so callers can
+     * keep mapping {@code ConditionalCheckFailedException}, {@code ResourceNotFoundException} and the rest.</p>
+     *
+     * @param future the in-flight DynamoDB call
+     * @param operation what the call does, for the timeout message, e.g. "getting coordinatorState Leader"
+     * @return the call's response
+     * @throws DependencyException if the call times out, the thread is interrupted, or the call fails with a
+     *     checked exception
+     */
+    protected <T> T getWithTimeout(final CompletableFuture<T> future, final String operation)
+            throws DependencyException {
         try {
             return FutureUtils.resolveOrCancelFuture(future, dynamoDbRequestTimeout);
         } catch (final ExecutionException e) {
@@ -472,10 +489,7 @@ public abstract class CoordinatorStateDAODelegate {
             throw new DependencyException(e);
         } catch (final TimeoutException e) {
             throw new DependencyException(
-                    String.format(
-                            "Timed out after %s getting coordinatorState %s from %s",
-                            dynamoDbRequestTimeout, key, tableName),
-                    e);
+                    String.format("Timed out after %s %s in %s", dynamoDbRequestTimeout, operation, tableName), e);
         }
     }
 
