@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.annotation.concurrent.ThreadSafe;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
@@ -38,6 +39,7 @@ import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
 import software.amazon.kinesis.coordinator.delegate.CoordinatorStateDAODelegate;
 import software.amazon.kinesis.coordinator.delegate.LeaseTableCoordinatorStateDAODelegate;
@@ -123,6 +125,9 @@ public class CoordinatorStateDAO {
     private final LeaseTableCoordinatorStateDAODelegate leaseTableDaoDelegate;
     private final LegacyTableCoordinatorStateDAODelegate legacyTableDaoDelegate;
     private final TableMigrationStatusProvider tableMigrationStatusProvider;
+    /** Upper bound on how long a DynamoDB call made directly by this class waits for a response. */
+    private final Duration dynamoDbRequestTimeout;
+
     private volatile TableMigrationStatus cachedStatus;
     private volatile boolean initialized;
 
@@ -146,6 +151,7 @@ public class CoordinatorStateDAO {
         this.legacyTableDaoDelegate = new LegacyTableCoordinatorStateDAODelegate(
                 dynamoDbAsyncClient, coordinatorStateTableConfig, dynamoDbRequestTimeout);
         this.tableMigrationStatusProvider = tableMigrationStatusProvider;
+        this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         this.initialized = false;
     }
 
@@ -439,8 +445,8 @@ public class CoordinatorStateDAO {
      * <p>Needs {@code dynamodb:ConditionCheckItem} and {@code dynamodb:PutItem} on that table.</p>
      *
      * @return true if written, false if the lock isn't owned by {@code ownerName}
-     * @throws DependencyException if DynamoDB fails, or the transaction is cancelled for another reason (e.g. a
-     *     conflicting transaction); the caller retries
+     * @throws DependencyException if DynamoDB fails, the call doesn't finish within the DynamoDB request timeout, or
+     *     the transaction is cancelled for another reason (e.g. a conflicting transaction); the caller retries
      */
     public boolean putCoordinatorStateIfLockOwnedBy(
             @NonNull final CoordinatorState state, @NonNull final String lockKey, @NonNull final String ownerName)
@@ -470,12 +476,17 @@ public class CoordinatorStateDAO {
                         .build())
                 .build());
         try {
-            dynamoDbAsyncClient
-                    .transactWriteItems(TransactWriteItemsRequest.builder()
+            FutureUtils.resolveOrCancelFuture(
+                    dynamoDbAsyncClient.transactWriteItems(TransactWriteItemsRequest.builder()
                             .transactItems(items)
-                            .build())
-                    .get();
+                            .build()),
+                    dynamoDbRequestTimeout);
             return true;
+        } catch (final TimeoutException e) {
+            throw new DependencyException(
+                    String.format(
+                            "Timed out after %s on the fenced write of %s", dynamoDbRequestTimeout, state.getKey()),
+                    e);
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new DependencyException("TransactWriteItems interrupted", e);

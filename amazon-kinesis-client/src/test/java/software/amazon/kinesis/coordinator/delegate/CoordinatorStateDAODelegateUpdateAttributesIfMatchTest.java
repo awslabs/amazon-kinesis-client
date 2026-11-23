@@ -14,9 +14,11 @@ import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedExce
 import software.amazon.awssdk.services.dynamodb.model.ReturnValuesOnConditionCheckFailure;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -31,7 +33,7 @@ class CoordinatorStateDAODelegateUpdateAttributesIfMatchTest {
 
     private final DynamoDbAsyncClient client = mock(DynamoDbAsyncClient.class);
     private final CoordinatorStateDAODelegate delegate =
-            new LeaseTableCoordinatorStateDAODelegate(client, "table", Duration.ofSeconds(1));
+            new LeaseTableCoordinatorStateDAODelegate(client, "table", Duration.ofMillis(200));
 
     private final Map<String, AttributeValue> updates =
             Collections.singletonMap("heartbeat", AttributeValue.fromN("2"));
@@ -84,5 +86,18 @@ class CoordinatorStateDAODelegateUpdateAttributesIfMatchTest {
 
         assertTrue(result.isPresent());
         assertTrue(result.get().isEmpty());
+    }
+
+    @Test
+    void updateAttributesIfMatch_timesOut_whenDynamoDbNeverResponds() {
+        final CompletableFuture<UpdateItemResponse> neverCompletes = new CompletableFuture<>();
+        when(client.updateItem(any(UpdateItemRequest.class))).thenReturn(neverCompletes);
+
+        final long start = System.currentTimeMillis();
+        assertThrows(
+                DependencyException.class, () -> delegate.updateAttributesIfMatch("LeaderVersion", updates, expected));
+
+        assertTrue(System.currentTimeMillis() - start < 5_000);
+        assertTrue(neverCompletes.isCancelled());
     }
 }

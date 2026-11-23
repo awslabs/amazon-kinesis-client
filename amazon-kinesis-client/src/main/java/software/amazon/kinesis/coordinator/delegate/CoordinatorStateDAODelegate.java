@@ -480,7 +480,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
                 .build();
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
+            getWithTimeout(dynamoDbAsyncClient.updateItem(request), "updating attributes of coordinatorState " + key);
             return Optional.empty();
         } catch (final ConditionalCheckFailedException e) {
             return Optional.of(e.hasItem() ? e.item() : Collections.emptyMap());
