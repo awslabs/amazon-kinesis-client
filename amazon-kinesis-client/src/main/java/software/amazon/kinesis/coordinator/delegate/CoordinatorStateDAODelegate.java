@@ -21,6 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
@@ -85,6 +88,9 @@ public abstract class CoordinatorStateDAODelegate {
     private final Map<String, BiFunction<String, Map<String, AttributeValue>, CoordinatorState>> deserializers =
             new HashMap<>();
 
+    /** Upper bound on how long a single coordinator-state call waits for DynamoDB. */
+    private final Duration dynamoDbRequestTimeout;
+
     public CoordinatorStateDAODelegate(
             final DynamoDbAsyncClient dynamoDbAsyncClient,
             final String tableName,
@@ -94,6 +100,7 @@ public abstract class CoordinatorStateDAODelegate {
         this.tableName = tableName;
         this.partitionKeyAttributeName = partitionKeyAttributeName;
         this.dynamoDbSyncClient = new DynamoDbAsyncToSyncClientAdapter(dynamoDbAsyncClient, dynamoDbRequestTimeout);
+        this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         registerDeserializers();
     }
 
@@ -163,7 +170,7 @@ public abstract class CoordinatorStateDAODelegate {
                 ScanRequest.builder().tableName(tableName).consistentRead(true).build();
 
         try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(request));
+            ScanResponse response = getWithTimeout(dynamoDbAsyncClient.scan(request), "scanning coordinatorState");
             final List<CoordinatorState> stateList = new ArrayList<>();
             while (Objects.nonNull(response)) {
                 log.debug("Scan response {}", response);
@@ -174,7 +181,8 @@ public abstract class CoordinatorStateDAODelegate {
                             .exclusiveStartKey(response.lastEvaluatedKey())
                             .build();
                     log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
+                    response =
+                            getWithTimeout(dynamoDbAsyncClient.scan(continuationRequest), "scanning coordinatorState");
                 } else {
                     log.debug("Scan finished");
                     response = null;
@@ -219,7 +227,8 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            ScanResponse response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(scanRequest));
+            ScanResponse response = getWithTimeout(
+                    dynamoDbAsyncClient.scan(scanRequest), "scanning coordinatorState of type " + entityType);
             final List<CoordinatorState> stateList = new ArrayList<>();
 
             while (Objects.nonNull(response)) {
@@ -231,7 +240,8 @@ public abstract class CoordinatorStateDAODelegate {
                             .exclusiveStartKey(response.lastEvaluatedKey())
                             .build();
                     log.debug("Scan request {}", continuationRequest);
-                    response = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.scan(continuationRequest));
+                    response =
+                            getWithTimeout(dynamoDbAsyncClient.scan(continuationRequest), "scanning coordinatorState");
                 } else {
                     log.debug("Scan finished");
                     response = null;
@@ -271,7 +281,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.putItem(request));
+            getWithTimeout(dynamoDbAsyncClient.putItem(request), "creating coordinatorState " + state.getKey());
         } catch (final ConditionalCheckFailedException e) {
             log.info("Not creating coordinator state because the key already exists");
             return false;
@@ -312,7 +322,8 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            final GetItemResponse result = FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.getItem(request));
+            final GetItemResponse result =
+                    getWithTimeout(dynamoDbAsyncClient.getItem(request), "getting coordinatorState " + key);
 
             final Map<String, AttributeValue> dynamoRecord = result.item();
             if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
@@ -351,7 +362,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .key(getCoordinatorStateKey(key))
                 .build();
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.deleteItem(request));
+            getWithTimeout(dynamoDbAsyncClient.deleteItem(request), "deleting coordinatorState " + key);
         } catch (final ProvisionedThroughputExceededException e) {
             log.warn(
                     "Provisioned throughput on {} has exceeded. It is recommended to increase the IOPs"
@@ -393,7 +404,7 @@ public abstract class CoordinatorStateDAODelegate {
                 .build();
 
         try {
-            FutureUtils.unwrappingFuture(() -> dynamoDbAsyncClient.updateItem(request));
+            getWithTimeout(dynamoDbAsyncClient.updateItem(request), "updating coordinatorState " + state.getKey());
         } catch (final ConditionalCheckFailedException e) {
             log.debug("CoordinatorState update {} failed because conditions were not met", state);
             return false;
@@ -445,8 +456,41 @@ public abstract class CoordinatorStateDAODelegate {
         // Fallback: generic CoordinatorState for unknown entity types (e.g., Leader lock)
         final CoordinatorState c =
                 CoordinatorState.builder().key(keyValue).attributes(attributes).build();
-        log.info("Retrieved generic coordinatorState {} attributes {}", c, attributes);
+        log.debug("Retrieved generic coordinatorState {} attributes {}", c, attributes);
         return c;
+    }
+
+    /**
+     * Waits for a DynamoDB call for at most the configured DynamoDB request timeout, cancelling the call if it
+     * doesn't finish in time. Coordinator-state calls run on the leader decider, the migration monitors and the
+     * worker heartbeat, so an unbounded wait would stall them all behind one slow call.
+     *
+     * <p>Like {@link FutureUtils#unwrappingFuture}, an SDK exception from the call is rethrown as-is, so callers can
+     * keep mapping {@code ConditionalCheckFailedException}, {@code ResourceNotFoundException} and the rest.</p>
+     *
+     * @param future the in-flight DynamoDB call
+     * @param operation what the call does, for the timeout message, e.g. "getting coordinatorState Leader"
+     * @return the call's response
+     * @throws DependencyException if the call times out, the thread is interrupted, or the call fails with a
+     *     checked exception
+     */
+    protected <T> T getWithTimeout(final CompletableFuture<T> future, final String operation)
+            throws DependencyException {
+        try {
+            return FutureUtils.resolveOrCancelFuture(future, dynamoDbRequestTimeout);
+        } catch (final ExecutionException e) {
+            // Rethrow the SDK exception so the caller's existing catch blocks map it as before.
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new DependencyException(e.getCause());
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DependencyException(e);
+        } catch (final TimeoutException e) {
+            throw new DependencyException(
+                    String.format("Timed out after %s %s in %s", dynamoDbRequestTimeout, operation, tableName), e);
+        }
     }
 
     private Map<String, AttributeValue> toDynamoRecord(final CoordinatorState state) {
