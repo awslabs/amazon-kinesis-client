@@ -92,6 +92,12 @@ public final class LeaseAssignmentManager {
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
+    // Fleet segmenting metrics, emitted only while segmenting is active.
+    static final String METRIC_NUM_WORKERS_ON_CURRENT_VERSION = "NumWorkersOnCurrentVersion";
+    static final String METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION = "NumWorkersOnDeployingVersion";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION = "NumOfLeaseReassignmentsCurrentVersion";
+    static final String METRIC_DEPLOYING_LEADER_RUNS_SKIPPED = "DeployingLeaderRunsSkipped";
+    static final String METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION = "NumOfLeaseReassignmentsDeployingVersion";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
 
@@ -222,11 +228,22 @@ public final class LeaseAssignmentManager {
                 log.info(
                         "DeployingLeader {}: every active worker is on its version; skipping assignment this run.",
                         currentWorkerId);
+                metricsScope.addData(METRIC_DEPLOYING_LEADER_RUNS_SKIPPED, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 success = true;
                 return;
             }
 
             publishLeaseAndWorkerCountMetrics(metricsScope, inMemoryStorageView);
+            // Which role this run is for, so DeployingLeader runs can be told apart from current Leader runs, and how
+            // the active fleet splits between the two versions.
+            if (segmentingHandler.isEnabled()) {
+                metricsScope.addData(
+                        inMemoryStorageView.isCurrentVersionLeader() ? "CurrentLeaderRuns" : "DeployingLeaderRuns",
+                        1,
+                        StandardUnit.COUNT,
+                        MetricsLevel.SUMMARY);
+                publishWorkersPerVersionMetrics(metricsScope, inMemoryStorageView);
+            }
 
             final LeaseAssignmentDecider leaseAssignmentDecider = getLeaseAssignmentDecider(inMemoryStorageView);
 
@@ -286,12 +303,19 @@ public final class LeaseAssignmentManager {
                 leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
                         metricsScope, "BalanceWorkerVariance", balanceWorkerVarianceStartTime, MetricsLevel.DETAILED);
+                final int reassignments = inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
+                        - totalNewAssignmentBeforeWorkerVarianceBalancing;
                 metricsScope.addData(
-                        "NumOfLeasesReassignment",
-                        inMemoryStorageView.leaseToNewAssignedWorkerMap.size()
-                                - totalNewAssignmentBeforeWorkerVarianceBalancing,
-                        StandardUnit.COUNT,
-                        MetricsLevel.SUMMARY);
+                        "NumOfLeasesReassignment", reassignments, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                if (segmentingHandler.isEnabled()) {
+                    metricsScope.addData(
+                            inMemoryStorageView.isCurrentVersionLeader()
+                                    ? METRIC_NUM_LEASE_REASSIGNMENTS_CURRENT_VERSION
+                                    : METRIC_NUM_LEASE_REASSIGNMENTS_DEPLOYING_VERSION,
+                            reassignments,
+                            StandardUnit.COUNT,
+                            MetricsLevel.SUMMARY);
+                }
             }
 
             if (inMemoryStorageView.leaseToNewAssignedWorkerMap.isEmpty()) {
@@ -432,6 +456,26 @@ public final class LeaseAssignmentManager {
             failedAssignmentCounter.incrementAndGet();
         }
         return response;
+    }
+
+    /**
+     * Publishes the number of active workers on this leader's version, so each leader reports only its own segment
+     * and nothing is published twice. The current leader publishes NumWorkersOnCurrentVersion: workers on its hash
+     * plus workers with no or a stale hash (old or rolled-back code). The deploying leader publishes
+     * NumWorkersOnDeployingVersion: workers on its own fresh hash.
+     */
+    private void publishWorkersPerVersionMetrics(
+            final MetricsScope metricsScope, final InMemoryStorageView inMemoryStorageView) {
+        // The leader's segment: the same set of workers the deciders balance (leaseTakingCandidates).
+        final int workersInSegment =
+                inMemoryStorageView.getLeaseTakingCandidates().size();
+        metricsScope.addData(
+                inMemoryStorageView.isCurrentVersionLeader()
+                        ? METRIC_NUM_WORKERS_ON_CURRENT_VERSION
+                        : METRIC_NUM_WORKERS_ON_DEPLOYING_VERSION,
+                workersInSegment,
+                StandardUnit.COUNT,
+                MetricsLevel.SUMMARY);
     }
 
     private void publishLeaseAndWorkerCountMetrics(
