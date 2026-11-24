@@ -263,6 +263,35 @@ public class LeaseManagementConfig {
     private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
 
     /**
+     * Flag to enable the rolling deployment system.
+     *
+     * <p>
+     * If set to true, workers will emit a verisonHash to DDB. If a new LeaseAssignmentStrategy gets deployed to the
+     * fleet such that updated workers start to emit a different version, then the new strategy will only be applied to
+     * the workers that are on the same version. Note that as a prerequisite, all existing workers must be emitting
+     * their version (i.e. this flag must be set to true for the next deployment to use the rolling deployment system).
+     * </p>
+     *
+     * <p>
+     * If set to false, then the new assignment algorithm will take effect on all workers when a worker with the updated
+     * version becomes the leader of the fleet.
+     *
+     * <p>
+     * Single-table migration: the rolling deployment system works for applications on a single lease table, and for
+     * applications on the multi-table setup that are not migrating ({@code
+     * CoordinatorConfig#migrateAllEntitiesToLeaseTable()} false, table migration status INIT or DEPLOYED). It is
+     * turned off on a worker with {@code migrateAllEntitiesToLeaseTable} set to true until the table migration is
+     * COMPLETE, and on any worker while its table migration status is PENDING. While it is off, a worker behaves as if
+     * this flag were false: do not change the {@link LeaseAssignmentStrategy} during the migration. If a migration
+     * rollback (back to {@code migrateAllEntitiesToLeaseTable} false) leaves the migration unable to reach PENDING,
+     * delete the {@code LeaderVersion} and {@code DeployingLeaderVersion} items from the lease table.
+     * </p>
+     *
+     * <p>Default value: false</p>
+     */
+    private boolean enableRollingDeploymentSystem = false;
+
+    /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
      * already existing tables.
      *

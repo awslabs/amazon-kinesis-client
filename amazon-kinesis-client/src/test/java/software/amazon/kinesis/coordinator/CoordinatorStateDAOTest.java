@@ -17,6 +17,7 @@ package software.amazon.kinesis.coordinator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
@@ -51,6 +52,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
+import software.amazon.kinesis.segmenting.LeaderVersionState;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -430,6 +432,87 @@ public class CoordinatorStateDAOTest {
 
         Assertions.assertTrue(foundKey1, "key1 should still exist");
         Assertions.assertTrue(foundKey3, "key3 should still exist");
+    }
+
+    /** F1: the version item is written only while the lock item names the writer as owner. */
+    @Test
+    public void testPutCoordinatorStateIfLockOwnedBy() throws Exception {
+        final CoordinatorStateDAO dao = createDAO(getCoordinatorStateConfig("testPutCoordinatorStateIfLockOwnedBy"));
+        dao.initialize();
+        final AmazonDynamoDBLockClient lockClient = new AmazonDynamoDBLockClient(dao.getLeaseTableDaoDelegate()
+                .getDDBLockClientOptionsBuilder()
+                .withOwnerName("worker-2")
+                .withCreateHeartbeatBackgroundThread(false)
+                .build());
+        Assertions.assertTrue(lockClient
+                .tryAcquireLock(AcquireLockOptions.builder(LEADER_HASH_KEY).build())
+                .isPresent());
+
+        // worker-1 lost the lock (e.g. its write was still in flight when worker-2 took it): rejected, not written.
+        Assertions.assertFalse(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "old", "worker-1", 1L),
+                LEADER_HASH_KEY,
+                "worker-1"));
+        Assertions.assertNull(dao.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY));
+
+        // worker-2 owns the lock: written in full.
+        Assertions.assertTrue(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "new", "worker-2", 2L),
+                LEADER_HASH_KEY,
+                "worker-2"));
+        final LeaderVersionState written =
+                (LeaderVersionState) dao.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY);
+        Assertions.assertEquals("new", written.getVersionHash());
+        Assertions.assertEquals("worker-2", written.getOwnerName());
+
+        // The lock is released (deleted): nobody owns it, so nothing is written.
+        lockClient.releaseLock(
+                lockClient.getLock(LEADER_HASH_KEY, Optional.empty()).get());
+        Assertions.assertFalse(dao.putCoordinatorStateIfLockOwnedBy(
+                new LeaderVersionState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY, "late", "worker-2", 3L),
+                LEADER_HASH_KEY,
+                "worker-2"));
+        Assertions.assertEquals(
+                "new",
+                ((LeaderVersionState) dao.getCoordinatorState(LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY))
+                        .getVersionHash());
+    }
+
+    @Test
+    public void testUpdateAttributesIfMatch() throws Exception {
+        final CoordinatorStateDAO dao = createDAO(getCoordinatorStateConfig("testUpdateAttributesIfMatch"));
+        dao.initialize();
+        final String key = LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY;
+        final Map<String, AttributeValue> heartbeat =
+                Collections.singletonMap(LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME, AttributeValue.fromN("2"));
+        final Map<String, AttributeValue> ownedByWorker1 = Collections.singletonMap(
+                LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME, AttributeValue.fromS("worker-1"));
+
+        // Missing item: not created, and reported as an empty item.
+        final Optional<Map<String, AttributeValue>> missing =
+                dao.updateAttributesIfMatch(key, heartbeat, ownedByWorker1);
+        Assertions.assertTrue(missing.isPresent());
+        Assertions.assertTrue(missing.get().isEmpty());
+        Assertions.assertNull(dao.getCoordinatorState(key));
+
+        dao.createCoordinatorStateIfNotExists(new LeaderVersionState(key, "v1", "worker-1", 1L));
+
+        // Matching condition: updated.
+        Assertions.assertFalse(
+                dao.updateAttributesIfMatch(key, heartbeat, ownedByWorker1).isPresent());
+        Assertions.assertEquals(
+                Long.valueOf(2L), ((LeaderVersionState) dao.getCoordinatorState(key)).getHeartbeatMillis());
+
+        // Failed condition: not updated. (Real DynamoDB also returns the item as it was; DynamoDB Local doesn't, so
+        // that is covered with a mocked client in CoordinatorStateDAODelegateUpdateAttributesIfMatchTest.)
+        final Optional<Map<String, AttributeValue>> failed = dao.updateAttributesIfMatch(
+                key,
+                Collections.singletonMap(LeaderVersionState.HEARTBEAT_ATTRIBUTE_NAME, AttributeValue.fromN("3")),
+                Collections.singletonMap(
+                        LeaderVersionState.OWNER_NAME_ATTRIBUTE_NAME, AttributeValue.fromS("worker-2")));
+        Assertions.assertTrue(failed.isPresent());
+        Assertions.assertEquals(
+                Long.valueOf(2L), ((LeaderVersionState) dao.getCoordinatorState(key)).getHeartbeatMillis());
     }
 
     private CoordinatorStateTableConfig getCoordinatorStateConfig(final String applicationName) {

@@ -18,9 +18,11 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
@@ -146,6 +148,16 @@ public class LegacyTableCoordinatorStateDAODelegate extends CoordinatorStateDAOD
             throw new InvalidStateException("Legacy table does not exist, cannot update coordinator state");
         }
         return super.updateCoordinatorStateWithExpectation(state, expectations);
+    }
+
+    @Override
+    public Optional<Map<String, AttributeValue>> updateAttributesIfMatch(
+            final String key, final Map<String, AttributeValue> updates, final Map<String, AttributeValue> expected)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        if (!enabled) {
+            throw new InvalidStateException("Legacy table does not exist, cannot update coordinator state");
+        }
+        return super.updateAttributesIfMatch(key, updates, expected);
     }
 
     @Override

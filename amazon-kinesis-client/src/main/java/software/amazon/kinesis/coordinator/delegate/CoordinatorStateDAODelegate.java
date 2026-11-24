@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -47,6 +48,7 @@ import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExcee
 import software.amazon.awssdk.services.dynamodb.model.Put;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.ReturnValuesOnConditionCheckFailure;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
@@ -64,6 +66,7 @@ import software.amazon.kinesis.leases.EntityType;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.segmenting.LeaderVersionState;
 
 /**
  * Data Access Object to abstract accessing {@link CoordinatorState} from
@@ -121,6 +124,11 @@ public abstract class CoordinatorStateDAODelegate {
         deserializers.put(
                 EntityType.TABLE_MIGRATION.getDdbValue(),
                 (key, attributes) -> TableMigrationState.deserialize(key, new HashMap<>(attributes)));
+        // Leader lock items share this entity type. deserialize returns null for them, so they fall back to the
+        // generic CoordinatorState below; only the leader version items become LeaderVersionState.
+        deserializers.put(
+                EntityType.LEADER_LOCK.getDdbValue(),
+                (key, attributes) -> LeaderVersionState.deserialize(key, attributes));
     }
 
     /**
@@ -424,6 +432,66 @@ public abstract class CoordinatorStateDAODelegate {
 
         log.info("Coordinator state updated {}", state);
         return true;
+    }
+
+    /**
+     * Sets {@code updates} on the item {@code key} only if the item exists and each attribute in {@code expected} has
+     * the given value. If the condition fails, DynamoDB returns the item as it was
+     * ({@code ReturnValuesOnConditionCheckFailure} {@code ALL_OLD}), so the caller can see why without a second read.
+     *
+     * @return empty if the item was updated; otherwise the item's attributes when the condition failed, or an empty
+     *     map if the item doesn't exist
+     * @throws InvalidStateException if table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    public Optional<Map<String, AttributeValue>> updateAttributesIfMatch(
+            @NonNull final String key,
+            @NonNull final Map<String, AttributeValue> updates,
+            @NonNull final Map<String, AttributeValue> expected)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        final Map<String, String> names = new HashMap<>();
+        final Map<String, AttributeValue> values = new HashMap<>();
+        names.put("#pk", partitionKeyAttributeName);
+        final List<String> sets = new ArrayList<>();
+        int i = 0;
+        for (final Map.Entry<String, AttributeValue> update : updates.entrySet()) {
+            names.put("#u" + i, update.getKey());
+            values.put(":u" + i, update.getValue());
+            sets.add("#u" + i + " = :u" + i);
+            i++;
+        }
+        final List<String> conditions = new ArrayList<>();
+        conditions.add("attribute_exists(#pk)");
+        i = 0;
+        for (final Map.Entry<String, AttributeValue> expectation : expected.entrySet()) {
+            names.put("#e" + i, expectation.getKey());
+            values.put(":e" + i, expectation.getValue());
+            conditions.add("#e" + i + " = :e" + i);
+            i++;
+        }
+        final UpdateItemRequest request = UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(Collections.singletonMap(partitionKeyAttributeName, AttributeValue.fromS(key)))
+                .updateExpression("SET " + String.join(", ", sets))
+                .conditionExpression(String.join(" AND ", conditions))
+                .expressionAttributeNames(names)
+                .expressionAttributeValues(values)
+                .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
+                .build();
+        try {
+            getWithTimeout(dynamoDbAsyncClient.updateItem(request), "updating attributes of coordinatorState " + key);
+            return Optional.empty();
+        } catch (final ConditionalCheckFailedException e) {
+            return Optional.of(e.hasItem() ? e.item() : Collections.emptyMap());
+        } catch (final ProvisionedThroughputExceededException e) {
+            throw new ProvisionedThroughputException(e);
+        } catch (final ResourceNotFoundException e) {
+            throw new InvalidStateException(String.format(
+                    "Cannot update coordinatorState for key %s, because table %s does not exist", key, tableName));
+        } catch (final DynamoDbException e) {
+            throw new DependencyException(e);
+        }
     }
 
     private Map<String, AttributeValue> getCoordinatorStateKey(@NonNull final String key) {
