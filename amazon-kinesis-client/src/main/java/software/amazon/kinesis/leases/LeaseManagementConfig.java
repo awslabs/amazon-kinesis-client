@@ -263,21 +263,52 @@ public class LeaseManagementConfig {
     private LeaseAssignmentStrategy leaseAssignmentStrategy = LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE;
 
     /**
-     * Flag to enable the rolling deployment system.
+     * Whether to enable fleet segmenting for lease assignment.
      *
      * <p>
-     * If set to true, workers will emit a verisonHash to DDB. If a new LeaseAssignmentStrategy gets deployed to the
-     * fleet such that updated workers start to emit a different version, then the new strategy will only be applied to
-     * the workers that are on the same version. Note that as a prerequisite, all existing workers must be emitting
-     * their version (i.e. this flag must be set to true for the next deployment to use the rolling deployment system).
+     * Fleet segmenting lets you change the {@link LeaseAssignmentStrategy} with a rolling deployment, without the new
+     * strategy taking over the whole fleet as soon as one updated worker becomes leader. Each worker reports a version
+     * derived from its lease assignment strategy. While the fleet runs two versions, it is split into two segments,
+     * each with its own leader:
+     * </p>
+     * <ul>
+     *     <li>The current Leader keeps assigning leases among workers on the current version, using the current
+     *     strategy. It also assigns unassigned and expired leases.</li>
+     *     <li>A DeployingLeader, elected from the workers on the new version, balances leases among those workers only,
+     *     using the new strategy.</li>
+     * </ul>
+     * <p>
+     * Neither leader moves leases away from workers in the other segment. Once every active worker runs the new
+     * version, the DeployingLeader becomes the Leader and the fleet is one segment again. If the deployment is rolled
+     * back, the new segment empties and the current Leader keeps the fleet.
      * </p>
      *
      * <p>
-     * If set to false, then the new assignment algorithm will take effect on all workers when a worker with the updated
-     * version becomes the leader of the fleet.
+     * To use it, enable this flag on every worker in one deployment, then change the {@link LeaseAssignmentStrategy}
+     * in a later deployment. The workers already in the fleet must report their version before the new strategy ships.
+     * Enabling the flag and changing the strategy in the same deployment does not segment the fleet: the new strategy
+     * takes effect on all workers when an updated worker becomes leader, as if this flag were false.
+     * </p>
      *
      * <p>
-     * Single-table migration: the rolling deployment system works for applications on a single lease table, and for
+     * Deployments that don't change the {@link LeaseAssignmentStrategy} keep every worker on one version, so they don't
+     * segment the fleet.
+     * </p>
+     *
+     * <p>
+     * If set to false, a new lease assignment strategy takes effect on all workers when a worker with the new strategy
+     * becomes the leader of the fleet.
+     * </p>
+     *
+     * <p>
+     * Permissions: the leader writes its version only while it holds the leader lock, as one transaction with a check
+     * on the lock item. This needs {@code dynamodb:ConditionCheckItem} on the table that holds the leader lock (the
+     * lease table, or the coordinator state table on the multi-table setup), in addition to the permissions KCL
+     * already uses.
+     * </p>
+     *
+     * <p>
+     * Single-table migration: fleet segmenting works for applications on a single lease table, and for
      * applications on the multi-table setup that are not migrating ({@code
      * CoordinatorConfig#migrateAllEntitiesToLeaseTable()} false, table migration status INIT or DEPLOYED). It is
      * turned off on a worker with {@code migrateAllEntitiesToLeaseTable} set to true until the table migration is
@@ -289,7 +320,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: false</p>
      */
-    private boolean enableRollingDeploymentSystem = false;
+    private boolean enableFleetSegmentingForLeaseAssignment = false;
 
     /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update

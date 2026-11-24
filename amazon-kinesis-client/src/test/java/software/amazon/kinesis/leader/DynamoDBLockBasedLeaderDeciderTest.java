@@ -180,7 +180,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 mock(software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient.class),
                 mock(software.amazon.awssdk.services.kinesis.KinesisAsyncClient.class),
                 newWorkerId);
-        config.enableRollingDeploymentSystem(true);
+        config.enableFleetSegmentingForLeaseAssignment(true);
         // The handler and decider share one DAO, as in the Scheduler, so the version DAO sees the decider's locks.
         final CoordinatorStateDAO sharedDao = newDao();
         final FleetSegmentingHandler realHandler =
@@ -546,7 +546,7 @@ class DynamoDBLockBasedLeaderDeciderTest {
                 mock(software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient.class),
                 mock(software.amazon.awssdk.services.kinesis.KinesisAsyncClient.class),
                 workerId);
-        config.enableRollingDeploymentSystem(true);
+        config.enableFleetSegmentingForLeaseAssignment(true);
         return config;
     }
 

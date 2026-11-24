@@ -55,7 +55,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
-        config.enableRollingDeploymentSystem(true);
+        config.enableFleetSegmentingForLeaseAssignment(true);
         config.leaseAssignmentStrategy(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
         handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
     }
@@ -164,7 +164,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void isCurrentVersionLeader_returnsTrue_whenDisabled() {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertTrue(disabledHandler.isCurrentVersionLeader());
@@ -173,7 +173,7 @@ public class FleetSegmentingHandlerTest {
     /** A disabled worker's metrics carry no properties, as before segmenting. */
     @Test
     void generateVersionHashWithLastUpdatedTimeMap_returnsNull_whenDisabled() {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         final FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertNull(disabledHandler.generateVersionHashWithLastUpdatedTimeMap());
@@ -414,7 +414,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertFalse(disabledHandler.isEnabled());
@@ -422,7 +422,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getTargetLeaderLockKey_returnsLeaderKey_whenDisabled() throws Exception {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
 
@@ -505,7 +505,7 @@ public class FleetSegmentingHandlerTest {
         Mockito.verify(mockVersionHeartbeatExecutor)
                 .scheduleAtFixedRate(any(Runnable.class), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
 
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         final ScheduledExecutorService disabledExecutor = mock(ScheduledExecutorService.class);
         new FleetSegmentingHandler(config, mockCoordinatorStateDAO, disabledExecutor);
 

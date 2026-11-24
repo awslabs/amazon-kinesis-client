@@ -20,7 +20,7 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
- * Component responsible for handling the rolling deployment system. If enabled, workers that are getting deployed with
+ * Component responsible for fleet segmenting for lease assignment. If enabled, workers that are getting deployed with
  * a new lease assignment algorithm will contend for the DeployingLeader lock. Workers that have the new algorithm will
  * have its leases balanced by the DeployingLeader. Leases owned by workers on the deploying version cannot be
  * transferred over unless the lease becomes unassigned.
@@ -58,7 +58,7 @@ public class FleetSegmentingHandler {
     @Getter
     private volatile boolean allActiveWorkersOnThisVersion = false;
 
-    /** Value of {@code enableRollingDeploymentSystem}. */
+    /** Value of {@code enableFleetSegmentingForLeaseAssignment}. */
     private final boolean configEnabled;
 
     /**
@@ -122,7 +122,7 @@ public class FleetSegmentingHandler {
             final BooleanSupplier segmentingAllowed) {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
-        this.configEnabled = config.enableRollingDeploymentSystem();
+        this.configEnabled = config.enableFleetSegmentingForLeaseAssignment();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         // The heartbeat is scheduled whenever the flag is on; each tick checks isEnabled(), since segmenting may
         // only become allowed after construction (client version 3X, table migration COMPLETE).
@@ -143,7 +143,7 @@ public class FleetSegmentingHandler {
             final BooleanSupplier segmentingAllowed) {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
-        this.configEnabled = config.enableRollingDeploymentSystem();
+        this.configEnabled = config.enableFleetSegmentingForLeaseAssignment();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         this.leaderVersionDAO = leaderVersionDAO;
     }
