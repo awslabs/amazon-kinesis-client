@@ -272,7 +272,7 @@ public class LeaseManagementConfig {
      * each with its own leader:
      * </p>
      * <ul>
-     *     <li>The current Leader keeps assigning leases among workers on the current version, using the current
+     *     <li>The current Leader keeps assigning leases among workers on the primary version, using the current
      *     strategy. It also assigns unassigned and expired leases.</li>
      *     <li>A DeployingLeader, elected from the workers on the new version, balances leases among those workers only,
      *     using the new strategy.</li>

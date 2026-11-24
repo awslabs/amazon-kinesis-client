@@ -505,8 +505,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     /** The crashed Leader was on this worker's version: it contends for Leader and takes over. */
     @Test
-    void leaderStoppedHeartbeating_currentVersionWorkerTakesLeader() throws Exception {
-        final String workerId = "currentVersionWorker";
+    void leaderStoppedHeartbeating_primaryVersionWorkerTakesLeader() throws Exception {
+        final String workerId = "primaryVersionWorker";
         final CoordinatorStateDAO sharedDao = newDao();
         final FleetSegmentingHandler handler =
                 new FleetSegmentingHandler(segmentingConfig(workerId), sharedDao, inlineExecutor(), () -> true);
