@@ -217,7 +217,7 @@ public final class LeaseAssignmentManager {
             // assignment runs more than the worker version expiry apart (60 s by default) both find every active
             // worker on this version (isAllOnVersionConfirmed()), then moves at the next key re-evaluation.
             if (segmentingHandler.isEnabled()
-                    && !inMemoryStorageView.isCurrentVersionLeader()
+                    && !inMemoryStorageView.isPrimaryVersionLeader()
                     && segmentingHandler.isAllActiveWorkersOnThisVersion()) {
                 log.info(
                         "DeployingLeader {}: every active worker is on its version; skipping assignment this run.",
@@ -252,7 +252,7 @@ public final class LeaseAssignmentManager {
 
             final long expiredAndUnassignedLeaseAssignmentStartTime = System.currentTimeMillis();
 
-            if (inMemoryStorageView.isCurrentVersionLeader()) {
+            if (inMemoryStorageView.isPrimaryVersionLeader()) {
                 leaseAssignmentDecider.assignExpiredOrUnassignedLeases(expiredOrUnAssignedLeases);
                 MetricsUtil.addLatency(
                         metricsScope,
@@ -280,8 +280,8 @@ public final class LeaseAssignmentManager {
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
                 log.info(
-                        "Running balanceWorkerVariance. isCurrentVersionLeader=[{}] versionHash=[{}]",
-                        inMemoryStorageView.isCurrentVersionLeader(),
+                        "Running balanceWorkerVariance. isPrimaryVersionLeader=[{}] versionHash=[{}]",
+                        inMemoryStorageView.isPrimaryVersionLeader(),
                         segmentingHandler.getVersionHash());
                 leaseAssignmentDecider.balanceWorkerVariance();
                 MetricsUtil.addLatency(
@@ -558,7 +558,7 @@ public final class LeaseAssignmentManager {
          */
         private long leaseTableScanTime = 0L;
         /**
-         * Average throughput per worker that this leader balances towards. For the current version Leader (and with
+         * Average throughput per worker that this leader balances towards. For the primary version Leader (and with
          * segmenting off) it is all leases' throughput over all active workers. For the DeployingLeader it is the
          * throughput of the leases its own workers hold over the number of its own workers, so it describes the same
          * set of workers as {@link #assignableLeaseCount}.
@@ -568,21 +568,21 @@ public final class LeaseAssignmentManager {
         // Segment views computed once at the end of loadInMemoryStorageView.
 
         /**
-         * Whether this leader is the current version Leader (it holds the Leader lock) or the DeployingLeader in this
+         * Whether this leader is the primary version Leader (it holds the Leader lock) or the DeployingLeader in this
          * run. Fixed at load time.
          */
-        private boolean isCurrentVersionLeader = true;
+        private boolean isPrimaryVersionLeader = true;
 
         private List<WorkerMetricStats> workersOnVersionHash = Collections.emptyList();
         private List<WorkerMetricStats> workersWithNoVersionHash = Collections.emptyList();
         /**
          * Workers that the LeaseAssignmentDecider can assign leases to. This list is used to calculate the fleet
-         * average for each metric. All active workers for the current version Leader; for the DeployingLeader, only
+         * average for each metric. All active workers for the primary version Leader; for the DeployingLeader, only
          * the workers on its version.
          */
         private List<WorkerMetricStats> assignableWorkers = Collections.emptyList();
         /**
-         * Number of leases this leader can assign. The current version Leader can assign unassigned leases and all
+         * Number of leases this leader can assign. The primary version Leader can assign unassigned leases and all
          * owned leases; the DeployingLeader can only assign leases whose owner is on its version.
          */
         private long assignableLeaseCount = 0L;
@@ -590,12 +590,12 @@ public final class LeaseAssignmentManager {
          * Workers this leader may take leases from. Workers on the other version are always excluded, so the two
          * leaders never move each other's leases.
          * <ul>
-         *     <li>The current version Leader takes from workers on its own version hash and from workers with no (or
+         *     <li>The primary version Leader takes from workers on its own version hash and from workers with no (or
          *     a stale) version hash, such as workers running pre-segmenting code.</li>
          *     <li>The DeployingLeader takes only from workers on its own version hash. A DeployingLeader exists only
          *     while a deploy is in progress, and by then every worker in the fleet runs segmenting code and reports a
          *     version, so there should be no workers without a version. If there are any, they are left to the
-         *     current version Leader.</li>
+         *     primary version Leader.</li>
          * </ul>
          */
         private List<WorkerMetricStats> leaseTakingCandidates = Collections.emptyList();
@@ -675,16 +675,16 @@ public final class LeaseAssignmentManager {
             });
 
             // Compute the segment views once per run. Every decision in the run then uses the same answer, instead
-            // of calling isCurrentVersionLeader() 6-10 times and possibly getting different answers mid-run.
+            // of calling isPrimaryVersionLeader() 6-10 times and possibly getting different answers mid-run.
             // Workers are fixed after load and lease moves stay within the assignable workers, so these
             // don't change during the run.
-            this.isCurrentVersionLeader = segmentingHandler.isCurrentVersionLeader();
+            this.isPrimaryVersionLeader = segmentingHandler.isPrimaryVersionLeader();
             this.workersOnVersionHash = segmentingHandler.isEnabled()
                     ? segmentingHandler.filterWorkersOnVersionHash(activeWorkerMetrics)
                     : activeWorkerMetrics;
             this.workersWithNoVersionHash =
                     segmentingHandler.filterWorkersWithNoOrStaleVersionHash(activeWorkerMetrics);
-            this.assignableWorkers = isCurrentVersionLeader ? activeWorkerMetrics : workersOnVersionHash;
+            this.assignableWorkers = isPrimaryVersionLeader ? activeWorkerMetrics : workersOnVersionHash;
             this.assignableLeaseCount = computeAssignableLeaseCount();
             this.leaseTakingCandidates = computeLeaseTakingCandidates();
             this.targetAverageThroughput = computeTargetAverageThroughput(averageLeaseThroughput);
@@ -703,7 +703,7 @@ public final class LeaseAssignmentManager {
         }
 
         private double computeTargetAverageThroughput(final double averageLeaseThroughput) {
-            if (isCurrentVersionLeader) {
+            if (isPrimaryVersionLeader) {
                 return averageLeaseThroughput * leaseList.size() / Math.max(1, activeWorkerMetrics.size());
             }
             final double segmentThroughput = assignableWorkers.stream()
@@ -713,11 +713,11 @@ public final class LeaseAssignmentManager {
         }
 
         private List<WorkerMetricStats> computeLeaseTakingCandidates() {
-            if (!isCurrentVersionLeader) {
+            if (!isPrimaryVersionLeader) {
                 if (!workersWithNoVersionHash.isEmpty()) {
                     log.warn(
                             "DeployingLeader found {} active workers with no or a stale version hash; leaving them to "
-                                    + "the current version Leader",
+                                    + "the primary version Leader",
                             workersWithNoVersionHash.size());
                 }
                 return workersOnVersionHash;
@@ -729,7 +729,7 @@ public final class LeaseAssignmentManager {
         }
 
         private long computeAssignableLeaseCount() {
-            if (isCurrentVersionLeader) {
+            if (isPrimaryVersionLeader) {
                 return leaseList.size();
             }
             final Set<String> assignableWorkerIds = assignableWorkers.stream()

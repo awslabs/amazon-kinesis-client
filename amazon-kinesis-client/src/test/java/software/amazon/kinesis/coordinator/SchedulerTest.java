@@ -1797,13 +1797,13 @@ public class SchedulerTest {
         }
     }
 
-    private Scheduler setUpLeaderForProcessLoop(final boolean onCurrentVersion) throws Exception {
+    private Scheduler setUpLeaderForProcessLoop(final boolean onPrimaryVersion) throws Exception {
         final software.amazon.kinesis.coordinator.LeaderDecider leaderDecider =
                 mock(software.amazon.kinesis.coordinator.LeaderDecider.class);
         when(leaderDecider.isLeader(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         final software.amazon.kinesis.segmenting.FleetSegmentingHandler handler =
                 mock(software.amazon.kinesis.segmenting.FleetSegmentingHandler.class);
-        when(handler.isCurrentVersionLeader()).thenReturn(onCurrentVersion);
+        when(handler.isPrimaryVersionLeader()).thenReturn(onPrimaryVersion);
         setSchedulerFieldToAccessible("leaderDecider", leaderDecider);
         setSchedulerFieldToAccessible("segmentingHandler", handler);
         setSchedulerFieldToAccessible("streamInfoManager", streamInfoManager);

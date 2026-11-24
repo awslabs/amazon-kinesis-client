@@ -190,8 +190,8 @@ class PeriodicShardSyncManager {
     public synchronized void syncShardsOnce() throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
-        if (!segmentingHandler.isCurrentVersionLeader()) {
-            log.info("{} is not on current version, skipping shard sync.", workerId);
+        if (!segmentingHandler.isPrimaryVersionLeader()) {
+            log.info("{} is not on primary version, skipping shard sync.", workerId);
             return;
         }
         for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
@@ -218,7 +218,7 @@ class PeriodicShardSyncManager {
         if (leaderDecider.isLeader(workerId) && leaderSynced.get()) {
             // Checked after isLeader(): that call can move this worker from Leader to DeployingLeader, and only the
             // current Leader runs shard sync. Checking first used the answer from before the move.
-            if (!segmentingHandler.isCurrentVersionLeader()) {
+            if (!segmentingHandler.isPrimaryVersionLeader()) {
                 log.info("{} is not the current Leader, skipping shard sync.", workerId);
                 return;
             }

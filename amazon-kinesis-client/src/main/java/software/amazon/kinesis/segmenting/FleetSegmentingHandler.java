@@ -20,7 +20,7 @@ import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.worker.metricstats.WorkerMetricStats;
 
 /**
- * Component responsible for handling the rolling deployment system. If enabled, workers that are getting deployed with
+ * Component responsible for fleet segmenting for lease assignment. If enabled, workers that are getting deployed with
  * a new lease assignment algorithm will contend for the DeployingLeader lock. Workers that have the new algorithm will
  * have its leases balanced by the DeployingLeader. Leases owned by workers on the deploying version cannot be
  * transferred over unless the lease becomes unassigned.
@@ -38,14 +38,14 @@ public class FleetSegmentingHandler {
     private static final String VERSION_HASH_LUT_KEY = "versionHashLut";
 
     /**
-     * How long after its last heartbeat {@code LeaderVersion} still counts as the fleet's current version. Until then,
+     * How long after its last heartbeat {@code LeaderVersion} still counts as the fleet's primary version. Until then,
      * a worker on another version contends for DeployingLeader, even if the Leader holder has stopped heartbeating
      * (e.g. crashed), unless every active worker reports its version. After that, every worker contends for Leader.
      *
      * <p>This is much longer than the Leader lock lease on purpose. When the Leader holder crashes, its lock only
      * becomes acquirable after the lease (2 minutes by default). If the version expired first, workers on the
-     * deploying version would race current-version workers for the lock, and the winner's version would become
-     * current. Ten minutes lets a current-version worker take the lock, and lets the DeployingLeader see that the old
+     * deploying version would race primary-version workers for the lock, and the winner's version would become
+     * current. Ten minutes lets a primary-version worker take the lock, and lets the DeployingLeader see that the old
      * version is gone (its workers' metrics go stale after {@link #workerVersionExpiryMillis}) and move to Leader
      * itself, before the version expires. The limit only matters when neither can happen, e.g. a fleet left on two new
      * versions, or with workers that report no version: it bounds how long the fleet goes without a current leader.</p>
@@ -58,7 +58,7 @@ public class FleetSegmentingHandler {
     @Getter
     private volatile boolean allActiveWorkersOnThisVersion = false;
 
-    /** Value of {@code enableRollingDeploymentSystem}. */
+    /** Value of {@code enableFleetSegmentingForLeaseAssignment}. */
     private final boolean configEnabled;
 
     /**
@@ -70,7 +70,7 @@ public class FleetSegmentingHandler {
 
     /**
      * Most recent key this worker held. Not cleared when the lock is lost, so a worker that was the DeployingLeader
-     * is not treated as the current version Leader until it actually holds the Leader lock.
+     * is not treated as the primary version Leader until it actually holds the Leader lock.
      */
     private volatile String lastHeldLeaderLockKey = null;
 
@@ -122,7 +122,7 @@ public class FleetSegmentingHandler {
             final BooleanSupplier segmentingAllowed) {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
-        this.configEnabled = config.enableRollingDeploymentSystem();
+        this.configEnabled = config.enableFleetSegmentingForLeaseAssignment();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         // The heartbeat is scheduled whenever the flag is on; each tick checks isEnabled(), since segmenting may
         // only become allowed after construction (client version 3X, table migration COMPLETE).
@@ -143,7 +143,7 @@ public class FleetSegmentingHandler {
             final BooleanSupplier segmentingAllowed) {
         this.segmentingAllowed = segmentingAllowed;
         this.versionHash = String.valueOf(config.leaseAssignmentStrategy().getVersionHash());
-        this.configEnabled = config.enableRollingDeploymentSystem();
+        this.configEnabled = config.enableFleetSegmentingForLeaseAssignment();
         this.workerVersionExpiryMillis = workerVersionExpiryMillis(config);
         this.leaderVersionDAO = leaderVersionDAO;
     }
@@ -204,9 +204,9 @@ public class FleetSegmentingHandler {
             log.debug("Segmenting handler is disabled, using {} as leader lock.", LeaderLock.LEADER_HASH_KEY);
             return LeaderLock.LEADER_HASH_KEY;
         }
-        final LeaderVersionState currentVersion;
+        final LeaderVersionState primaryVersion;
         try {
-            currentVersion = leaderVersionDAO.getVersionState(LeaderLock.LEADER_HASH_KEY);
+            primaryVersion = leaderVersionDAO.getVersionState(LeaderLock.LEADER_HASH_KEY);
         } catch (final Exception e) {
             // if any transient failures occur when trying to use DDB, fallback to using the last known value
             final String lastKnownKey = lastKnownTargetLeaderLockKey;
@@ -224,34 +224,34 @@ public class FleetSegmentingHandler {
                     e);
             return lastKnownKey;
         }
-        final String key = computeTargetLeaderLockKey(currentVersion);
+        final String key = computeTargetLeaderLockKey(primaryVersion);
         lastKnownTargetLeaderLockKey = key;
         return key;
     }
 
-    private String computeTargetLeaderLockKey(final LeaderVersionState currentVersion) {
+    private String computeTargetLeaderLockKey(final LeaderVersionState primaryVersion) {
         final long nowMillis = System.currentTimeMillis();
-        // No current version (first rollout, segmenting never used, or the last Leader stopped heartbeating more than
+        // No primary version (first rollout, segmenting never used, or the last Leader stopped heartbeating more than
         // LEADER_VERSION_EXPIRY_MILLIS ago): every worker takes the Leader lock.
-        if (currentVersion == null
-                || currentVersion.getVersionHash() == null
-                || currentVersion.isExpired(nowMillis, LEADER_VERSION_EXPIRY_MILLIS)) {
+        if (primaryVersion == null
+                || primaryVersion.getVersionHash() == null
+                || primaryVersion.isExpired(nowMillis, LEADER_VERSION_EXPIRY_MILLIS)) {
             log.info(
-                    "Returning {}: {} is missing, has no version, or expired. currentVersion={}",
+                    "Returning {}: {} is missing, has no version, or expired. primaryVersion={}",
                     LeaderLock.LEADER_HASH_KEY,
                     LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
-                    currentVersion);
+                    primaryVersion);
             return LeaderLock.LEADER_HASH_KEY;
         }
 
         // If all workers are emitting the same version, take the Leader lock.
         // Otherwise take the leader lock depending on the version hash.
-        final boolean versionHashMatches = versionHash.equals(currentVersion.getVersionHash());
+        final boolean versionHashMatches = versionHash.equals(primaryVersion.getVersionHash());
         if (versionHashMatches) {
             return LeaderLock.LEADER_HASH_KEY;
         }
         if (allActiveWorkersOnThisVersion) {
-            // This is the flip: this worker's version becomes the fleet's current version. One assignment run that
+            // This is the flip: this worker's version becomes the fleet's primary version. One assignment run that
             // sees every active worker on this version can miss an old-version worker that is coming back (e.g. a
             // rollback) and hasn't reported yet, so the flip waits until runs more than a worker-version expiry
             // apart agree. By then a returning worker's fresh metrics row has broken the streak.
@@ -273,13 +273,13 @@ public class FleetSegmentingHandler {
         }
         // The current Leader has not heartbeated for longer than a worker would take to go stale, so it has probably
         // stopped. Say why this worker stays away from the Leader lock.
-        if (currentVersion.isExpired(nowMillis, workerVersionExpiryMillis)) {
+        if (primaryVersion.isExpired(nowMillis, workerVersionExpiryMillis)) {
             log.info(
                     "{} (version {}) has not been heartbeated for {}ms; staying on {} until a worker on that version "
                             + "takes {} or all active workers report version {}.",
                     LeaderVersionState.CURRENT_LEADER_VERSION_STATE_KEY,
-                    currentVersion.getVersionHash(),
-                    nowMillis - currentVersion.getHeartbeatMillis(),
+                    primaryVersion.getVersionHash(),
+                    nowMillis - primaryVersion.getHeartbeatMillis(),
                     LeaderLock.DEPLOYING_LEADER_HASH_KEY,
                     LeaderLock.LEADER_HASH_KEY,
                     versionHash);
@@ -304,19 +304,19 @@ public class FleetSegmentingHandler {
     }
 
     /**
-     * Whether this worker is the current version Leader, which handles the Leader responsibilities
+     * Whether this worker is the primary version Leader, which handles the Leader responsibilities
      * (expired/unassigned lease assignment, shard sync), as opposed to the DeployingLeader, which only balances the
      * deploying version's workers. If the segmenting handler is disabled, the leader behaves as it normally would
      * without segmenting.
      *
      * <p>Decided by which lock this worker holds, not by re-reading the Leader item: only the holder of the Leader
-     * lock is the current version Leader. This needs no DynamoDB read, so a throttled coordinator table can't make the
-     * real current leader skip its duties, and a DeployingLeader holder is never the current version Leader just
+     * lock is the primary version Leader. This needs no DynamoDB read, so a throttled coordinator table can't make the
+     * real current leader skip its duties, and a DeployingLeader holder is never the primary version Leader just
      * because the Leader item's version hash happens to match its own (the end-of-rollforward double-current case). A
      * worker that has never held a leader lock, e.g. when a non-lock leader decider is active, is treated as the
-     * current version Leader.</p>
+     * primary version Leader.</p>
      */
-    public boolean isCurrentVersionLeader() {
+    public boolean isPrimaryVersionLeader() {
         // Whoever holds DeployingLeader is never current, even if segmenting is no longer enabled for it (e.g. its
         // write routing diverged from its lock client when table migration completed). Otherwise it would run the
         // current Leader's duties, such as stream sync, alongside the real Leader until its key is re-evaluated.

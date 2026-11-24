@@ -55,7 +55,7 @@ public class FleetSegmentingHandlerTest {
                 Mockito.mock(DynamoDbAsyncClient.class),
                 Mockito.mock(KinesisAsyncClient.class),
                 "dummyWorkerId");
-        config.enableRollingDeploymentSystem(true);
+        config.enableFleetSegmentingForLeaseAssignment(true);
         config.leaseAssignmentStrategy(LeaseAssignmentStrategy.WORKER_UTILIZATION_AWARE);
         handler = new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
     }
@@ -118,21 +118,21 @@ public class FleetSegmentingHandlerTest {
         assertEquals(LeaderLock.LEADER_HASH_KEY, handler.getTargetLeaderLockKey());
     }
 
-    // ---------------- isCurrentVersionLeader (decided by the held lock, no reads) ----------------
+    // ---------------- isPrimaryVersionLeader (decided by the held lock, no reads) ----------------
 
     @Test
-    void isCurrentVersionLeader_trueWhenHoldingLeader() throws Exception {
+    void isPrimaryVersionLeader_trueWhenHoldingLeader() throws Exception {
         handler.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
 
-        assertTrue(handler.isCurrentVersionLeader());
+        assertTrue(handler.isPrimaryVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     @Test
-    void isCurrentVersionLeader_falseWhenHoldingDeployingLeader() throws Exception {
+    void isPrimaryVersionLeader_falseWhenHoldingDeployingLeader() throws Exception {
         handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
 
-        assertFalse(handler.isCurrentVersionLeader());
+        assertFalse(handler.isPrimaryVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
@@ -141,39 +141,39 @@ public class FleetSegmentingHandlerTest {
      * matches its own. It only becomes current once it actually holds the Leader lock.
      */
     @Test
-    void isCurrentVersionLeader_deployingLeaderStaysNotCurrent_untilItHoldsLeader() throws Exception {
+    void isPrimaryVersionLeader_deployingLeaderStaysNotCurrent_untilItHoldsLeader() throws Exception {
         mockCoordinatorState(
                 LeaderLock.LEADER_HASH_KEY, sampleVersionHash, Instant.now().getEpochSecond());
         handler.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        assertFalse(handler.isCurrentVersionLeader());
+        assertFalse(handler.isPrimaryVersionLeader());
 
         // Losing the lock doesn't make a former deploying leader current either.
         handler.setHeldLeaderLockKey(null);
-        assertFalse(handler.isCurrentVersionLeader());
+        assertFalse(handler.isPrimaryVersionLeader());
 
         handler.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
-        assertTrue(handler.isCurrentVersionLeader());
+        assertTrue(handler.isPrimaryVersionLeader());
     }
 
     /** With a non-lock leader decider (2.x-compatible modes) no lock is ever held; shard sync must run. */
     @Test
-    void isCurrentVersionLeader_trueWhenNoLockEverHeld() throws Exception {
-        assertTrue(handler.isCurrentVersionLeader());
+    void isPrimaryVersionLeader_trueWhenNoLockEverHeld() throws Exception {
+        assertTrue(handler.isPrimaryVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
     @Test
-    void isCurrentVersionLeader_returnsTrue_whenDisabled() {
-        config.enableRollingDeploymentSystem(false);
+    void isPrimaryVersionLeader_returnsTrue_whenDisabled() {
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
-        assertTrue(disabledHandler.isCurrentVersionLeader());
+        assertTrue(disabledHandler.isPrimaryVersionLeader());
     }
 
     /** A disabled worker's metrics carry no properties, as before segmenting. */
     @Test
     void generateVersionHashWithLastUpdatedTimeMap_returnsNull_whenDisabled() {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         final FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertNull(disabledHandler.generateVersionHashWithLastUpdatedTimeMap());
@@ -339,7 +339,7 @@ public class FleetSegmentingHandlerTest {
         assertFalse(gated.isEnabled());
         assertEquals(LeaderLock.LEADER_HASH_KEY, gated.getTargetLeaderLockKey());
         gated.setHeldLeaderLockKey(LeaderLock.LEADER_HASH_KEY);
-        assertTrue(gated.isCurrentVersionLeader());
+        assertTrue(gated.isPrimaryVersionLeader());
         Mockito.verify(mockCoordinatorStateDAO, Mockito.never()).getCoordinatorState(any());
     }
 
@@ -414,7 +414,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void isEnabled_returnsFalse_whenConfigDisabled() {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
         assertFalse(disabledHandler.isEnabled());
@@ -422,7 +422,7 @@ public class FleetSegmentingHandlerTest {
 
     @Test
     void getTargetLeaderLockKey_returnsLeaderKey_whenDisabled() throws Exception {
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         FleetSegmentingHandler disabledHandler =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor);
 
@@ -505,7 +505,7 @@ public class FleetSegmentingHandlerTest {
         Mockito.verify(mockVersionHeartbeatExecutor)
                 .scheduleAtFixedRate(any(Runnable.class), eq(0L), Mockito.anyLong(), eq(TimeUnit.MILLISECONDS));
 
-        config.enableRollingDeploymentSystem(false);
+        config.enableFleetSegmentingForLeaseAssignment(false);
         final ScheduledExecutorService disabledExecutor = mock(ScheduledExecutorService.class);
         new FleetSegmentingHandler(config, mockCoordinatorStateDAO, disabledExecutor);
 
@@ -605,16 +605,16 @@ public class FleetSegmentingHandlerTest {
     // ---------------- F3: a held DeployingLeader is never current ----------------
 
     @Test
-    void isCurrentVersionLeader_falseWhileHoldingDeployingLeader_evenWhenDisabled() {
+    void isPrimaryVersionLeader_falseWhileHoldingDeployingLeader_evenWhenDisabled() {
         final FleetSegmentingHandler gated =
                 new FleetSegmentingHandler(config, mockCoordinatorStateDAO, mockVersionHeartbeatExecutor, () -> false);
 
         gated.setHeldLeaderLockKey(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
-        assertFalse(gated.isCurrentVersionLeader());
+        assertFalse(gated.isPrimaryVersionLeader());
 
         // Once it holds no lock, a disabled worker behaves as before segmenting again.
         gated.setHeldLeaderLockKey(null);
-        assertTrue(gated.isCurrentVersionLeader());
+        assertTrue(gated.isPrimaryVersionLeader());
     }
 
     // ---------------- F5: the flip waits for runs more than a worker-version expiry apart ----------------

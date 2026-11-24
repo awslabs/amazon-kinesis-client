@@ -1304,7 +1304,7 @@ class LeaseAssignmentManagerTest {
      */
     @Test
     void performAssignment_deployingLeader_doesNotAssignUnassignedLeases() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1335,12 +1335,12 @@ class LeaseAssignmentManagerTest {
     }
 
     /**
-     * The run reads isCurrentVersionLeader() once and every step uses that answer. Here a later call would say
+     * The run reads isPrimaryVersionLeader() once and every step uses that answer. Here a later call would say
      * "deploying", but the run started as the current leader, so both expired leases still go out fleet-wide.
      */
     @Test
-    void performAssignment_readsCurrentVersionOncePerRun() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true, false);
+    void performAssignment_readsPrimaryVersionOncePerRun() throws Exception {
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true, false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1358,7 +1358,7 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        Mockito.verify(mockSegmentingHandler, Mockito.times(1)).isCurrentVersionLeader();
+        Mockito.verify(mockSegmentingHandler, Mockito.times(1)).isPrimaryVersionLeader();
         assertTrue(leaseRefresher.listLeases().stream().allMatch(lease -> lease.leaseOwner() != null));
         assertTrue(leaseRefresher.listLeases().stream().anyMatch(lease -> "otherWorker".equals(lease.leaseOwner())));
     }
@@ -1386,14 +1386,14 @@ class LeaseAssignmentManagerTest {
         new1.throughputKBps(100D);
         populateLeasesInLeaseTable(old1, old2, new1);
 
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
         final LeaseAssignmentManager.InMemoryStorageView deployingView =
                 leaseAssignmentManager.new InMemoryStorageView();
         deployingView.loadInMemoryStorageView(new NullMetricsScope());
         // Only newWorker's lease: 100 KB/s over 1 worker.
         assertEquals(100D, deployingView.getTargetAverageThroughput(), 0.001);
 
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true);
         final LeaseAssignmentManager.InMemoryStorageView currentView = leaseAssignmentManager.new InMemoryStorageView();
         currentView.loadInMemoryStorageView(new NullMetricsScope());
         // All leases: 2100 KB/s over 2 workers.
@@ -1418,7 +1418,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_currentLeader_assignsToAllWorkers() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1443,7 +1443,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_deployingLeader_varianceBalancingRespectsVersionFilter() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
 
         final WorkerMetricStats yieldWorker = createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID);
         final WorkerMetricStats takeWorker = createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID);
@@ -1486,7 +1486,7 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_deployingLeader_doesNotAssignUnassignedLeasesEvenWhenAllWorkersOnSameVersion()
             throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -1513,7 +1513,7 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_deployingLeader_skipsRunWhenAllActiveWorkersOnItsVersion() throws Exception {
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
         when(mockSegmentingHandler.isAllActiveWorkersOnThisVersion()).thenReturn(true);
 
         createLeaseAssignmentManager(
@@ -1541,7 +1541,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_deployingLeader_staleWorkerExcludedFromVarianceBalancing() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(true);
 
         createLeaseAssignmentManager(
@@ -1569,7 +1569,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_noDeployingLeader_varianceBalancingUsesAllActiveWorkers() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10),
@@ -1601,7 +1601,7 @@ class LeaseAssignmentManagerTest {
 
     @Test
     void performAssignment_withDeployingLeader_varianceBalancingUsesOnlyVersionFilteredWorkers() throws Exception {
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(false);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(false);
 
         final WorkerMetricStats yieldWorker = createDummyYieldWorkerMetrics(TEST_YIELD_WORKER_ID);
         final WorkerMetricStats takeWorker = createDummyTakeWorkerMetrics(TEST_TAKE_WORKER_ID);
@@ -1645,7 +1645,7 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_disabled_assignsToAllWorkersRegardlessOfVersion() throws Exception {
         when(mockSegmentingHandler.isEnabled()).thenReturn(false);
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true);
 
         createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
@@ -2327,7 +2327,7 @@ class LeaseAssignmentManagerTest {
     private void initializeFleetSegmentingHandlerMocks() {
         mockSegmentingHandler = mock((FleetSegmentingHandler.class));
         when(mockSegmentingHandler.getVersionHash()).thenReturn(TEST_VERSION_HASH.get("versionHash"));
-        when(mockSegmentingHandler.isCurrentVersionLeader()).thenReturn(true);
+        when(mockSegmentingHandler.isPrimaryVersionLeader()).thenReturn(true);
         when(mockSegmentingHandler.isWorkerVersionHashStale(any())).thenReturn(false);
         when(mockSegmentingHandler.isEnabled()).thenReturn(true);
 
