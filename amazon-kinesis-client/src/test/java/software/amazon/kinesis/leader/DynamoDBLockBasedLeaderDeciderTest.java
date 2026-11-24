@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
+import software.amazon.kinesis.coordinator.LeaderDecider;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStateMachine;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatus;
 import software.amazon.kinesis.coordinator.migration.TableMigrationStatusProvider;
@@ -102,12 +103,20 @@ class DynamoDBLockBasedLeaderDeciderTest {
 
     private DynamoDBLockBasedLeaderDecider newDecider(
             final String workerId, final long leaseDurationMillis, final long heartbeatPeriodMillis) {
+        return newDecider(workerId, leaseDurationMillis, heartbeatPeriodMillis, new NullMetricsFactory());
+    }
+
+    private DynamoDBLockBasedLeaderDecider newDecider(
+            final String workerId,
+            final long leaseDurationMillis,
+            final long heartbeatPeriodMillis,
+            final software.amazon.kinesis.metrics.MetricsFactory metricsFactory) {
         return DynamoDBLockBasedLeaderDecider.create(
                 newDao(),
                 workerId,
                 leaseDurationMillis,
                 heartbeatPeriodMillis,
-                new NullMetricsFactory(),
+                metricsFactory,
                 mockTableMigrationStateMachine,
                 mockSegmentingHandler);
     }
@@ -352,6 +361,50 @@ class DynamoDBLockBasedLeaderDeciderTest {
         assertEquals(
                 workerId, getItem(LeaderLock.LEADER_HASH_KEY).get("ownerName").s());
         assertTrue(getItem(LeaderLock.DEPLOYING_LEADER_HASH_KEY).isEmpty(), "DeployingLeader lock was not released");
+    }
+
+    /** The decider reports whether this worker is the DeployingLeader. */
+    @Test
+    void isLeader_deployingLeader_emitsIsDeployingLeaderMetric() {
+        final software.amazon.kinesis.metrics.MetricsFactory factory =
+                mock(software.amazon.kinesis.metrics.MetricsFactory.class);
+        final software.amazon.kinesis.metrics.MetricsScope scope =
+                mock(software.amazon.kinesis.metrics.MetricsScope.class);
+        when(factory.createMetrics()).thenReturn(scope);
+        final String workerId = "metricsWorker";
+        final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 100L, 10L, factory);
+        decider.initialize();
+        when(mockSegmentingHandler.isEnabled()).thenReturn(true);
+        when(mockSegmentingHandler.getTargetLeaderLockKey(anyBoolean()))
+                .thenReturn(LeaderLock.DEPLOYING_LEADER_HASH_KEY);
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(scope)
+                .addData(eq(LeaderDecider.METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER), eq(1.0), any(), any());
+        decider.shutdown();
+    }
+
+    @Test
+    void isLeader_segmentingDisabled_doesNotEmitIsDeployingLeaderMetric() {
+        final software.amazon.kinesis.metrics.MetricsFactory factory =
+                mock(software.amazon.kinesis.metrics.MetricsFactory.class);
+        final software.amazon.kinesis.metrics.MetricsScope scope =
+                mock(software.amazon.kinesis.metrics.MetricsScope.class);
+        when(factory.createMetrics()).thenReturn(scope);
+        final String workerId = "metricsWorker";
+        final DynamoDBLockBasedLeaderDecider decider = newDecider(workerId, 100L, 10L, factory);
+        decider.initialize();
+
+        assertTrue(decider.isLeader(workerId));
+
+        verify(scope, org.mockito.Mockito.never())
+                .addData(
+                        eq(LeaderDecider.METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER),
+                        org.mockito.ArgumentMatchers.anyDouble(),
+                        any(),
+                        any());
+        decider.shutdown();
     }
 
     /** Only the Leader holder drives table migration; the DeployingLeader reports false. */

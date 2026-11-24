@@ -23,6 +23,8 @@ package software.amazon.kinesis.coordinator;
 public interface LeaderDecider {
     String METRIC_OPERATION_LEADER_DECIDER = "LeaderDecider";
     String METRIC_OPERATION_LEADER_DECIDER_IS_LEADER = METRIC_OPERATION_LEADER_DECIDER + ":IsLeader";
+    /** 1 when this worker holds the DeployingLeader lock (fleet segmenting), else 0. */
+    String METRIC_OPERATION_LEADER_DECIDER_IS_DEPLOYING_LEADER = METRIC_OPERATION_LEADER_DECIDER + ":IsDeployingLeader";
 
     /**
      * Method invoked to check the given workerId corresponds to one of the workers
