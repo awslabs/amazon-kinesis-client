@@ -769,6 +769,82 @@ public class ShardConsumerTest {
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
+    /**
+     * A shard that ends just before a worker graceful shutdown: the shutdown task has completed, but the consumer is
+     * not terminal until the next lifecycle pass. A notification attached in that window must still be completed.
+     */
+    @Test
+    public void testGracefulShutdownAfterShutdownTaskCompletesNotification() throws Exception {
+        CyclicBarrier taskBarrier = new CyclicBarrier(2);
+
+        TestPublisher cache = new TestPublisher();
+        final ShardConsumer consumer = createShardConsumer(cache);
+
+        mockSuccessfulInitialize(null);
+        mockSuccessfulProcessing(taskBarrier);
+        mockSuccessfulShutdown(null);
+
+        boolean init = consumer.initializeComplete().get();
+        while (!init) {
+            init = consumer.initializeComplete().get();
+        }
+
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        consumer.markForShutdown(ShutdownReason.SHARD_END);
+        assertFalse(consumer.shutdownComplete().get());
+        assertFalse(consumer.isShutdown());
+
+        consumer.gracefulShutdown(shutdownNotification);
+
+        assertTrue(consumer.shutdownComplete().get());
+        assertTrue(consumer.isShutdown());
+        verify(shutdownNotification, times(1)).shutdownComplete();
+    }
+
+    /**
+     * The Scheduler checks {@code isShutdown()} before it attaches a notification. A consumer that becomes terminal
+     * between that check and the attach runs no further lifecycle passes, so the attach must complete the
+     * notification itself.
+     */
+    @Test
+    public void testGracefulShutdownOnTerminalConsumerCompletesNotification() throws Exception {
+        CyclicBarrier taskBarrier = new CyclicBarrier(2);
+
+        TestPublisher cache = new TestPublisher();
+        final ShardConsumer consumer = createShardConsumer(cache);
+
+        mockSuccessfulInitialize(null);
+        mockSuccessfulProcessing(taskBarrier);
+        mockSuccessfulShutdown(null);
+
+        boolean init = consumer.initializeComplete().get();
+        while (!init) {
+            init = consumer.initializeComplete().get();
+        }
+
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        consumer.markForShutdown(ShutdownReason.SHARD_END);
+        assertFalse(consumer.shutdownComplete().get());
+        assertTrue(consumer.shutdownComplete().get());
+        assertTrue(consumer.isShutdown());
+
+        consumer.gracefulShutdown(shutdownNotification);
+
+        verify(shutdownNotification, times(1)).shutdownComplete();
+    }
+
     @Test
     public void testExceptionInProcessingRetriesSameBatch() throws Exception {
         TestPublisher cache = new TestPublisher();

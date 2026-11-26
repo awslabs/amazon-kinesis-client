@@ -71,9 +71,11 @@ public class ShardConsumer {
 
     /**
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
-     * much coordination/synchronization to handle concurrent reads/updates.
+     * much coordination/synchronization to handle concurrent reads/updates. It is volatile because
+     * {@link #isShutdown()} is read from other threads, and {@link #gracefulShutdown(ShutdownNotification)} relies
+     * on seeing a terminal state that was set before its notification became visible.
      */
-    private ConsumerState currentState;
+    private volatile ConsumerState currentState;
 
     private final Object shutdownLock = new Object();
 
@@ -81,6 +83,8 @@ public class ShardConsumer {
     private volatile ShutdownReason shutdownReason;
 
     private volatile ShutdownNotification shutdownNotification;
+
+    private ShutdownNotification completedShutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
 
@@ -298,6 +302,12 @@ public class ShardConsumer {
                             updateState(TaskOutcome.SUCCESSFUL);
                         }
                         if (isShutdown()) {
+                            //
+                            // The shutdown task leaves the consumer in SHUTTING_DOWN until this pass, so a worker
+                            // graceful shutdown can attach its notification after the check below already ran.
+                            // Complete it here, otherwise the graceful shutdown latches never reach zero.
+                            //
+                            completeShutdownNotification();
                             return true;
                         }
 
@@ -305,14 +315,21 @@ public class ShardConsumer {
 
                         // call shutdownNotification.shutdownComplete() if shutting down as part of gracefulShutdown
                         if (currentState.state() == ConsumerStates.ShardConsumerState.SHUTTING_DOWN
-                                && taskOutcome == TaskOutcome.SUCCESSFUL
-                                && shutdownNotification != null) {
-                            shutdownNotification.shutdownComplete();
+                                && taskOutcome == TaskOutcome.SUCCESSFUL) {
+                            completeShutdownNotification();
                         }
                         return false;
                     }
                 },
                 executorService);
+    }
+
+    private synchronized void completeShutdownNotification() {
+        final ShutdownNotification notification = shutdownNotification;
+        if (notification != null && notification != completedShutdownNotification) {
+            notification.shutdownComplete();
+            completedShutdownNotification = notification;
+        }
     }
 
     private synchronized void processData(ProcessRecordsInput input) {
@@ -420,6 +437,13 @@ public class ShardConsumer {
             this.shutdownNotification = shutdownNotification;
         }
         markForShutdown(ShutdownReason.REQUESTED);
+        if (isShutdown()) {
+            //
+            // The consumer became terminal before the notification was visible to it, and a terminal consumer
+            // runs no further lifecycle passes. Complete the notification here.
+            //
+            completeShutdownNotification();
+        }
     }
 
     /**
