@@ -82,6 +82,8 @@ public class ShardConsumer {
 
     private volatile ShutdownNotification shutdownNotification;
 
+    private ShutdownNotification completedShutdownNotification;
+
     private final ShardConsumerSubscriber subscriber;
 
     private ProcessRecordsInput shardEndProcessRecordsInput;
@@ -298,6 +300,12 @@ public class ShardConsumer {
                             updateState(TaskOutcome.SUCCESSFUL);
                         }
                         if (isShutdown()) {
+                            //
+                            // The shutdown task leaves the consumer in SHUTTING_DOWN until this pass, so a worker
+                            // graceful shutdown can attach its notification after the check below already ran.
+                            // Complete it here, otherwise the graceful shutdown latches never reach zero.
+                            //
+                            completeShutdownNotification();
                             return true;
                         }
 
@@ -305,14 +313,21 @@ public class ShardConsumer {
 
                         // call shutdownNotification.shutdownComplete() if shutting down as part of gracefulShutdown
                         if (currentState.state() == ConsumerStates.ShardConsumerState.SHUTTING_DOWN
-                                && taskOutcome == TaskOutcome.SUCCESSFUL
-                                && shutdownNotification != null) {
-                            shutdownNotification.shutdownComplete();
+                                && taskOutcome == TaskOutcome.SUCCESSFUL) {
+                            completeShutdownNotification();
                         }
                         return false;
                     }
                 },
                 executorService);
+    }
+
+    private synchronized void completeShutdownNotification() {
+        final ShutdownNotification notification = shutdownNotification;
+        if (notification != null && notification != completedShutdownNotification) {
+            notification.shutdownComplete();
+            completedShutdownNotification = notification;
+        }
     }
 
     private synchronized void processData(ProcessRecordsInput input) {
