@@ -71,9 +71,11 @@ public class ShardConsumer {
 
     /**
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
-     * much coordination/synchronization to handle concurrent reads/updates.
+     * much coordination/synchronization to handle concurrent reads/updates. It is volatile because
+     * {@link #isShutdown()} is read from other threads, and {@link #gracefulShutdown(ShutdownNotification)} relies
+     * on seeing a terminal state that was set before its notification became visible.
      */
-    private ConsumerState currentState;
+    private volatile ConsumerState currentState;
 
     private final Object shutdownLock = new Object();
 
@@ -435,6 +437,13 @@ public class ShardConsumer {
             this.shutdownNotification = shutdownNotification;
         }
         markForShutdown(ShutdownReason.REQUESTED);
+        if (isShutdown()) {
+            //
+            // The consumer became terminal before the notification was visible to it, and a terminal consumer
+            // runs no further lifecycle passes. Complete the notification here.
+            //
+            completeShutdownNotification();
+        }
     }
 
     /**
